@@ -2,7 +2,7 @@
 layer: change
 artifact_type: plan
 contract_version: "1"
-status: proposed
+status: completed
 template_id: implementation-plan
 name: general-os-vnext-coordination-layer
 targets:
@@ -132,11 +132,11 @@ user-local Project OS installation.
 
 - Coordination owner: `single lead controller`
 - Coordination schema: `2`
-- Branch: `main (to be created by Task 1)`
+- Branch: `main`
 - Base commit: `none; the GitHub remote had zero refs on 2026-11-11`
-- Expected workspace: `empty general-os checkout plus this proposed plan`
-- Next action: `initialize the repository and create the package/test skeleton`
-- Blockers: `none for the approved scope; live Codex or Orca evidence is optional and must be reported honestly`
+- Expected workspace: `clean general-os checkout on main, synchronized with origin/main`
+- Next action: `implementation and verification complete; branch finishing is optional`
+- Blockers: `none required; live Orca smoke is unavailable without configured transport and is recorded as unavailable evidence`
 
 | Task | State | Workspace | Executor | Depends On | Required Proof | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
