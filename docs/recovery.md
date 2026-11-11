@@ -1,12 +1,22 @@
 # Recovery
 
-Runtime loss is intentionally boring:
+Runtime loss is intentionally boring. Recover from durable intent plus current
+Git, not from Codex or Orca session history:
 
 1. Read `state/coordination.json`.
-2. Inspect current Git directly.
-3. If Git has a material conflict, block and preserve the workspace.
-4. If required evidence already exists, verify it against current Git.
-5. Otherwise start a fresh Codex assignment, or an optional Orca assignment
-   when independent ownership is required and configured.
+2. Inspect the current branch, revision, worktree, conflicts, and changed
+   files directly from Git.
+3. Determine the unfinished dependency-ready task, or use the global goal when
+   the task graph is empty.
+4. Reuse required evidence only after checking that it is fresh and applies to
+   the current Git revision.
+5. Start a fresh Codex assignment. Use Orca only when the unfinished work needs
+   an independent workstream and the configured boundary is available.
 
-No runtime session reconstruction or recovery ledger is required.
+If Git has a material conflict, a required dependency is unfinished, authority
+is insufficient, or a required independent boundary is unavailable, block and
+preserve the workspace. Missing optional runtime metadata lowers confidence but
+does not create a new recovery ledger or automatically stop safe work.
+
+Do not reconstruct lost runtime sessions, persist runtime IDs, or copy runtime
+progress into `state/coordination.json`.

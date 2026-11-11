@@ -72,7 +72,7 @@ def run_accept(args: argparse.Namespace) -> int:
         evidence_revision=args.revision or snapshot.revision,
     )
     decision = evaluate_acceptance(task, snapshot, verification)
-    if decision.status == "PASS":
+    if decision.status in {"PASS", "BLOCKED"}:
         save_state(args.state, apply_task_transition(state, task.id, decision))
     _print(asdict(decision))
     return 0

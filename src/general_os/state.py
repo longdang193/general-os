@@ -32,6 +32,7 @@ def _tuple_of_strings(value: Any, field_name: str) -> tuple[str, ...]:
 @dataclass(frozen=True)
 class Task:
     id: str
+    objective: str | None = None
     state: str = "pending"
     depends_on: tuple[str, ...] = ()
     acceptance: tuple[str, ...] = ()
@@ -41,6 +42,10 @@ class Task:
     def __post_init__(self) -> None:
         if not isinstance(self.id, str) or not self.id.strip():
             raise StateError("task id must be a non-empty string")
+        if self.objective is not None and (
+            not isinstance(self.objective, str) or not self.objective.strip()
+        ):
+            raise StateError("objective must be a non-empty string when provided")
         if self.state not in TASK_STATES:
             raise StateError(f"invalid task state: {self.state}")
         depends_on = _tuple_of_strings(self.depends_on, "depends_on")
@@ -62,6 +67,7 @@ class Task:
     def from_dict(cls, value: Mapping[str, Any]) -> "Task":
         allowed = {
             "id",
+            "objective",
             "state",
             "depends_on",
             "acceptance",
@@ -73,6 +79,7 @@ class Task:
             raise StateError(f"unknown task field: {sorted(unknown)[0]}")
         return cls(
             id=value.get("id", ""),
+            objective=value.get("objective"),
             state=value.get("state", "pending"),
             depends_on=value.get("depends_on", ()),
             acceptance=value.get("acceptance", ()),
@@ -89,6 +96,8 @@ class Task:
             "depends_on": list(self.depends_on),
             "acceptance": list(self.acceptance),
         }
+        if self.objective is not None:
+            result["objective"] = self.objective
         if self.profile is not None:
             result["profile"] = self.profile
         if self.requires_independent_boundary:

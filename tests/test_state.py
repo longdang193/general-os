@@ -11,6 +11,7 @@ def test_state_round_trips_goal_tasks_and_acceptance(tmp_path):
         tasks=(
             Task(
                 id="fix-admission",
+                objective="Implement the admission fix",
                 acceptance=("regression passes", "existing tests pass"),
                 profile="high",
             ),
@@ -27,6 +28,11 @@ def test_state_round_trips_goal_tasks_and_acceptance(tmp_path):
 def test_task_rejects_invalid_state():
     with pytest.raises(StateError, match="invalid task state"):
         Task(id="work", state="running")
+
+
+def test_task_rejects_blank_objective():
+    with pytest.raises(StateError, match="objective must be a non-empty string"):
+        Task(id="work", objective=" ")
 
 
 def test_state_rejects_unknown_dependency_and_cycles():
@@ -78,4 +84,16 @@ def test_state_serialization_does_not_add_runtime_fields():
                 "acceptance": [],
             }
         ],
+    }
+
+
+def test_task_without_objective_remains_backward_compatible():
+    task = Task.from_dict({"id": "work"})
+
+    assert task.objective is None
+    assert task.to_dict() == {
+        "id": "work",
+        "state": "pending",
+        "depends_on": [],
+        "acceptance": [],
     }

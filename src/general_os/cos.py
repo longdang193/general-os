@@ -84,12 +84,13 @@ class ChiefOfStaff:
         task: Task | None,
         workspace: str,
     ) -> CodexObservation | OrcaObservation:
+        prompt = task.objective if task is not None and task.objective else self.state.goal
         if decision.strategy == "codex":
             return dispatch_codex(
                 self.codex,
                 CodexDispatchRequest(
                     task_id=task.id if task is not None else "goal-only",
-                    prompt=self.state.goal,
+                    prompt=prompt,
                     workspace=workspace,
                     profile=decision.profile,
                     native_subagents_enabled=self.policy.native_subagents_enabled,
@@ -100,7 +101,7 @@ class ChiefOfStaff:
                 self.orca,
                 OrcaDispatchRequest(
                     task_id=task.id,
-                    prompt=self.state.goal,
+                    prompt=prompt,
                     workspace=workspace,
                     profile=decision.profile,
                 ),

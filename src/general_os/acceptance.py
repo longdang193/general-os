@@ -33,17 +33,17 @@ def evaluate_acceptance(
         verification.evidence_revision is not None
         and verification.evidence_revision != snapshot.revision
     ):
-        return AcceptanceDecision("BLOCKED", "verification evidence is stale")
+        return AcceptanceDecision("FAIL", "verification evidence is stale")
     if verification.status == "blocked":
         return AcceptanceDecision("BLOCKED", verification.message or "verification blocked")
     if verification.status == "fail":
         return AcceptanceDecision("FAIL", verification.message or "verification failed")
     if verification.status != "pass":
-        return AcceptanceDecision("BLOCKED", "verification result is unknown")
+        return AcceptanceDecision("FAIL", "verification result is unknown")
     missing = set(task.acceptance) - set(verification.passed)
     if missing:
         return AcceptanceDecision(
-            "BLOCKED", f"required proof is missing: {', '.join(sorted(missing))}"
+            "FAIL", f"required proof is missing: {', '.join(sorted(missing))}"
         )
     return AcceptanceDecision("PASS", "required proof is current")
 
@@ -58,6 +58,8 @@ def apply_task_transition(
     target = next((task for task in state.tasks if task.id == task_id), None)
     if target is None:
         raise ValueError(f"unknown task: {task_id}")
+    if decision.status == "FAIL":
+        return state
     new_state = "completed" if decision.status == "PASS" else "blocked"
     if target.state == new_state:
         return state

@@ -7,6 +7,24 @@ from general_os.profiles import ProfileSpec
 from general_os.state import CoordinationState, Task
 
 
+class RecordingCodexTransport:
+    def __init__(self):
+        self.requests = []
+
+    def start(self, request):
+        self.requests.append(request)
+        return {"id": "thread-1", "status": "running"}
+
+
+class RecordingOrcaTransport:
+    def __init__(self):
+        self.requests = []
+
+    def dispatch(self, request):
+        self.requests.append(request)
+        return {"id": "worker-1", "status": "running"}
+
+
 def snapshot(revision="abc123", conflicts=()):
     return GitSnapshot(
         branch="main",
@@ -33,6 +51,78 @@ def test_cos_chooses_codex_and_leaves_native_children_to_codex():
     decision = make_cos(state).choose_strategy(state.tasks[0], snapshot())
 
     assert decision == CoSDecision("codex", "work", "normal", "single assignment")
+
+
+def test_dispatch_task_uses_task_objective_for_codex():
+    state = CoordinationState(
+        goal="overall goal",
+        tasks=(Task(id="work", objective="bounded objective"),),
+    )
+    transport = RecordingCodexTransport()
+    chief = ChiefOfStaff(
+        state=state,
+        policy=RuntimeConfig(),
+        profiles={"normal": ProfileSpec("normal")},
+        codex=CodexClient(transport),
+        orca=OrcaClient(),
+    )
+
+    chief.dispatch_task(
+        CoSDecision("codex", "work", "normal", "single assignment"),
+        state.tasks[0],
+        "C:/work/general-os",
+    )
+
+    assert transport.requests[0].prompt == "bounded objective"
+
+
+def test_dispatch_goal_only_uses_global_goal_for_codex():
+    state = CoordinationState(goal="overall goal")
+    transport = RecordingCodexTransport()
+    chief = ChiefOfStaff(
+        state=state,
+        policy=RuntimeConfig(),
+        profiles={"normal": ProfileSpec("normal")},
+        codex=CodexClient(transport),
+        orca=OrcaClient(),
+    )
+
+    chief.dispatch_task(
+        CoSDecision("codex", None, "normal", "goal-only assignment"),
+        None,
+        "C:/work/general-os",
+    )
+
+    assert transport.requests[0].prompt == "overall goal"
+
+
+def test_dispatch_task_uses_task_objective_for_orca():
+    state = CoordinationState(
+        goal="overall goal",
+        tasks=(
+            Task(
+                id="work",
+                objective="independent bounded objective",
+                requires_independent_boundary=True,
+            ),
+        ),
+    )
+    transport = RecordingOrcaTransport()
+    chief = ChiefOfStaff(
+        state=state,
+        policy=RuntimeConfig(orca_enabled=True),
+        profiles={"normal": ProfileSpec("normal")},
+        codex=CodexClient(),
+        orca=OrcaClient(transport, enabled=True),
+    )
+
+    chief.dispatch_task(
+        CoSDecision("orca", "work", "normal", "independent boundary required"),
+        state.tasks[0],
+        "C:/work/general-os",
+    )
+
+    assert transport.requests[0].prompt == "independent bounded objective"
 
 
 def test_cos_chooses_codex_goal_only_when_task_graph_is_empty():

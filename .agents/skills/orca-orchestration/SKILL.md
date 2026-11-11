@@ -1,6 +1,6 @@
 ---
 name: orca-orchestration
-description: Use Orca for independently managed top-level workstreams selected by CoS.
+description: Use when CoS selects Orca for an independently managed top-level workstream.
 ---
 
 # Orca Orchestration
