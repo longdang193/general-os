@@ -16,13 +16,20 @@ Dispatch requests, runtime identities, Goal Mode status, native subagent
 counts, Orca lifecycle, heartbeats, temporary plans, and verification output
 are observations, not another durable ledger.
 
-## Dispatch
+## Execution boundary
 
-An empty task list is a valid goal-only assignment. Its headless decision is
-Codex with `task_id = null`, and the global goal is the prompt. When a task has
-an objective, that objective is the prompt; the global goal is not copied into
-the task or used as a second task assignment. A required independent boundary
-cannot silently fall back to Codex when Orca is unavailable.
+An empty task list is a valid goal-only assignment for the current Codex
+runtime. When a task has an objective, that objective is the assignment; the
+global goal is not copied into the task or used as a second task assignment.
+Codex may use native subagents inside that assignment. CoS selects Orca only
+when independent ownership is materially useful or required; a required
+independent boundary cannot silently fall back to Codex when Orca is
+unavailable.
+
+Profiles are selected by name from `agents/*.toml`. Explicit profile facts may
+be projected one way to the selected runtime, while absent facts inherit native
+defaults. Profile selection does not create an Orca registry or a durable
+runtime configuration mirror.
 
 ## Acceptance
 

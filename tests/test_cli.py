@@ -14,28 +14,6 @@ def test_state_validate_returns_json(capsys):
     assert output["status"] == "valid"
 
 
-def test_cos_next_returns_codex_decision_json(capsys):
-    assert (
-        main(
-            [
-                "cos",
-                "next",
-                "--state",
-                "state/coordination.json",
-                "--repo",
-                ".",
-                "--json",
-            ]
-        )
-        == 0
-    )
-
-    output = json.loads(capsys.readouterr().out)
-    assert output["strategy"] == "codex"
-    assert output["task_id"] is None
-    assert output["reason"] == "goal-only assignment"
-
-
 def test_orca_smoke_reports_observed_status_without_claiming_worker_completion(
     monkeypatch, capsys
 ):

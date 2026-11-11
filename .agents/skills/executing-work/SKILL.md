@@ -24,9 +24,9 @@ Codex agent loop.
 5. Run focused verification, inspect the resulting Git state, and return
    evidence to CoS.
 
-The current Codex runtime is the normal interactive execution path. The
-repository `CodexClient` and `dispatch.py` surfaces are optional headless or
-compatibility helpers; they do not define a second interactive runtime.
+The current Codex runtime is the normal interactive execution path. General-os
+does not maintain a second Python interactive runtime; compatibility proof must
+not be presented as native Codex execution evidence.
 
 ## Native Subagents
 

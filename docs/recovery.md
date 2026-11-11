@@ -10,13 +10,15 @@ Git, not from Codex or Orca session history:
    the task graph is empty.
 4. Reuse required evidence only after checking that it is fresh and applies to
    the current Git revision.
-5. Start a fresh Codex assignment. Use Orca only when the unfinished work needs
-   an independent workstream and the configured boundary is available.
+5. Start a fresh native assignment. Use the current Codex runtime by default;
+   use Orca only when the unfinished work needs an independent workstream and
+   the configured boundary is available.
 
 If Git has a material conflict, a required dependency is unfinished, authority
 is insufficient, or a required independent boundary is unavailable, block and
 preserve the workspace. Missing optional runtime metadata lowers confidence but
 does not create a new recovery ledger or automatically stop safe work.
 
-Do not reconstruct lost runtime sessions, persist runtime IDs, or copy runtime
-progress into `state/coordination.json`.
+There is no separate recovery runtime or recovery ledger. Do not reconstruct
+lost runtime sessions, persist runtime IDs, or copy runtime progress into
+`state/coordination.json`.

@@ -23,15 +23,16 @@ second runtime scheduler.
   and subordinate native subagents.
 - Orca owns independently managed worker lifecycle after CoS selects that
   boundary and the `orca-orchestration` skill is loaded.
-- Python `cos.py` and dispatch adapters are headless/helper projections, not a
-  second authoritative routing policy.
+- `agents/*.toml` is the sole profile registry. Profile selection is semantic;
+  explicit facts may be projected one way to a selected runtime and absent
+  facts inherit native defaults.
 
 ## Decision Flow
 
 1. Read `state/coordination.json` and inspect current Git directly.
 2. Select the first unfinished dependency-ready task. An empty task graph is a
    valid goal-only assignment.
-3. Resolve the semantic profile without translating profile metadata into
+3. Resolve the semantic profile without translating missing metadata into
    guessed runtime model or effort settings.
 4. Select the current Codex runtime by default. Let Codex decide whether native
    subagents help its bounded assignment.
@@ -64,6 +65,6 @@ or persist runtime IDs, heartbeats, progress, or worker registries.
 ## Common Mistakes
 
 - Reimplementing Codex Goal Mode or native subagent scheduling in CoS.
-- Treating a Python helper result as the canonical semantic decision.
+- Treating a runtime observation as the canonical durable decision.
 - Treating stale test evidence as a durable blocker.
 - Copying Codex or Orca runtime state into `general-os`.

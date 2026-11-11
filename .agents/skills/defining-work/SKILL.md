@@ -61,6 +61,8 @@ executor sessions, runtime IDs, temporary checklists, and progress out of it.
 - Keep acceptance observable and tied to fresh evidence.
 - Persist exceptional authority constraints only when they materially change
   what may happen.
+- Select profiles by name from `agents/*.toml`; do not persist runtime-specific
+  model, effort, worker, or lifecycle mirrors.
 - Do not add an execution strategy, worker registry, runtime grant, heartbeat,
   or mirror of native runtime state.
 - Prefer defaults and omission over repeated configuration.

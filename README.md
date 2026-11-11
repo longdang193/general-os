@@ -19,5 +19,10 @@ Acceptance is separate from runtime completion: fresh evidence yields `PASS`,
 retryable or incomplete evidence yields `FAIL`, and only a material safety,
 authority, dependency, Git, or required-runtime boundary yields `BLOCKED`.
 
+Profiles are named semantic choices from `agents/*.toml`, the sole profile
+registry. Explicit profile facts may be projected one way to the selected
+native runtime; omitted facts inherit native defaults. Orca is optional and
+harness-neutral, while ordinary work remains in the current Codex runtime.
+
 `project-OS-starter` is a read-only migration reference, not a runtime or
 schema dependency. It must remain unmodified.

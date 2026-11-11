@@ -14,6 +14,13 @@ execution loop, Goal Mode, context, tools, approvals, and subordinate native
 subagents. Orca owns independently managed worker lifecycle after CoS selects
 that boundary.
 
+`agents/*.toml` is the only profile registry. A profile name is semantic
+selection, not a guessed model or effort setting. General-os may project
+explicit profile facts one way to a selected native runtime; omitted facts
+inherit that runtime's defaults. There is no second Orca profile registry.
+The selected Orca worker is harness-neutral: its resolved runtime may be Codex,
+Claude, or another explicitly supported harness without changing durable state.
+
 Do not mirror runtime IDs, progress, heartbeats, worker registries, or
 temporary plans into general-os. If a fact can be read reliably from Git,
 Codex, or Orca at the point of use, derive it instead of persisting a copy.
@@ -32,6 +39,7 @@ smallest safe execution boundary:
 4. A real Git, authority, dependency, or required-boundary failure blocks;
    missing optional runtime bookkeeping does not.
 
-The Python CoS and dispatch modules are factual/headless compatibility helpers.
-They do not become a second interactive scheduler or a second owner of task
-state.
+The current Codex runtime is the normal interactive execution path. General-os
+does not maintain a Python Codex/CoS/dispatch runtime or a second interactive
+scheduler. Its Orca surface is limited to optional native orchestration guidance
+and read-only health observation; worker lifecycle remains native Orca.

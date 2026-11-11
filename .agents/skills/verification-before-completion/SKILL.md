@@ -22,6 +22,10 @@ CoS changes durable task state. Runtime completion is only an observation.
 5. Report one result with the exact checks, results, revision, and remaining
    work.
 
+Profile names and runtime observations are context, not acceptance evidence.
+Use fresh Git and verification output; do not require optional runtime
+bookkeeping when current source and tests establish the result.
+
 ## Result Contract
 
 ### `PASS`

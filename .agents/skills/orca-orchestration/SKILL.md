@@ -26,16 +26,20 @@ commands in `general-os` code or this skill.
 
 ## Handoff
 
-Project only the semantic assignment:
+Project only the semantic assignment and resolved profile context:
 
 - task objective and relevant context
 - acceptance criteria when useful
 - resolved general-os profile name as context
 
-Do not translate current profile `model`, `provider`, `rank`, or name fields
-into native model or effort settings. Orca and Codex inherit their native
-defaults until a separate profile slice defines explicitly runtime-native
-fields.
+Resolve profile names from the sole `agents/*.toml` registry. Do not create an
+Orca-specific profile registry.
+
+Do not translate missing profile facts or profile names into guessed native
+model or effort settings. Explicit profile facts may be projected one way;
+otherwise the selected worker inherits native defaults. Orca is harness-neutral:
+the resolved worker may use Codex, Claude, or another explicitly supported
+harness.
 
 Never persist or mirror Run IDs, Task IDs, Dispatch IDs, worker IDs,
 heartbeats, progress, or other Orca runtime state in `general-os` durable
@@ -51,6 +55,6 @@ required. If the durable task contract requires an independent boundary, report
 the current Orca observation as a blocker. Do not mutate `orca_enabled` in
 response to transient runtime health.
 
-The injected Python `OrcaTransport`/`OrcaClient` lifecycle seam is a
-compatibility/test seam during migration, not the canonical orchestration path.
-The native Orca skill owns real worker inspection and lifecycle.
+General-os does not provide a Python dispatch, inspection, cancellation, or
+worker registry seam. The native Orca skill owns real worker inspection and
+lifecycle; general-os may retain only read-only CLI health observation.

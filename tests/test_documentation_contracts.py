@@ -100,9 +100,9 @@ def test_orca_skill_and_runtime_docs_keep_native_ownership_explicit():
     assert "orca_enabled" in skill
     assert "native" in skill.lower()
     assert "worker lifecycle" in skill
-    assert "Run ID" in skill
-    assert "native" in skill.lower()
+    assert "harness-neutral" in skill
     assert "model" in skill
+    assert "native defaults" in skill
 
 
 def test_native_cos_keeps_orca_optional_but_allows_material_independence():
@@ -114,6 +114,21 @@ def test_native_cos_keeps_orca_optional_but_allows_material_independence():
 
     assert "materially useful" in chief
     assert "hard requirement" in chief
-    assert "Ordinary work remains Codex-first" in runtime
+    assert "primary execution path" in runtime
     assert "required independent" in runtime
     assert "blocks when Orca is disabled or unavailable" in runtime
+
+
+def test_profile_projection_is_canonical_and_one_way():
+    root = Path(__file__).parents[1]
+    architecture = (root / "docs" / "architecture.md").read_text(encoding="utf-8")
+    runtime = (root / "docs" / "runtime-adapters.md").read_text(encoding="utf-8")
+    skill = (root / ".agents" / "skills" / "orca-orchestration" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+
+    for text in (architecture, runtime, skill):
+        assert "agents/*.toml" in text
+        assert "project" in text.lower() or "projected" in text.lower()
+        assert "defaults" in text
+    assert "no second Orca profile registry" in architecture
