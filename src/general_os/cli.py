@@ -9,6 +9,7 @@ from dataclasses import asdict
 from general_os.acceptance import VerificationResult, apply_task_transition, evaluate_acceptance
 from general_os.git import inspect_git
 from general_os.orca import OrcaCliStatusObserver
+from general_os.profiles import load_profiles, project_profile, resolve_profile
 from general_os.state import StateError, load_state, save_state
 
 
@@ -56,6 +57,13 @@ def run_orca_smoke(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_profile_resolve(args: argparse.Namespace) -> int:
+    profile = resolve_profile(args.name, load_profiles(args.directory))
+    projection = project_profile(profile)
+    _print({"profile": profile.name, **asdict(projection)})
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="general-os")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -80,6 +88,13 @@ def build_parser() -> argparse.ArgumentParser:
     smoke = orca_commands.add_parser("smoke")
     smoke.add_argument("--json", action="store_true")
     smoke.set_defaults(handler=run_orca_smoke)
+
+    profile = commands.add_parser("profile")
+    profile_commands = profile.add_subparsers(dest="profile_command", required=True)
+    resolve = profile_commands.add_parser("resolve")
+    resolve.add_argument("--name", required=True)
+    resolve.add_argument("--directory", default="agents")
+    resolve.set_defaults(handler=run_profile_resolve)
 
     return parser
 

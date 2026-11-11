@@ -14,6 +14,19 @@ def test_state_validate_returns_json(capsys):
     assert output["status"] == "valid"
 
 
+def test_profile_resolve_returns_one_way_projection(capsys):
+    assert main(["profile", "resolve", "--name", "high", "--directory", "agents"]) == 0
+
+    output = json.loads(capsys.readouterr().out)
+    assert output == {
+        "effort": "high",
+        "harness": "codex",
+        "instructions": "",
+        "model": "combo-high",
+        "profile": "high",
+    }
+
+
 def test_orca_smoke_reports_observed_status_without_claiming_worker_completion(
     monkeypatch, capsys
 ):

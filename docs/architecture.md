@@ -18,6 +18,9 @@ that boundary.
 selection, not a guessed model or effort setting. General-os may project
 explicit profile facts one way to a selected native runtime; omitted facts
 inherit that runtime's defaults. There is no second Orca profile registry.
+The read-only `general-os profile resolve` command exposes only the explicit
+`harness`, `model`, `effort`, and `instructions` facts; rank, name, and provider
+never synthesize runtime settings.
 The selected Orca worker is harness-neutral: its resolved runtime may be Codex,
 Claude, or another explicitly supported harness without changing durable state.
 

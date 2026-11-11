@@ -48,10 +48,9 @@ small without introducing a scheduler, runtime registry, or duplicated state.
   or `instructions`; absent fields inherit the native runtime default.
 - Keep `agents/*.toml` as the only profile registry. Do not add Orca profiles,
   provider matrices, a live model catalog, or a second capability algebra.
-- Do not implement the full profile-projection schema in this hardening slice.
-  Record the follow-up boundary for a small `profiles.py`/`agents/*.toml`/
-  native-skill projection slice instead of encoding profiles as descriptive-only
-  metadata.
+- This historical plan intentionally deferred the profile-projection slice.
+  The successor plan `2026-11-11-21-54-profile-projection-and-live-probes-plan.md`
+  owns its later implementation; this plan does not own that code.
 - CoS selects the execution boundary (`Codex` local or `Orca` independent).
   The resolved profile selects only the compatible worker-harness configuration;
   a Claude-capable profile must not force Orca around ordinary local work.
@@ -169,8 +168,8 @@ Changes:
   native Codex execution owned by the current Codex runtime.
 - Remove exact prose, blacklist, and skill-count assertions; retain stable
   schema, ownership, command-surface, and behavioral assertions.
-- Keep the deferred profile-projection slice explicit so this plan does not
-  silently expand into a provider matrix or runtime layer.
+- Keep this plan's historical scope separate from the successor projection
+  slice; neither plan expands into a provider matrix or runtime layer.
 
 Dependencies: Tasks 1 and 2.
 
@@ -228,8 +227,8 @@ Acceptance:
   dangling maintained references.
 - Documentation and native skills define canonical explicit profile projection,
   harness-neutral Orca ownership, lazy health observation, and boring recovery.
-- The profile-projection implementation remains an explicit follow-up rather
-  than an unplanned schema or runtime-layer expansion.
+- The profile-projection implementation is intentionally owned by the successor
+  plan rather than being an unplanned schema or runtime-layer expansion here.
 - Fresh repository, CLI, Orca, and Git checks pass; no `project-OS-starter` path
   changes.
 

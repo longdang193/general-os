@@ -1,7 +1,15 @@
 import json
 import subprocess
 
-from general_os.orca import OrcaCliStatusObserver
+import pytest
+
+from general_os.orca import OrcaCliStatusObserver, build_orca_launch
+from general_os.profiles import (
+    ProfileProjection,
+    load_profiles,
+    project_profile,
+    resolve_profile,
+)
 
 
 def completed(payload, *, returncode=0, stderr=""):
@@ -70,3 +78,90 @@ def test_orca_status_observer_reports_malformed_and_process_failures():
     assert "invalid Orca JSON" in malformed.message
     assert failed.status == "failed"
     assert failed.message == "runtime unavailable"
+
+
+def test_orca_launch_projects_only_explicit_profile_values():
+    launch = build_orca_launch(
+        ProfileProjection(
+            harness="claude",
+            model="verified-claude-model",
+            effort="high",
+            instructions="Review the architecture and report evidence.",
+        )
+    )
+
+    assert launch.argv("orca") == (
+        "orca",
+        "agent",
+        "launch",
+        "--agent",
+        "claude",
+        "--model",
+        "verified-claude-model",
+        "--effort",
+        "high",
+        "--prompt",
+        "Review the architecture and report evidence.",
+    )
+
+
+def test_orca_launch_omits_native_defaults():
+    launch = build_orca_launch(
+        ProfileProjection(
+            harness="codex",
+            model=None,
+            effort=None,
+            instructions="",
+        )
+    )
+
+    assert launch.argv("orca") == ("orca", "agent", "launch", "--agent", "codex")
+
+
+@pytest.mark.parametrize(
+    ("name", "model", "effort"),
+    [
+        ("low", "combo-low", "low"),
+        ("normal", "combo-normal", "medium"),
+        ("high", "combo-high", "high"),
+        ("xhigh", "combo-xhigh", "xhigh"),
+    ],
+)
+def test_orca_launch_uses_only_supplied_profile_projection(name, model, effort):
+    profile = resolve_profile(name, load_profiles("agents"))
+
+    launch = build_orca_launch(project_profile(profile))
+
+    assert launch.model == model
+    assert launch.effort == effort
+    assert launch.argv("orca") == (
+        "orca",
+        "agent",
+        "launch",
+        "--agent",
+        "codex",
+        "--model",
+        model,
+        "--effort",
+        effort,
+    )
+
+
+@pytest.mark.parametrize(
+    ("projection", "message"),
+    [
+        (
+            ProfileProjection(None, "model", None, ""),
+            "Orca launch requires an explicit harness",
+        ),
+        (
+            ProfileProjection("claude", None, "high", ""),
+            "Orca effort requires an explicit model",
+        ),
+    ],
+)
+def test_orca_launch_rejects_incomplete_projection(projection, message):
+    launch = build_orca_launch(projection)
+
+    with pytest.raises(ValueError, match=message):
+        launch.argv("orca")

@@ -41,6 +41,11 @@ otherwise the selected worker inherits native defaults. Orca is harness-neutral:
 the resolved worker may use Codex, Claude, or another explicitly supported
 harness.
 
+For the native CLI handoff, use the resolved projection through
+`build_orca_launch(project_profile(profile))`. This maps only explicit
+`harness`, `model`, `effort`, and `instructions` values to Orca launch flags;
+it does not create a second profile registry or persist runtime configuration.
+
 Never persist or mirror Run IDs, Task IDs, Dispatch IDs, worker IDs,
 heartbeats, progress, or other Orca runtime state in `general-os` durable
 state. Return native runtime outcome and evidence to CoS instead.

@@ -1,4 +1,6 @@
 name = "high"
 rank = 3
-model = "codex"
+harness = "codex"
+model = "combo-high"
+effort = "high"
 provider = "native"

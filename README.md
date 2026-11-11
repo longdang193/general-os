@@ -20,9 +20,12 @@ retryable or incomplete evidence yields `FAIL`, and only a material safety,
 authority, dependency, Git, or required-runtime boundary yields `BLOCKED`.
 
 Profiles are named semantic choices from `agents/*.toml`, the sole profile
-registry. Explicit profile facts may be projected one way to the selected
-native runtime; omitted facts inherit native defaults. Orca is optional and
-harness-neutral, while ordinary work remains in the current Codex runtime.
+registry. The supplied profiles explicitly own the configured `combo-*` model
+and effort values; projection passes those facts one way to the selected
+runtime. Orca is optional and harness-neutral, while ordinary work remains in
+the current Codex runtime. Inspect the explicit projection with `python -m
+general_os profile resolve --name high --directory agents`; the command is
+read-only and does not infer runtime model or effort values.
 
 `project-OS-starter` is a read-only migration reference, not a runtime or
 schema dependency. It must remain unmodified.

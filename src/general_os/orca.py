@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from general_os.profiles import ProfileProjection
+
 
 @dataclass(frozen=True)
 class OrcaStatusObservation:
@@ -19,6 +21,42 @@ class OrcaStatusObservation:
     app_version: str | None = None
     executable: str | None = None
     message: str = ""
+
+
+@dataclass(frozen=True)
+class OrcaLaunch:
+    """One-way launch configuration projected into native Orca CLI flags."""
+
+    agent: str | None
+    model: str | None
+    effort: str | None
+    prompt: str
+
+    def argv(self, executable: str = "orca") -> tuple[str, ...]:
+        if not self.agent:
+            raise ValueError("Orca launch requires an explicit harness")
+        if self.effort and not self.model:
+            raise ValueError("Orca effort requires an explicit model")
+
+        command = [executable, "agent", "launch", "--agent", self.agent]
+        if self.model:
+            command.extend(("--model", self.model))
+        if self.effort:
+            command.extend(("--effort", self.effort))
+        if self.prompt:
+            command.extend(("--prompt", self.prompt))
+        return tuple(command)
+
+
+def build_orca_launch(projection: ProfileProjection) -> OrcaLaunch:
+    """Project explicit general-os profile facts into native Orca launch data."""
+
+    return OrcaLaunch(
+        agent=projection.harness,
+        model=projection.model,
+        effort=projection.effort,
+        prompt=projection.instructions,
+    )
 
 
 Runner = Callable[[Sequence[str], float | None], subprocess.CompletedProcess[str]]

@@ -1,4 +1,6 @@
 name = "normal"
 rank = 2
-model = "codex"
+harness = "codex"
+model = "combo-normal"
+effort = "medium"
 provider = "native"

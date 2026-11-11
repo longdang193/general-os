@@ -1,4 +1,6 @@
 name = "low"
 rank = 1
-model = "codex"
+harness = "codex"
+model = "combo-low"
+effort = "low"
 provider = "native"

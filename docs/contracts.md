@@ -31,6 +31,21 @@ be projected one way to the selected runtime, while absent facts inherit native
 defaults. Profile selection does not create an Orca registry or a durable
 runtime configuration mirror.
 
+The projection shape is `{harness, model, effort, instructions}` plus the
+resolved profile name. Each runtime field is either explicitly configured or
+`null`; `model = "codex"` is not a valid substitute for the `codex` harness.
+The supplied capability profiles explicitly configure the Claude gateway
+combos `combo-low`, `combo-normal`, `combo-high`, and `combo-xhigh` with their
+corresponding effort levels; these values are owned by `agents/*.toml`, not
+reconstructed from rank or profile name.
+
+The optional Orca handoff consumes that projection once and maps it to native
+`orca agent launch` arguments: `harness` becomes `--agent`, explicit `model`
+and `effort` become their matching flags, and `instructions` becomes the
+launch prompt. Missing fields are omitted; no Orca profile registry or runtime
+state is created. Orca rejects an incomplete launch when the harness is absent
+or effort is supplied without an explicit model.
+
 ## Acceptance
 
 Acceptance uses the current task, current Git snapshot, and fresh verification:

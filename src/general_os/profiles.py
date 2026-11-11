@@ -17,7 +17,25 @@ class ProfileSpec:
     rank: int | None = None
     model: str | None = None
     provider: str | None = None
+    harness: str | None = None
+    effort: str | None = None
     instructions: str = ""
+
+
+@dataclass(frozen=True)
+class ProfileProjection:
+    harness: str | None
+    model: str | None
+    effort: str | None
+    instructions: str
+
+
+def _optional_text(raw: object, field: str, path: Path) -> str | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, str) or not raw.strip():
+        raise ProfileError(f"{field} must be a non-empty string: {path}")
+    return raw
 
 
 def load_profiles(directory: str | Path) -> dict[str, ProfileSpec]:
@@ -38,8 +56,10 @@ def load_profiles(directory: str | Path) -> dict[str, ProfileSpec]:
         profiles[name] = ProfileSpec(
             name=name,
             rank=raw.get("rank"),
-            model=raw.get("model"),
+            model=_optional_text(raw.get("model"), "model", path),
             provider=raw.get("provider"),
+            harness=_optional_text(raw.get("harness"), "harness", path),
+            effort=_optional_text(raw.get("effort"), "effort", path),
             instructions=raw.get("instructions", ""),
         )
     return profiles
@@ -56,3 +76,14 @@ def resolve_profile(
         return profiles[requested]
     except KeyError as exc:
         raise ProfileError(f"unknown profile: {requested}") from exc
+
+
+def project_profile(profile: ProfileSpec) -> ProfileProjection:
+    """Project only explicit runtime facts; native runtimes own all defaults."""
+
+    return ProfileProjection(
+        harness=profile.harness,
+        model=profile.model,
+        effort=profile.effort,
+        instructions=profile.instructions,
+    )
