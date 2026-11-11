@@ -36,6 +36,7 @@ class Task:
     depends_on: tuple[str, ...] = ()
     acceptance: tuple[str, ...] = ()
     profile: str | None = None
+    requires_independent_boundary: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.id, str) or not self.id.strip():
@@ -52,12 +53,21 @@ class Task:
             not isinstance(self.profile, str) or not self.profile
         ):
             raise StateError("profile must be a non-empty string when provided")
+        if not isinstance(self.requires_independent_boundary, bool):
+            raise StateError("requires_independent_boundary must be boolean")
         object.__setattr__(self, "depends_on", depends_on)
         object.__setattr__(self, "acceptance", acceptance)
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "Task":
-        allowed = {"id", "state", "depends_on", "acceptance", "profile"}
+        allowed = {
+            "id",
+            "state",
+            "depends_on",
+            "acceptance",
+            "profile",
+            "requires_independent_boundary",
+        }
         unknown = set(value) - allowed
         if unknown:
             raise StateError(f"unknown task field: {sorted(unknown)[0]}")
@@ -67,6 +77,9 @@ class Task:
             depends_on=value.get("depends_on", ()),
             acceptance=value.get("acceptance", ()),
             profile=value.get("profile"),
+            requires_independent_boundary=value.get(
+                "requires_independent_boundary", False
+            ),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -78,6 +91,8 @@ class Task:
         }
         if self.profile is not None:
             result["profile"] = self.profile
+        if self.requires_independent_boundary:
+            result["requires_independent_boundary"] = True
         return result
 
 

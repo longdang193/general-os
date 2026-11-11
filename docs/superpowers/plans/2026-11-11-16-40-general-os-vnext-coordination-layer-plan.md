@@ -142,9 +142,9 @@ user-local Project OS installation.
 | --- | --- | --- | --- | --- | --- | --- |
 | Task 1 | `completed` | current | `codex` | none | `python -m pytest -q tests/test_state.py tests/test_profiles.py tests/test_policy.py` | `17 passed` with Task 2 focused proof on 2026-11-11 |
 | Task 2 | `completed` | current | `codex` | Task 1 | `python -m pytest -q tests/test_git.py tests/test_recovery.py` | `17 passed` combined Task 1–2 proof on 2026-11-11 |
-| Task 3 | `pending` | current | `unresolved` | Task 1 | `python -m pytest -q tests/test_codex.py` | pending |
-| Task 4 | `pending` | current | `unresolved` | Task 1 | `python -m pytest -q tests/test_orca.py` | pending |
-| Task 5 | `pending` | current | `unresolved` | Task 2, Task 3, Task 4 | `python -m pytest -q` and `python -m general_os state validate state/coordination.json` | pending |
+| Task 3 | `completed` | current | `codex` | Task 1 | `python -m pytest -q tests/test_codex.py` | `5 passed` |
+| Task 4 | `completed` | current | `codex` | Task 1 | `python -m pytest -q tests/test_orca.py` | `4 passed`; optional smoke reports unavailable without claiming verification |
+| Task 5 | `completed` | current | `codex` | Task 2, Task 3, Task 4 | `python -m pytest -q`, `python -m compileall -q src`, and CLI checks | `37 passed`; compile and CLI/state/CoS checks pass |
 
 ## Task Breakdown
 
