@@ -5,13 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import asdict
-from pathlib import Path
 
 from general_os.acceptance import VerificationResult, apply_task_transition, evaluate_acceptance
 from general_os.codex import CodexClient
 from general_os.cos import ChiefOfStaff
 from general_os.git import inspect_git
-from general_os.orca import OrcaClient, OrcaRequest
+from general_os.orca import OrcaCliStatusObserver, OrcaClient
 from general_os.policy import load_runtime_config, resolve_policy
 from general_os.profiles import load_profiles
 from general_os.recovery import next_unfinished_task
@@ -88,10 +87,18 @@ def run_recover(args: argparse.Namespace) -> int:
 
 
 def run_orca_smoke(args: argparse.Namespace) -> int:
-    observation = OrcaClient().dispatch(
-        OrcaRequest("smoke", "local smoke", str(Path.cwd()), "normal")
+    observation = OrcaCliStatusObserver().observe()
+    _print(
+        {
+            "status": observation.status,
+            "reachable": observation.reachable,
+            "state": observation.state,
+            "app_version": observation.app_version,
+            "executable": observation.executable,
+            "message": observation.message,
+            "verified": observation.reachable is True,
+        }
     )
-    _print({"status": observation.status, "verified": observation.status == "finished"})
     return 0
 
 

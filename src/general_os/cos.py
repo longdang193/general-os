@@ -62,25 +62,33 @@ class ChiefOfStaff:
         return CoSDecision("codex", task.id, profile, "single assignment")
 
     def next_decision(self, snapshot: GitSnapshot) -> CoSDecision:
+        if not self.state.tasks:
+            if snapshot.conflicts:
+                return CoSDecision(
+                    "blocked", None, "normal", "Git conflict blocks goal-only execution"
+                )
+            return CoSDecision("codex", None, "normal", "goal-only assignment")
         try:
             task = self.select_next_task(snapshot)
         except RecoveryError as exc:
             return CoSDecision("blocked", None, "normal", str(exc))
         if task is None:
+            if all(item.state == "completed" for item in self.state.tasks):
+                return CoSDecision("done", None, "normal", "all declared tasks completed")
             return CoSDecision("blocked", None, "normal", "no dependency-ready task")
         return self.choose_strategy(task, snapshot)
 
     def dispatch_task(
         self,
         decision: CoSDecision,
-        task: Task,
+        task: Task | None,
         workspace: str,
     ) -> CodexObservation | OrcaObservation:
         if decision.strategy == "codex":
             return dispatch_codex(
                 self.codex,
                 CodexDispatchRequest(
-                    task_id=task.id,
+                    task_id=task.id if task is not None else "goal-only",
                     prompt=self.state.goal,
                     workspace=workspace,
                     profile=decision.profile,

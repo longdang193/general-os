@@ -35,6 +35,42 @@ def test_cos_chooses_codex_and_leaves_native_children_to_codex():
     assert decision == CoSDecision("codex", "work", "normal", "single assignment")
 
 
+def test_cos_chooses_codex_goal_only_when_task_graph_is_empty():
+    state = CoordinationState(goal="goal")
+
+    decision = make_cos(state).next_decision(snapshot())
+
+    assert decision == CoSDecision("codex", None, "normal", "goal-only assignment")
+
+
+def test_cos_reports_done_when_all_declared_tasks_are_completed():
+    state = CoordinationState(
+        goal="goal", tasks=(Task(id="work", state="completed"),)
+    )
+
+    decision = make_cos(state).next_decision(snapshot())
+
+    assert decision == CoSDecision(
+        "done", None, "normal", "all declared tasks completed"
+    )
+
+
+def test_cos_blocks_when_unfinished_tasks_have_no_ready_dependency():
+    state = CoordinationState(
+        goal="goal",
+        tasks=(
+            Task(id="dependency", state="blocked"),
+            Task(id="work", depends_on=("dependency",)),
+        ),
+    )
+
+    decision = make_cos(state).next_decision(snapshot())
+
+    assert decision == CoSDecision(
+        "blocked", None, "normal", "no dependency-ready task"
+    )
+
+
 def test_cos_chooses_orca_only_for_independent_enabled_work():
     state = CoordinationState(
         goal="goal",
