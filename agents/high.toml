@@ -1,0 +1,4 @@
+name = "high"
+rank = 3
+model = "codex"
+provider = "native"

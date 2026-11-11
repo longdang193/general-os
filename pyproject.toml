@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "general-os"
+version = "0.1.0"
+description = "A durable semantic coordination layer above native agent runtimes"
+requires-python = ">=3.12"
+
+[project.scripts]
+general-os = "general_os.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

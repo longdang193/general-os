@@ -1,0 +1,4 @@
+name = "normal"
+rank = 2
+model = "codex"
+provider = "native"
