@@ -65,7 +65,8 @@ Runtime completion never changes durable acceptance by itself. Repeated
 successful transitions are idempotent.
 
 Only the public in-process `create_verification_result` handoff may produce a
-passing verification result. It binds evidence to the task ID and current Git
+passing verification result. It binds evidence to the task ID, a deterministic
+fingerprint of the acceptance-relevant task contract, and the current Git
 observation. The CLI accepts retryable `FAIL` and material `BLOCKED` transitions,
 but it cannot manufacture `PASS` from status, check names, revision, or
 snapshot arguments. Reuse of evidence is rejected across tasks or snapshot
@@ -86,10 +87,10 @@ evidence containing the task ID, supported `orca` boundary kind, matching
 snapshot identity, and non-empty evidence. These values are not persisted as
 worker lifecycle state, and the CLI cannot forge them from free-form input.
 
-Completed tasks may retain their accepted snapshot identity as durable
-acceptance evidence. Recovery revalidates it against current Git; missing or
-mismatched evidence makes the task and any completed dependents pending until
-fresh acceptance is obtained.
+Completed tasks retain their accepted snapshot identity and task-contract
+fingerprint as durable acceptance evidence. Recovery revalidates both against
+current Git and current task semantics; missing or mismatched evidence makes the
+task and any completed dependents pending until fresh acceptance is obtained.
 
 Completed tasks must have completed dependencies. A retryable `FAIL` leaves an
 active task unchanged and returns a blocked task to `pending`; `BLOCKED` is

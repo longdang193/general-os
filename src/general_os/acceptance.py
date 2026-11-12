@@ -36,6 +36,7 @@ class VerificationResult:
     message: str = ""
     task_id: str | None = None
     snapshot_identity: str | None = None
+    task_contract_identity: str | None = None
     boundary_evidence: BoundaryEvidence | None = None
     blocker_category: str | None = None
     blocker_reason: str | None = None
@@ -61,6 +62,7 @@ def create_verification_result(
         evidence_revision=snapshot.revision,
         task_id=task.id,
         snapshot_identity=snapshot.identity,
+        task_contract_identity=task.contract_identity(),
         boundary_evidence=boundary_evidence,
     )
 
@@ -72,6 +74,7 @@ class AcceptanceDecision:
     blocker_category: str | None = None
     blocker_reason: str | None = None
     accepted_snapshot_identity: str | None = None
+    accepted_task_contract_identity: str | None = None
     task_id: str | None = field(default=None, compare=False, repr=False)
     _decision_token: object | None = field(default=None, compare=False, repr=False)
 
@@ -108,6 +111,8 @@ def evaluate_acceptance(
         return AcceptanceDecision("FAIL", "verification result is not verifier-produced")
     if verification.task_id != task.id:
         return AcceptanceDecision("FAIL", "verification result is bound to another task")
+    if verification.task_contract_identity != task.contract_identity():
+        return AcceptanceDecision("FAIL", "task contract evidence is missing or stale")
     if snapshot.identity is None:
         return AcceptanceDecision("FAIL", "verification worktree identity is missing")
     if verification.snapshot_identity != snapshot.identity:
@@ -130,6 +135,7 @@ def evaluate_acceptance(
         "PASS",
         "required proof is current",
         accepted_snapshot_identity=snapshot.identity,
+        accepted_task_contract_identity=task.contract_identity(),
         task_id=task.id,
         _decision_token=_DECISION_TOKEN,
     )
@@ -173,6 +179,10 @@ def apply_task_transition(
             raise ValueError("PASS requires verifier-produced task-bound evidence")
         if not decision.accepted_snapshot_identity:
             raise ValueError("PASS requires verifier snapshot identity")
+        if not decision.accepted_task_contract_identity:
+            raise ValueError("PASS requires verifier task contract identity")
+        if decision.accepted_task_contract_identity != target.contract_identity():
+            raise ValueError("PASS requires current task contract evidence")
         incomplete = [dependency for dependency in target.depends_on if next(task for task in state.tasks if task.id == dependency).state != "completed"]
         if incomplete:
             raise ValueError(f"task dependencies are incomplete: {', '.join(incomplete)}")
@@ -185,6 +195,7 @@ def apply_task_transition(
     ) and (
         decision.status != "PASS"
         or target.accepted_snapshot_identity == decision.accepted_snapshot_identity
+        and target.accepted_task_contract_identity == decision.accepted_task_contract_identity
     ):
         return state
     updated = replace(
@@ -192,6 +203,9 @@ def apply_task_transition(
         state=new_state,
         accepted_snapshot_identity=(
             decision.accepted_snapshot_identity if new_state == "completed" else None
+        ),
+        accepted_task_contract_identity=(
+            decision.accepted_task_contract_identity if new_state == "completed" else None
         ),
         blocker_category=decision.blocker_category if new_state == "blocked" else None,
         blocker_reason=decision.blocker_reason if new_state == "blocked" else None,
@@ -209,6 +223,7 @@ def revalidate_completed_tasks(
         if task.state == "completed" and (
             snapshot.identity is None
             or task.accepted_snapshot_identity != snapshot.identity
+            or task.accepted_task_contract_identity != task.contract_identity()
         ):
             stale.add(task.id)
 
@@ -233,6 +248,7 @@ def revalidate_completed_tasks(
                 task,
                 state="pending",
                 accepted_snapshot_identity=None,
+                accepted_task_contract_identity=None,
                 blocker_category=None,
                 blocker_reason=None,
             )
