@@ -33,6 +33,19 @@ def test_orca_status_observer_prefers_explicit_executable(tmp_path, monkeypatch)
     ) == str(configured)
 
 
+def test_orca_status_observer_does_not_fall_back_from_invalid_explicit_path(
+    tmp_path, monkeypatch
+):
+    path_candidate = tmp_path / "path-orca.exe"
+    path_candidate.write_text("", encoding="utf-8")
+    monkeypatch.setattr("general_os.orca.shutil.which", lambda _: str(path_candidate))
+
+    configured = tmp_path / "missing-orca.exe"
+    assert OrcaCliStatusObserver.discover_executable(
+        {"GENERAL_OS_ORCA_CLI": str(configured)}
+    ) == str(configured)
+
+
 def test_orca_status_observer_maps_ready_and_optional_diagnostics():
     observed_timeout = []
     observer = OrcaCliStatusObserver(
@@ -79,6 +92,16 @@ def test_orca_status_observer_reports_malformed_and_process_failures():
     assert "invalid Orca JSON" in malformed.message
     assert failed.status == "failed"
     assert failed.message == "runtime unavailable"
+
+
+def test_orca_status_observer_reports_timeout():
+    def timeout(command, limit):
+        raise subprocess.TimeoutExpired(command, limit)
+
+    observation = OrcaCliStatusObserver(executable="orca", runner=timeout).observe()
+
+    assert observation.status == "failed"
+    assert observation.message == "Orca status timed out"
 
 
 def test_orca_launch_projects_only_explicit_profile_values():

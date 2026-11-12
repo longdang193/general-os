@@ -28,6 +28,8 @@ def run_state_validate(args: argparse.Namespace) -> int:
 
 
 def run_accept(args: argparse.Namespace) -> int:
+    if args.status == "pass":
+        raise StateError("PASS requires verifier-produced evidence")
     if args.status != "blocked" and (
         args.blocker_category is not None or args.blocker_reason is not None
     ):
@@ -39,9 +41,6 @@ def run_accept(args: argparse.Namespace) -> int:
     snapshot = inspect_git(args.repo)
     verification = VerificationResult(
         status=args.status,
-        passed=tuple(args.check),
-        evidence_revision=args.revision or snapshot.revision,
-        snapshot_identity=args.snapshot_identity,
         blocker_category=args.blocker_category,
         blocker_reason=args.blocker_reason,
     )
@@ -66,7 +65,7 @@ def run_orca_smoke(args: argparse.Namespace) -> int:
             "verified": observation.reachable is True,
         }
     )
-    return 0
+    return 0 if observation.status == "ready" else 1
 
 
 def run_profile_resolve(args: argparse.Namespace) -> int:
@@ -90,10 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
     accept.add_argument("--state", required=True)
     accept.add_argument("--repo", required=True)
     accept.add_argument("--task-id", required=True)
-    accept.add_argument("--status", choices=("pass", "fail", "blocked"), required=True)
-    accept.add_argument("--check", action="append", default=[])
-    accept.add_argument("--revision")
-    accept.add_argument("--snapshot-identity")
+    accept.add_argument("--status", choices=("fail", "blocked"), required=True)
     accept.add_argument("--blocker-category", choices=sorted(BLOCKER_CATEGORIES))
     accept.add_argument("--blocker-reason")
     accept.set_defaults(handler=run_accept)

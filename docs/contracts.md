@@ -62,14 +62,27 @@ context when it returns a blocked task to `pending`.
 Runtime completion never changes durable acceptance by itself. Repeated
 successful transitions are idempotent.
 
+Only the in-process verifier handoff may produce a passing verification result.
+The CLI accepts retryable `FAIL` and material `BLOCKED` transitions, but it
+cannot manufacture `PASS` from status, check names, revision, or snapshot
+arguments. Reuse of evidence is rejected across tasks or snapshot identities;
+repeating the same verified task/snapshot transition remains idempotent.
+
 ## Verification evidence
 
-`GitSnapshot.identity` binds `HEAD`, branch, tracked diff, status, and untracked
-file content. A repository-bound `PASS` must carry the same identity. A task
+`GitSnapshot.identity` binds canonical repository/worktree provenance, `HEAD`,
+branch, tracked diff, status, and untracked file content. Untracked files are
+hashed in bounded chunks; symlink targets and unreadable paths have explicit
+diagnostics. A repository-bound `PASS` must carry the same identity. A task
 with `requires_independent_boundary` must also carry ephemeral typed boundary
-evidence containing the supported `orca` boundary kind, matching snapshot
-identity, and non-empty evidence. These values are not persisted in durable
-state, and the CLI cannot forge them from free-form input.
+evidence containing the task ID, supported `orca` boundary kind, matching
+snapshot identity, and non-empty evidence. These values are not persisted as
+worker lifecycle state, and the CLI cannot forge them from free-form input.
+
+Completed tasks may retain their accepted snapshot identity as durable
+acceptance evidence. Recovery revalidates it against current Git; missing or
+mismatched evidence makes the task and any completed dependents pending until
+fresh acceptance is obtained.
 
 Completed tasks must have completed dependencies. A retryable `FAIL` leaves an
 active task unchanged and returns a blocked task to `pending`; `BLOCKED` is
@@ -80,8 +93,11 @@ write operations guarded by an interprocess lock and atomic replacement.
 
 Fresh in-memory state may create a missing file, but may not overwrite an
 existing file without loaded-state provenance. Durable `remote_side_effects =
-"allow"` exceptions require non-empty scope, provenance, and a future
-ISO-8601 expiry; a configured local `deny` ceiling remains absolute.
+"allow"` exceptions require non-empty scope, provenance, and a timezone-aware
+ISO-8601 expiry. Resolution requires an exact requested scope.
+Expired-but-well-formed exceptions remain loadable but fall back to the safer
+local policy; malformed exceptions fail closed. A configured local `deny`
+ceiling remains absolute.
 
 The configured local `remote_side_effects = "deny"` policy cannot be widened by
 durable state. Missing profile directories, missing requested profiles, unknown

@@ -81,7 +81,15 @@ class GitRepository:
         status: str,
     ) -> str:
         digest = hashlib.sha256()
-        for value in (branch, revision or "", status):
+        repository_root = self._run("rev-parse", "--show-toplevel")
+        common_dir = self._run("rev-parse", "--git-common-dir")
+        for value in (
+            str(Path(repository_root).resolve()),
+            str((self.root / common_dir).resolve()),
+            branch,
+            revision or "",
+            status,
+        ):
             digest.update(value.encode("utf-8"))
             digest.update(b"\0")
         if revision is None:
@@ -101,11 +109,22 @@ class GitRepository:
         ]
         for path in sorted(untracked):
             candidate = self.root / path
-            if candidate.is_file():
-                digest.update(os.fsencode(path))
-                digest.update(b"\0")
-                digest.update(candidate.read_bytes())
-                digest.update(b"\0")
+            digest.update(os.fsencode(path))
+            digest.update(b"\0")
+            try:
+                if candidate.is_symlink():
+                    digest.update(b"symlink\0")
+                    digest.update(os.fsencode(os.readlink(candidate)))
+                elif candidate.is_file():
+                    digest.update(b"file\0")
+                    with candidate.open("rb") as handle:
+                        while chunk := handle.read(1024 * 1024):
+                            digest.update(chunk)
+                else:
+                    digest.update(b"non-regular\0")
+            except OSError as exc:
+                raise GitError(f"Unable to hash untracked path {path}") from exc
+            digest.update(b"\0")
         return digest.hexdigest()
 
 

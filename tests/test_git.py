@@ -1,6 +1,8 @@
 import subprocess
 
-from general_os.git import GitRepository, GitSnapshot
+import pytest
+
+from general_os.git import GitError, GitRepository, GitSnapshot
 
 
 def run_git(root, *args):
@@ -152,3 +154,59 @@ def test_snapshot_identity_handles_utf8_tracked_diff(tmp_path):
     snapshot = GitRepository(tmp_path).inspect()
 
     assert snapshot.clean is False
+
+
+def test_snapshot_identity_distinguishes_clean_clones(tmp_path):
+    source = tmp_path / "source"
+    clone = tmp_path / "clone"
+    source.mkdir()
+    run_git(source, "init", "--initial-branch", "main")
+    (source / "file.txt").write_text("content\n", encoding="utf-8")
+    run_git(source, "add", "file.txt")
+    run_git(
+        source,
+        "-c",
+        "user.name=Test User",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "initial",
+    )
+    run_git(tmp_path, "clone", str(source), str(clone))
+
+    assert GitRepository(source).inspect().identity != GitRepository(clone).inspect().identity
+
+
+def test_snapshot_identity_hashes_symlink_target_when_supported(tmp_path):
+    run_git(tmp_path, "init", "--initial-branch", "main")
+    target = tmp_path / "target.txt"
+    link = tmp_path / "link.txt"
+    target.write_text("content\n", encoding="utf-8")
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("symlinks unavailable")
+
+    first = GitRepository(tmp_path).inspect()
+    link.unlink()
+    link.symlink_to(tmp_path / "other.txt")
+    second = GitRepository(tmp_path).inspect()
+
+    assert first.identity != second.identity
+
+
+def test_snapshot_identity_reports_unreadable_untracked_file(tmp_path, monkeypatch):
+    run_git(tmp_path, "init", "--initial-branch", "main")
+    path = tmp_path / "untracked.txt"
+    path.write_text("content\n", encoding="utf-8")
+    original_open = type(path).open
+
+    def fail_open(self, *args, **kwargs):
+        if self == path:
+            raise OSError("unreadable")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(type(path), "open", fail_open)
+    with pytest.raises(GitError, match="Unable to hash untracked path"):
+        GitRepository(tmp_path).inspect()

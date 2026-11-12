@@ -53,6 +53,7 @@ def load_runtime_config(path: str | Path) -> RuntimeConfig:
 def resolve_policy(
     exceptions: Mapping[str, str] | AuthorityExceptions | None = None,
     config: RuntimeConfig | None = None,
+    requested_scope: str | None = None,
 ) -> RuntimeConfig:
     resolved = config or RuntimeConfig()
     if isinstance(exceptions, AuthorityExceptions):
@@ -88,7 +89,7 @@ def resolve_policy(
         missing = {"scope", "provenance", "expires_at"} - set(values)
         if missing:
             raise PolicyError(
-                "allow policy exception requires scope, provenance, and expiry"
+                "allow policy exception requires requested scope, provenance, and expiry"
             )
         metadata_keys = {"scope", "provenance", "expires_at"}
         if not all(
@@ -96,16 +97,19 @@ def resolve_policy(
             for key in metadata_keys
         ):
             raise PolicyError("allow policy exception metadata must be non-empty strings")
+        if requested_scope is None:
+            raise PolicyError("allow policy exception requires a requested scope")
+        if values["scope"] != requested_scope:
+            raise PolicyError("allow policy exception scope does not match requested scope")
         try:
             expires_at = values["expires_at"].replace("Z", "+00:00")
             expiry = datetime.fromisoformat(expires_at)
         except (AttributeError, TypeError, ValueError) as exc:
             raise PolicyError("allow policy exception expiry must be ISO-8601") from exc
-        if (
-            expiry.tzinfo is None
-            or expiry.astimezone(timezone.utc) <= datetime.now(timezone.utc)
-        ):
-            raise PolicyError("allow policy exception is expired")
+        if expiry.tzinfo is None:
+            raise PolicyError("allow policy exception expiry must include a timezone")
+        if expiry.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+            remote_side_effects = resolved.remote_side_effects
     if not isinstance(resolved.native_subagents_enabled, bool):
         raise PolicyError("native_subagents_enabled must be boolean")
     if not isinstance(resolved.orca_enabled, bool):

@@ -137,7 +137,7 @@ class OrcaCliStatusObserver:
     def discover_executable(environ: Mapping[str, str] | None = None) -> str | None:
         environment = environ if environ is not None else os.environ
         configured = environment.get("GENERAL_OS_ORCA_CLI")
-        if configured and Path(configured).is_file():
+        if configured:
             return str(Path(configured))
         for command in ("orca", "orca.exe"):
             found = shutil.which(command)

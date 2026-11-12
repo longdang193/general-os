@@ -29,7 +29,7 @@ the unprefixed target name; excluded control-plane material is retired.
 | `skill-creating-learning-materials` | migrate to `.agents/skills/creating-learning-materials/` |
 | `skill-dashboard-reporting` | migrate to `.agents/skills/dashboard-reporting/` |
 | `skill-deepagents-executing-plans` | retire; no second execution authority |
-| `skill-dispatching-parallel-agents` | fold native bounded delegation into `executing-work`; retire peer scheduling |
+| `skill-dispatching-parallel-agents` | fold native bounded delegation into `.agents/skills/executing-work/`; retire peer scheduling |
 | `skill-disposable-artifact-cleanup` | migrate to `.agents/skills/disposable-artifact-cleanup/` |
 | `skill-distinctive-frontend-design` | migrate to `.agents/skills/distinctive-frontend-design/` |
 | `skill-executing-plans` | fold into `.agents/skills/executing-work/` |
@@ -45,7 +45,7 @@ the unprefixed target name; excluded control-plane material is retired.
 | `skill-requesting-code-review` | migrate to `.agents/skills/requesting-code-review/` |
 | `skill-reviewing-pull-requests` | migrate to `.agents/skills/reviewing-pull-requests/` |
 | `skill-spec-drafting` | migrate to `.agents/skills/spec-drafting/` |
-| `skill-subagent-driven-development` | fold bounded sequential child work into `executing-work`; retire peer orchestration |
+| `skill-subagent-driven-development` | fold bounded sequential child work into `.agents/skills/executing-work/`; retire peer orchestration |
 | `skill-systematic-debugging` | migrate to `.agents/skills/systematic-debugging/` |
 | `skill-test-driven-development` | migrate to `.agents/skills/test-driven-development/` |
 | `skill-using-git-worktrees` | migrate to `.agents/skills/workspace-isolation/` |
@@ -60,16 +60,16 @@ the unprefixed target name; excluded control-plane material is retired.
 | Predecessor rule | Disposition |
 | --- | --- |
 | `agent-memory-rule.md` | fold durable-memory boundary into `AGENTS.md` |
-| `audit-evidence-mandate-rule.md` | fold evidence ownership into verification skills |
+| `audit-evidence-mandate-rule.md` | fold evidence ownership into `.agents/skills/verification-before-completion/` |
 | `backend-verification-rule.md` | fold semantic contract into `.agents/skills/backend-verification/` |
 | `command-execution-rule.md` | fold native command safety into `AGENTS.md` |
-| `doc-contracts-rule.md` | fold documentation contract checks into `writing-skills` and tests |
-| `frontend-backend-integration-rule.md` | fold contract boundary into `full-stack-integration` |
+| `doc-contracts-rule.md` | fold documentation contract checks into `.agents/skills/writing-skills/` and `tests/test_documentation_contracts.py` |
+| `frontend-backend-integration-rule.md` | fold contract boundary into `.agents/skills/full-stack-integration/` |
 | `frontend-ui-rule.md` | migrate shared rule to `docs/rules/frontend-ui.md` |
 | `git-tracked-coordination-rule.md` | fold Git/plan ownership into `AGENTS.md` |
 | `prompt-cache-contract-rule.md` | migrate shared rule to `docs/rules/prompt-cache.md` |
 | `publication-boundary-rule.md` | migrate shared rule to `docs/rules/publication-boundary.md` |
-| `python-contracts-rule.md` | fold Python boundary guidance into `code-standards` |
+| `python-contracts-rule.md` | fold Python boundary guidance into `.agents/skills/code-standards/` |
 
 ## Cutover acceptance
 

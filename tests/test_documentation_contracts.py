@@ -1,5 +1,7 @@
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -180,6 +182,37 @@ def test_migration_manifest_accounts_for_every_predecessor_surface():
     assert all(rule in migration for rule in rules)
     assert migration.count("| `skill-") == 33
     assert migration.count("| `") >= 44
+
+
+def test_migration_manifest_validator_checks_current_tree():
+    root = Path(__file__).parents[1]
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "validate_migration_manifest.py"),
+            "--manifest",
+            str(root / "docs" / "migration" / "project-os-starter.md"),
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "valid:" in result.stdout
+
+
+def test_publication_boundary_has_one_maintained_skill_owner():
+    root = Path(__file__).parents[1]
+    owners = [
+        path
+        for path in (root / ".agents" / "skills").glob("*/SKILL.md")
+        if "docs/rules/publication-boundary.md"
+        in path.read_text(encoding="utf-8")
+    ]
+
+    assert [path.parent.name for path in owners] == ["finishing-development-work"]
 
 
 def test_maintained_skills_use_minimal_frontmatter_and_no_generated_rules():

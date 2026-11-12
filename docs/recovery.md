@@ -8,9 +8,13 @@ Git, not from Codex or Orca session history:
    files directly from Git.
 3. Determine the unfinished dependency-ready task, or use the global goal when
    the task graph is empty.
-4. Reuse required evidence only after checking that it is fresh and applies to
-   the current Git revision.
-5. Start a fresh native assignment. Use the current Codex runtime by default;
+4. Revalidate every completed task against its accepted `GitSnapshot.identity`
+   and the current complete snapshot identity. If evidence is missing or
+   mismatched after checkout, reset, or other material Git divergence, move the
+   task to `pending` and invalidate completed dependents transitively.
+5. Reuse required evidence only after checking that it is fresh and applies to
+   the current task and complete Git snapshot identity.
+6. Start a fresh native assignment. Use the current Codex runtime by default;
    use Orca only when the unfinished work needs an independent workstream and
    the configured boundary is available.
 

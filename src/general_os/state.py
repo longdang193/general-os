@@ -45,6 +45,7 @@ class Task:
     acceptance: tuple[str, ...] = ()
     profile: str | None = None
     requires_independent_boundary: bool = False
+    accepted_snapshot_identity: str | None = None
     blocker_category: str | None = None
     blocker_reason: str | None = None
 
@@ -69,6 +70,13 @@ class Task:
             raise StateError("profile must be a non-empty string when provided")
         if not isinstance(self.requires_independent_boundary, bool):
             raise StateError("requires_independent_boundary must be boolean")
+        if self.accepted_snapshot_identity is not None and (
+            not isinstance(self.accepted_snapshot_identity, str)
+            or not self.accepted_snapshot_identity.strip()
+        ):
+            raise StateError(
+                "accepted_snapshot_identity must be a non-empty string when provided"
+            )
         if self.state == "blocked":
             if self.blocker_category not in BLOCKER_CATEGORIES:
                 raise StateError("blocked tasks require a valid blocker category")
@@ -92,6 +100,7 @@ class Task:
             "acceptance",
             "profile",
             "requires_independent_boundary",
+            "accepted_snapshot_identity",
             "blocker_category",
             "blocker_reason",
         }
@@ -108,6 +117,7 @@ class Task:
             requires_independent_boundary=value.get(
                 "requires_independent_boundary", False
             ),
+            accepted_snapshot_identity=value.get("accepted_snapshot_identity"),
             blocker_category=value.get("blocker_category"),
             blocker_reason=value.get("blocker_reason"),
         )
@@ -125,6 +135,8 @@ class Task:
             result["profile"] = self.profile
         if self.requires_independent_boundary:
             result["requires_independent_boundary"] = True
+        if self.accepted_snapshot_identity is not None:
+            result["accepted_snapshot_identity"] = self.accepted_snapshot_identity
         if self.blocker_category is not None:
             result["blocker_category"] = self.blocker_category
             result["blocker_reason"] = self.blocker_reason
@@ -142,18 +154,29 @@ class CoordinationState:
     def __post_init__(self) -> None:
         if not isinstance(self.goal, str) or not self.goal.strip():
             raise StateError("goal must be a non-empty string")
+        if isinstance(self.version, bool) or not isinstance(self.version, int):
+            raise StateError(f"unsupported state version: {self.version}")
         if self.version != STATE_VERSION:
             raise StateError(f"unsupported state version: {self.version}")
         tasks = tuple(self.tasks)
         task_ids = [task.id for task in tasks]
         if len(set(task_ids)) != len(task_ids):
             raise StateError("duplicate task id")
-        exceptions = dict(self.policy_exceptions)
+        exceptions = self._validated_policy_exceptions(self.policy_exceptions)
+        object.__setattr__(self, "tasks", tasks)
+        object.__setattr__(self, "policy_exceptions", exceptions)
+        self.validate()
+
+    @staticmethod
+    def _validated_policy_exceptions(value: Mapping[str, Any]) -> dict[str, str]:
+        if not isinstance(value, Mapping):
+            raise StateError("policy_exceptions must be an object")
+        exceptions = dict(value)
         unknown = set(exceptions) - POLICY_EXCEPTION_KEYS
         if unknown:
             raise StateError(f"unknown policy exception: {sorted(unknown)[0]}")
-        for key, value in exceptions.items():
-            if not isinstance(value, str) or not value.strip():
+        for key, item in exceptions.items():
+            if not isinstance(item, str) or not item.strip():
                 raise StateError(
                     f"policy exception values must be non-empty strings: {key}"
                 )
@@ -167,10 +190,10 @@ class CoordinationState:
                 expiry = datetime.fromisoformat(
                     exceptions["expires_at"].replace("Z", "+00:00")
                 )
-            except ValueError as exc:
+            except (AttributeError, TypeError, ValueError) as exc:
                 raise StateError("policy exception expiry must be ISO-8601") from exc
-            if expiry.tzinfo is None or expiry.astimezone(timezone.utc) <= datetime.now(timezone.utc):
-                raise StateError("policy exception expiry must be in the future")
+            if expiry.tzinfo is None:
+                raise StateError("policy exception expiry must include a timezone")
         elif any(key in exceptions for key in ("scope", "provenance", "expires_at")):
             raise StateError("policy metadata requires remote_side_effects=allow")
         if (
@@ -180,9 +203,7 @@ class CoordinationState:
             raise StateError(
                 f"invalid policy value for remote_side_effects: {exceptions['remote_side_effects']}"
             )
-        object.__setattr__(self, "tasks", tasks)
-        object.__setattr__(self, "policy_exceptions", exceptions)
-        self.validate()
+        return exceptions
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "CoordinationState":
@@ -199,6 +220,8 @@ class CoordinationState:
         if not isinstance(exceptions, Mapping):
             raise StateError("policy_exceptions must be an object")
         version = value.get("version", STATE_VERSION)
+        if isinstance(version, bool) or not isinstance(version, int):
+            raise StateError(f"unsupported state version: {version}")
         if version != STATE_VERSION:
             raise StateError(f"unsupported state version: {version}")
         return cls(
@@ -209,6 +232,7 @@ class CoordinationState:
         )
 
     def validate(self) -> None:
+        self._validated_policy_exceptions(self.policy_exceptions)
         tasks_by_id = {task.id: task for task in self.tasks}
         for task in self.tasks:
             for dependency in task.depends_on:

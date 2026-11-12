@@ -10,6 +10,9 @@ Finish verified development work through one explicitly selected Git disposition
 
 This skill owns Git reconciliation and Git-managed branch/worktree cleanup after verification. It does not implement remaining work, decide product behavior, publish curated output, clean task-owned disposable artifacts, or weaken failed checks.
 
+The canonical publication authority is `docs/rules/publication-boundary.md`.
+This skill references that rule and does not redefine its ownership.
+
 ## Preconditions
 
 Require a fresh accepted task-proof handoff for branch or PR publication, and a

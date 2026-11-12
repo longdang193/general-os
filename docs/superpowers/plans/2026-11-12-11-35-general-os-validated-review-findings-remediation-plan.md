@@ -1,7 +1,7 @@
 ---
 layer: change
 artifact_type: plan
-status: proposed
+status: completed
 template_id: implementation-plan
 contract_version: "1"
 name: general-os-validated-review-findings-remediation
@@ -232,28 +232,28 @@ identity before Task 1 can verify wrong-worktree evidence.
 - Stop for: a new runtime ledger, worker registry, external side effect, or unresolved change to the durable state schema.
 
 **Steps:**
-- [ ] Define the existing verifier-to-acceptance handoff so a `PASS` cannot be
+- [x] Define the existing verifier-to-acceptance handoff so a `PASS` cannot be
   assembled from free-form CLI claims; preserve `FAIL` and `BLOCKED` semantics.
-- [ ] Use a concrete in-process verifier handoff: the CLI accepts no caller
+- [x] Use a concrete in-process verifier handoff: the CLI accepts no caller
   supplied pass/check/snapshot claims, and only the current verifier adapter
   constructs the acceptance result consumed by `evaluate_acceptance`. Enforce
   this with a module-private, non-durable verifier capability or equivalent
   in-process provenance marker; do not add signatures, a nonce store, a receipt
   registry, or another durable runtime ledger.
-- [ ] Bind independent-boundary evidence to the task and repository/worktree
+- [x] Bind independent-boundary evidence to the task and repository/worktree
   identity without persisting worker IDs, heartbeats, or runtime lifecycle;
   task binding may be an ephemeral evidence field validated alongside the
   snapshot identity.
-- [ ] Define replay narrowly as reuse of evidence for a different task or a
+- [x] Define replay narrowly as reuse of evidence for a different task or a
   different `GitSnapshot.identity`; reuse for the same task and same snapshot
   remains valid and idempotent. Reject cross-task, wrong-worktree, stale, and
   unsupported boundary evidence before `apply_task_transition` can complete a
   task.
-- [ ] Keep repeated successful transitions idempotent and preserve dependency
+- [x] Keep repeated successful transitions idempotent and preserve dependency
   and blocker validation.
 
 **Verification:**
-- [ ] Add tests for missing verifier output, CLI pass/check injection, valid
+- [x] Add tests for missing verifier output, CLI pass/check injection, valid
   verifier output, same-task/same-snapshot idempotence, cross-task reuse,
   stale-snapshot reuse, and wrong-worktree evidence.
 - Expected: only the current verifier handoff for the current task and snapshot
@@ -297,18 +297,18 @@ must be complete before acceptance tests consume it.
 - Stop for: a new permission registry, credential handling, external approval integration, or silent widening of local deny ceilings.
 
 **Steps:**
-- [ ] Require an operation scope when resolving a durable allow and reject an
+- [x] Require an operation scope when resolving a durable allow and reject an
   exception whose scope does not match the requested target.
-- [ ] Treat provenance as evidence metadata rather than a free-form grant;
+- [x] Treat provenance as evidence metadata rather than a free-form grant;
   preserve the local `deny` ceiling and reject incomplete authority metadata.
-- [ ] Separate syntactic state validation from active-authority expiry so an
+- [x] Separate syntactic state validation from active-authority expiry so an
   expired exception remains loadable and resolves to the safer local policy.
-- [ ] Revalidate policy-exception structure on every save or make the nested
+- [x] Revalidate policy-exception structure on every save or make the nested
   mapping immutable without breaking JSON serialization.
-- [ ] Reject boolean and non-integer schema versions explicitly.
+- [x] Reject boolean and non-integer schema versions explicitly.
 
 **Verification:**
-- [ ] Test authorized and unauthorized scope resolution, expired-state loading,
+- [x] Test authorized and unauthorized scope resolution, expired-state loading,
   post-load mutation followed by save, malformed metadata, deny ceilings, and
   `version: true`.
 - Expected: expired-but-well-formed authority remains loadable and falls back
@@ -352,25 +352,25 @@ must use the repository/worktree-bound identity it establishes.
 - Stop for: destructive checkout/reset of the user workspace, persisted runtime identifiers, or weakening current content freshness checks.
 
 **Steps:**
-- [ ] Derive canonical repository/worktree provenance from Git and include a
+- [x] Derive canonical repository/worktree provenance from Git and include a
   stable representation in snapshot identity without exposing unnecessary path
   data in durable state.
-- [ ] Hash untracked files incrementally in bounded chunks and define explicit
+- [x] Hash untracked files incrementally in bounded chunks and define explicit
   behavior for unreadable files, symlinks, and I/O failures.
-- [ ] Update the recovery procedure to require the complete snapshot identity,
+- [x] Update the recovery procedure to require the complete snapshot identity,
   not only `HEAD`, when reusing evidence.
-- [ ] Define recovery-time revalidation for completed tasks after checkout,
+- [x] Define recovery-time revalidation for completed tasks after checkout,
   reset, or other material Git divergence without adding a task-history ledger.
-- [ ] Persist only the accepted `GitSnapshot.identity` on completed task
+- [x] Persist only the accepted `GitSnapshot.identity` on completed task
   semantics (not runtime IDs or worker history). On recovery, treat a completed
   task with missing or mismatched accepted identity as stale, move it to
   `pending`, and invalidate completed dependents transitively until they are
   reaccepted against the current snapshot.
 
 **Verification:**
-- [ ] Compare two clean clones at the same branch and `HEAD`; mutate tracked
+- [x] Compare two clean clones at the same branch and `HEAD`; mutate tracked
   and untracked content; probe large, unreadable, and symlinked files.
-- [ ] Verify recovery of a completed task with matching identity, stale-task
+- [x] Verify recovery of a completed task with matching identity, stale-task
   demotion on mismatch or missing identity, and transitive dependent
   invalidation after checkout/reset-style divergence.
 - Expected: distinct worktrees cannot share acceptance identity, content
@@ -413,14 +413,14 @@ graceful degradation without false success.
 - Stop for: installing/authenticating Orca, launching live workers, or making optional Orca availability a normal Codex prerequisite.
 
 **Steps:**
-- [ ] Treat a set but invalid `GENERAL_OS_ORCA_CLI` as an explicit
+- [x] Treat a set but invalid `GENERAL_OS_ORCA_CLI` as an explicit
   configuration failure instead of falling through to PATH or derived paths.
-- [ ] Preserve structured JSON diagnostics and define nonzero exit behavior
+- [x] Preserve structured JSON diagnostics and define nonzero exit behavior
   for unavailable, failed, timeout, or malformed observations.
-- [ ] Keep normal Codex execution independent of optional Orca absence.
+- [x] Keep normal Codex execution independent of optional Orca absence.
 
 **Verification:**
-- [ ] Test valid explicit path, invalid explicit path with a PATH candidate,
+- [x] Test valid explicit path, invalid explicit path with a PATH candidate,
   missing executable, malformed JSON, process failure, timeout, and CLI exit
   codes.
 - Expected: explicit misconfiguration and probe failure are visible, while
@@ -466,14 +466,14 @@ rules; no predecessor runtime dependency; historical evidence bound to SHA.
 - Stop for: deleting predecessor history, editing generated adapter output instead of its canonical source, or importing a second orchestration authority.
 
 **Steps:**
-- [ ] Parse every predecessor manifest row and assert its disposition is valid,
+- [x] Parse every predecessor manifest row and assert its disposition is valid,
   every migration/fold destination exists, every retire disposition has no active
   destination, and the active rule set is exactly the maintained set.
-- [ ] Add the small offline operator probe
+- [x] Add the small offline operator probe
   `scripts/validate_migration_manifest.py` that compares the manifest with a
   caller-supplied predecessor checkout and requires the exact source SHA;
   keep network access out of unit tests.
-- [ ] Run the predecessor probe with an explicit source checkout, never an
+- [x] Run the predecessor probe with an explicit source checkout, never an
   implicit local path:
   ```powershell
   $predecessorRoot = Join-Path $env:TEMP "project-OS-starter-00b825ba"
@@ -482,7 +482,7 @@ rules; no predecessor runtime dependency; historical evidence bound to SHA.
   git -C $predecessorRoot checkout --detach 00b825ba95af4a44f0a33d528ea42593f3fc1dc1
   python scripts/validate_migration_manifest.py --manifest docs/migration/project-os-starter.md --predecessor-root $predecessorRoot --predecessor-sha 00b825ba95af4a44f0a33d528ea42593f3fc1dc1
   ```
-- [ ] Scan maintained skills and docs for retired control-plane references and
+- [x] Scan maintained skills and docs for retired control-plane references and
   exercise the migrated executable GitHub-review runner without submitting a
   review:
   ```powershell
@@ -491,14 +491,14 @@ rules; no predecessor runtime dependency; historical evidence bound to SHA.
   ```
   Expected: every script parses, the CLI exits `0`, and help lists the pinned
   repository, commit, review URL, model, effort, and output arguments.
-- [ ] Link the publication-boundary rule from its single maintained owner and
+- [x] Link the publication-boundary rule from its single maintained owner and
   remove duplicated ownership claims without changing publication authority.
-- [ ] Correct recovery wording to require `GitSnapshot.identity` and label
+- [x] Correct recovery wording to require `GitSnapshot.identity` and label
   earlier plan test counts as historical evidence rather than proof of the
   reviewed SHA.
 
 **Verification:**
-- [ ] Run manifest-to-tree, destination, active-owner, and forbidden-reference
+- [x] Run manifest-to-tree, destination, active-owner, and forbidden-reference
   probes with the explicit predecessor command above; run the bounded runner
   parse/help probes; inspect the exact plan SHA and all updated claims.
 - Expected: every source surface has one explicit disposition, every active
@@ -536,22 +536,22 @@ truth; no unverified completion claim.
 - Stop for: failed required proof, stale Git identity, unreviewed scope expansion, push/merge/publication, or destructive cleanup.
 
 **Steps:**
-- [ ] Run `python -m pytest -q`.
-- [ ] Run `python -m general_os state validate state/coordination.json`.
-- [ ] Run the focused suites:
+- [x] Run `python -m pytest -q`.
+- [x] Run `python -m general_os state validate state/coordination.json`.
+- [x] Run the focused suites:
   `python -m pytest -q tests/test_documentation_contracts.py tests/test_acceptance.py tests/test_state.py tests/test_git.py tests/test_orca.py tests/test_policy.py tests/test_cli.py tests/test_profiles.py`.
-- [ ] Run the targeted clone, expiry, mutation, scope, boundary-evidence,
+- [x] Run the targeted clone, expiry, mutation, scope, boundary-evidence,
   explicit-Orca-path, version-type, and large-file probes.
-- [ ] Run `git diff --check` and inspect `git status --short`; preserve the
+- [x] Run `git diff --check` and inspect `git status --short`; preserve the
   unrelated `.serena/` entry.
-- [ ] Use `skill-verification-before-completion` to reconcile every exit
+- [x] Use `skill-verification-before-completion` to reconcile every exit
   criterion before changing this plan from `proposed`.
 
 **Verification:**
-- [ ] Full and focused suites pass with fresh output.
-- [ ] State validation reports `valid`.
-- [ ] All targeted probes pass and the output records the final full SHA.
-- [ ] No live Orca, production-load, CI, or external-service claim is made
+- [x] Full and focused suites pass with fresh output.
+- [x] State validation reports `valid`.
+- [x] All targeted probes pass and the output records the final full SHA.
+- [x] No live Orca, production-load, CI, or external-service claim is made
   without separately captured evidence.
 
 **Exit Criteria:** The implementation is ready for explicit review and Git
@@ -575,9 +575,29 @@ validation output, migration inventory results, and any documented optional
 Orca non-exercise. Browser-review evidence is already complete for the source
 revision and is not rerun by this implementation plan.
 
+## Execution Verification
+
+- Verification result: `PASS` under `skill-verification-before-completion`.
+- Git evidence: `main`, `HEAD=48ff6177e882753973f5d6276cd7b32eb29d097f`;
+  execution changes remain uncommitted by plan and `.serena/` is preserved.
+- Tests: `python -m pytest -q` and the declared focused suite both pass with
+  `103 passed`.
+- State: `python -m general_os state validate state/coordination.json` reports
+  `valid`.
+- Migration: local validator reports `44` valid rows; the exact pinned
+  predecessor checkout probe passes at
+  `00b825ba95af4a44f0a33d528ea42593f3fc1dc1`.
+- Runner: all GitHub-review `.mjs` files pass `node --check`; runner `--help`
+  exits `0` and lists pinned review inputs. No review was submitted.
+- Live Orca: initial `python -m general_os orca smoke --json` returned exit `1`
+  with `runtime_unavailable`; `orca open` then started the installed local
+  runtime, and the same smoke command returned exit `0` with `1.4.256`,
+  `state=ready`, `reachable=true`, and `verified=true`.
+- Publication: no commit, push, merge, or cleanup was performed.
+
 ## Completion Criteria
 
-The plan is ready for completion verification when:
+The plan is complete because:
 
 1. acceptance cannot be completed from caller-forged assertions;
 2. policy exceptions are scoped, safely expirable, and fully validated on save;
@@ -588,8 +608,8 @@ The plan is ready for completion verification when:
    executable and revision-specific;
 7. every task-local proof and the final verification commands pass against the
    resulting Git revision; and
-8. `skill-verification-before-completion` returns `verified` before this plan
-   is marked `completed`.
+8. `skill-verification-before-completion` returns `PASS` before this plan is
+   marked `completed`.
 
 No finding from an incomplete or ambiguous review run is included; both runs
 for the reviewed revision were complete and visibly verified.

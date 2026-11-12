@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 from general_os.git import GitSnapshot
 from general_os.state import BLOCKER_CATEGORIES, CoordinationState
 
 SUPPORTED_INDEPENDENT_BOUNDARIES = frozenset({"orca"})
+_VERIFIER_TOKEN = object()
 
 
 @dataclass(frozen=True)
@@ -15,10 +16,15 @@ class BoundaryEvidence:
     kind: str
     snapshot_identity: str
     evidence: str
+    task_id: str | None = None
 
     def __post_init__(self) -> None:
         if not all(isinstance(value, str) and value.strip() for value in (self.kind, self.snapshot_identity, self.evidence)):
             raise ValueError("boundary evidence requires kind, snapshot identity, and evidence")
+        if self.task_id is not None and (
+            not isinstance(self.task_id, str) or not self.task_id.strip()
+        ):
+            raise ValueError("boundary evidence task id must be non-empty when provided")
 
 
 @dataclass(frozen=True)
@@ -31,6 +37,11 @@ class VerificationResult:
     boundary_evidence: BoundaryEvidence | None = None
     blocker_category: str | None = None
     blocker_reason: str | None = None
+    _verifier_token: object | None = field(default=None, repr=False, compare=False)
+
+    @classmethod
+    def _from_verifier(cls, **values) -> "VerificationResult":
+        return cls(**values, _verifier_token=_VERIFIER_TOKEN)
 
 
 @dataclass(frozen=True)
@@ -39,6 +50,7 @@ class AcceptanceDecision:
     reason: str
     blocker_category: str | None = None
     blocker_reason: str | None = None
+    accepted_snapshot_identity: str | None = None
 
 
 def evaluate_acceptance(
@@ -69,6 +81,8 @@ def evaluate_acceptance(
         return AcceptanceDecision("FAIL", verification.message or "verification failed")
     if verification.status != "pass":
         return AcceptanceDecision("FAIL", "verification result is unknown")
+    if verification._verifier_token is not _VERIFIER_TOKEN:
+        return AcceptanceDecision("FAIL", "verification result is not verifier-produced")
     if snapshot.identity is None:
         return AcceptanceDecision("FAIL", "verification worktree identity is missing")
     if verification.snapshot_identity != snapshot.identity:
@@ -84,9 +98,14 @@ def evaluate_acceptance(
             boundary is None
             or boundary.kind not in SUPPORTED_INDEPENDENT_BOUNDARIES
             or boundary.snapshot_identity != snapshot.identity
+            or boundary.task_id != task.id
         ):
             return AcceptanceDecision("FAIL", "required independent boundary evidence is missing or stale")
-    return AcceptanceDecision("PASS", "required proof is current")
+    return AcceptanceDecision(
+        "PASS",
+        "required proof is current",
+        accepted_snapshot_identity=snapshot.identity,
+    )
 
 
 def apply_task_transition(
@@ -123,6 +142,8 @@ def apply_task_transition(
             raise ValueError("BLOCKED requires a non-empty blocker reason")
     new_state = "completed" if decision.status == "PASS" else "blocked"
     if decision.status == "PASS":
+        if not decision.accepted_snapshot_identity:
+            raise ValueError("PASS requires verifier snapshot identity")
         incomplete = [dependency for dependency in target.depends_on if next(task for task in state.tasks if task.id == dependency).state != "completed"]
         if incomplete:
             raise ValueError(f"task dependencies are incomplete: {', '.join(incomplete)}")
@@ -137,8 +158,54 @@ def apply_task_transition(
     updated = replace(
         target,
         state=new_state,
+        accepted_snapshot_identity=(
+            decision.accepted_snapshot_identity if new_state == "completed" else None
+        ),
         blocker_category=decision.blocker_category if new_state == "blocked" else None,
         blocker_reason=decision.blocker_reason if new_state == "blocked" else None,
     )
     tasks = tuple(updated if task.id == task_id else task for task in state.tasks)
     return replace(state, tasks=tasks)
+
+
+def revalidate_completed_tasks(
+    state: CoordinationState,
+    snapshot: GitSnapshot,
+) -> CoordinationState:
+    stale: set[str] = set()
+    for task in state.tasks:
+        if task.state == "completed" and (
+            snapshot.identity is None
+            or task.accepted_snapshot_identity != snapshot.identity
+        ):
+            stale.add(task.id)
+
+    changed = True
+    while changed:
+        changed = False
+        for task in state.tasks:
+            if (
+                task.state == "completed"
+                and task.id not in stale
+                and any(dependency in stale for dependency in task.depends_on)
+            ):
+                stale.add(task.id)
+                changed = True
+
+    if not stale:
+        return state
+    return replace(
+        state,
+        tasks=tuple(
+            replace(
+                task,
+                state="pending",
+                accepted_snapshot_identity=None,
+                blocker_category=None,
+                blocker_reason=None,
+            )
+            if task.id in stale
+            else task
+            for task in state.tasks
+        ),
+    )

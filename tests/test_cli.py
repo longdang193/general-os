@@ -130,7 +130,7 @@ def test_accept_requires_verifier_snapshot_identity(tmp_path, monkeypatch, capsy
         lambda _: GitSnapshot("main", "abc123", (), (), True, "current"),
     )
 
-    assert (
+    with pytest.raises(SystemExit):
         main(
             [
                 "accept",
@@ -142,18 +142,44 @@ def test_accept_requires_verifier_snapshot_identity(tmp_path, monkeypatch, capsy
                 "work",
                 "--status",
                 "pass",
-                "--check",
-                "check",
-                "--revision",
-                "abc123",
             ]
         )
-        == 0
+    assert load_state(state_path).tasks[0].state == "active"
+
+
+def test_orca_smoke_returns_nonzero_for_unavailable(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli,
+        "OrcaCliStatusObserver",
+        lambda: type(
+            "FakeObserver",
+            (),
+            {"observe": lambda self: OrcaStatusObservation("unavailable")},
+        )(),
     )
+
+    assert main(["orca", "smoke", "--json"]) == 1
     output = json.loads(capsys.readouterr().out)
 
-    assert output["status"] == "FAIL"
-    assert load_state(state_path).tasks[0].state == "active"
+    assert output["status"] == "unavailable"
+
+
+def test_orca_smoke_returns_nonzero_for_failed_probe(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli,
+        "OrcaCliStatusObserver",
+        lambda: type(
+            "FakeObserver",
+            (),
+            {"observe": lambda self: OrcaStatusObservation("failed", message="bad")},
+        )(),
+    )
+
+    assert main(["orca", "smoke", "--json"]) == 1
+    output = json.loads(capsys.readouterr().out)
+
+    assert output["status"] == "failed"
+    assert output["message"] == "bad"
 
 
 def test_accept_cli_does_not_accept_free_form_boundary_evidence():

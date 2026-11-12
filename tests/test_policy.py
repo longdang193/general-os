@@ -24,26 +24,42 @@ def test_policy_applies_material_side_effect_exception():
             "scope": "github:general-os",
             "provenance": "user-approval",
             "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
-        }
+        },
+        requested_scope="github:general-os",
     )
 
     assert policy.remote_side_effects == "allow"
     assert policy.orca_enabled is False
 
 
-def test_policy_rejects_unscoped_or_expired_allow():
-    with pytest.raises(PolicyError, match="scope, provenance, and expiry"):
+def test_policy_rejects_unscoped_or_mismatched_allow():
+    with pytest.raises(PolicyError, match="requested scope"):
         resolve_policy({"remote_side_effects": "allow"})
 
-    with pytest.raises(PolicyError, match="expired"):
+    with pytest.raises(PolicyError, match="does not match"):
         resolve_policy(
             {
                 "remote_side_effects": "allow",
                 "scope": "github:general-os",
                 "provenance": "user-approval",
-                "expires_at": "2000-01-01T00:00:00+00:00",
-            }
+                "expires_at": "2099-01-01T00:00:00+00:00",
+            },
+            requested_scope="github:other",
         )
+
+
+def test_expired_allow_falls_back_to_safe_config():
+    policy = resolve_policy(
+        {
+            "remote_side_effects": "allow",
+            "scope": "github:general-os",
+            "provenance": "user-approval",
+            "expires_at": "2000-01-01T00:00:00+00:00",
+        },
+        requested_scope="github:general-os",
+    )
+
+    assert policy.remote_side_effects == "ask"
 
 
 def test_configured_allow_does_not_require_exception_metadata():

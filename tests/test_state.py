@@ -115,6 +115,10 @@ def test_legacy_state_reads_and_future_versions_fail(tmp_path):
     with pytest.raises(StateError, match="unsupported state version"):
         load_state(path)
 
+    path.write_text(json.dumps({"version": True, "goal": "bool", "tasks": []}), encoding="utf-8")
+    with pytest.raises(StateError, match="unsupported state version"):
+        load_state(path)
+
 
 def test_stale_loaded_state_is_rejected(tmp_path):
     path = tmp_path / "coordination.json"
@@ -168,6 +172,16 @@ def test_task_without_objective_remains_backward_compatible():
     }
 
 
+def test_completed_snapshot_identity_round_trips():
+    task = Task(
+        id="work",
+        state="completed",
+        accepted_snapshot_identity="repo/worktree/snapshot",
+    )
+
+    assert Task.from_dict(task.to_dict()) == task
+
+
 def test_blocker_context_round_trips():
     state = CoordinationState(
         goal="goal",
@@ -198,3 +212,28 @@ def test_state_rejects_malformed_policy_expiry():
                 "expires_at": "not-a-date",
             },
         )
+
+
+def test_expired_policy_exception_remains_loadable():
+    state = CoordinationState(
+        goal="goal",
+        policy_exceptions={
+            "remote_side_effects": "allow",
+            "scope": "github:general-os",
+            "provenance": "user-approval",
+            "expires_at": "2000-01-01T00:00:00+00:00",
+        },
+    )
+
+    assert state.policy_exceptions["remote_side_effects"] == "allow"
+
+
+def test_save_revalidates_mutated_policy_exceptions(tmp_path):
+    path = tmp_path / "coordination.json"
+    state = CoordinationState(goal="goal", policy_exceptions={"remote_side_effects": "ask"})
+    save_state(path, state)
+    loaded = load_state(path)
+    loaded.policy_exceptions["remote_side_effects"] = "invalid"
+
+    with pytest.raises(StateError, match="invalid policy value"):
+        save_state(path, loaded)
