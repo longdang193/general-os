@@ -422,13 +422,13 @@ review established them.
 
 ## Execution Evidence
 
-- Full suite: `85 passed`.
+- Full suite: `87 passed`.
 - Focused suite (`documentation_contracts`, `acceptance`, `state`, `git`,
-  `orca`, `policy`, and `cli`): `68 passed`.
+  `orca`, `policy`, and `cli`): `70 passed`.
 - State validation: `valid` for `state/coordination.json`.
 - `git diff --check`: clean.
-- Publication: committed as `eb828a0815c9a15c903f1d38fc6acba2f843ffdf`, pushed
-  to `codex/general-os-review-remediation`, and opened as PR `#2`.
+- Publication: remediation commit `21faee2dc6fe3b6789993aebfc3fa43bdc398471`
+  was merged into `main` at `95b7fb5b337e78f2cdd9cb8ce71fc82df8a5462c`.
 - Review: the single authorized independent `review-1` cycle inspected the
   prior PR head, found two blocking issues and one non-blocking documentation
   issue; all three were addressed before merge, with no second cycle started.
