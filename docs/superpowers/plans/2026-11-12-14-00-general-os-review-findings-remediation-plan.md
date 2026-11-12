@@ -463,9 +463,10 @@ git rev-parse HEAD
 
 ## Final Evidence
 
-- Published branch `codex/general-os-acceptance-contract-fingerprint` points to
-  `eb0731453e4fa3029c4aa605f6f24f9eea9978f6`; the exact SHA is reachable from
-  GitHub and was verified in clean detached worktree `C:\tmp\general-os-verify-eb07314`.
+- Implementation commit `eb0731453e4fa3029c4aa605f6f24f9eea9978f6` is reachable
+  from GitHub and was verified in clean detached worktree
+  `C:\tmp\general-os-verify-eb07314`. The later plan-only commit records that
+  evidence; it does not change executable implementation.
 - `python -m pytest -q`: `115 passed`.
 - `python -m pytest -q tests/test_acceptance.py tests/test_state.py`: `41 passed`.
 - `python -m general_os state validate state/coordination.json`: `valid`.
@@ -479,9 +480,11 @@ git rev-parse HEAD
 - `git diff --check`: passed. Untracked `.serena/` is unrelated and preserved.
 - Browser review runs were not rerun; their completed, pinned evidence remains
   the source review input for this local remediation.
-- Clean-checkout verification on `eb0731453e4fa3029c4aa605f6f24f9eea9978f6`:
-  `115 passed`, state `valid`, migration `44` rows valid, Orca `ready` with
-  `probe_ok=true`, and clean Git status.
+- Clean-checkout verification on implementation commit
+  `eb0731453e4fa3029c4aa605f6f24f9eea9978f6`: `115 passed`, state `valid`,
+  migration `44` rows valid, Orca `ready` with `probe_ok=true`, and clean Git
+  status. Final PR-head verification is recorded in the PR review evidence,
+  outside this self-referencing plan commit.
 - No merge, CI, production-load, or external-service claim is made. The Orca
   probe covered worker dispatch and the targeted test only; it did not establish
   production-load or external-service behavior.
