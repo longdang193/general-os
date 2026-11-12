@@ -26,16 +26,16 @@ If scope is missing, infer smallest useful scope from request and repository evi
 
 Read only references needed for current assessment:
 
-- `repository operating guidance/tooling/runtime-tool-resolution.md` when a code, flow, impact, or external-repository capability is needed beyond native source inspection
-- `repository operating guidance/rules/audit-evidence-mandate-rule.md` when user requests an audit or evidence suggests a qualifying incident
-- `repository operating guidance/templates/audit-report-with-evidence-template.md` only when a formal audit bundle is required
+- `docs/runtime-adapters.md` when a code, flow, impact, or external-repository capability is needed beyond native source inspection
+- `verification-before-completion` when user requests an audit or evidence suggests a qualifying incident
+- no repository audit template; keep formal audit output in the approved task or plan format
 - `brainstorming` when desired behavior or design direction remains unclear
 - `spec-drafting` when behavior, interfaces, schemas, defaults, compatibility, or invariants require a decision contract
 - `defining-work` when design is settled but execution needs ordered tasks
 - `test-driven-development` before a bounded behavior-preserving patch
 - `executing-work` only after a plan is approved
-- `skill-dispatching-parallel-agents` only when selected actions have disjoint write ownership
-- `skill-verification-before-completion` after implementation
+- `executing-work` for bounded native work with disjoint ownership
+- `verification-before-completion` after implementation
 - `finishing-development-work` only after fresh verification and explicit Git authorization
 
 Formal audit ceremony is conditional. Ordinary refactor assessment requires traceable evidence, not an audit bundle.
@@ -56,7 +56,7 @@ Identify demonstrated cost or risk:
 
 Do not justify refactoring with aesthetics alone. Link each rationale to repository evidence and affected behavior, consumer, or maintenance outcome.
 
-Use formal `audit-report-with-evidence` only for an explicit audit request or trigger defined by `audit-evidence-mandate-rule.md`.
+Use formal audit evidence only for an explicit audit request or a requirement stated by the current task contract.
 
 ### What Should Be Refactored?
 
@@ -98,8 +98,8 @@ Route rather than perform next stage:
 | Unresolved behavior, interface, schema, default, compatibility, or invariant | `spec-drafting` |
 | Settled design with multi-step execution | `defining-work` |
 | Approved implementation plan | `executing-work` |
-| Independent actions with disjoint write ownership | `skill-dispatching-parallel-agents` |
-| Completed implementation | `skill-verification-before-completion` |
+| Independent actions with disjoint write ownership | `executing-work` |
+| Completed implementation | `verification-before-completion` |
 | Verified work needing authorized Git disposition | `finishing-development-work` |
 
 Use `brainstorming` before specification when desired behavior remains unresolved.
@@ -123,7 +123,7 @@ Prefer existing tests and validators. Recommend new executable contract only whe
 Use smallest available capability that answers question: native search, file
 inspection, diffs, and tests for bounded evidence; symbol, discovery, flow, or
 impact capabilities only when the question requires them. Resolve selection
-through `repository operating guidance/tooling/runtime-tool-resolution.md`.
+through `docs/runtime-adapters.md`.
 
 Treat stale or advisory analysis as non-authoritative. Source code,
 configuration, tests, schemas, validators, and current runtime evidence remain

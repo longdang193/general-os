@@ -110,6 +110,19 @@ def test_acceptance_requires_matching_worktree_identity():
     assert "worktree evidence" in decision.reason
 
 
+def test_acceptance_requires_worktree_identity_for_pass():
+    task = Task(id="work")
+
+    decision = evaluate_acceptance(
+        task,
+        snapshot(),
+        VerificationResult("pass"),
+    )
+
+    assert decision.status == "FAIL"
+    assert "identity" in decision.reason
+
+
 def test_required_boundary_needs_typed_matching_evidence():
     task = Task(id="work", requires_independent_boundary=True)
     evidence = BoundaryEvidence("orca", "snapshot-id", "worker receipt")
@@ -126,6 +139,21 @@ def test_required_boundary_needs_typed_matching_evidence():
     ).status == "FAIL"
 
 
+@pytest.mark.parametrize("kind", ("codex", "unknown"))
+def test_required_boundary_rejects_unsupported_evidence(kind):
+    task = Task(id="work", requires_independent_boundary=True)
+    evidence = BoundaryEvidence(kind, "snapshot-id", "caller supplied")
+
+    decision = evaluate_acceptance(
+        task,
+        snapshot(identity="snapshot-id"),
+        VerificationResult("pass", snapshot_identity="snapshot-id", boundary_evidence=evidence),
+    )
+
+    assert decision.status == "FAIL"
+    assert "boundary" in decision.reason
+
+
 def test_pass_cannot_complete_before_dependencies():
     state = CoordinationState(
         goal="goal",
@@ -137,10 +165,22 @@ def test_pass_cannot_complete_before_dependencies():
 
 
 def test_failed_blocked_task_returns_to_pending():
-    state = CoordinationState(goal="goal", tasks=(Task(id="work", state="blocked"),))
+    state = CoordinationState(
+        goal="goal",
+        tasks=(Task(id="work", state="blocked", blocker_category="git", blocker_reason="conflict"),),
+    )
 
     updated = apply_task_transition(
         state, "work", AcceptanceDecision("FAIL", "retryable failure")
     )
 
     assert updated.tasks[0].state == "pending"
+    assert updated.tasks[0].blocker_category is None
+    assert updated.tasks[0].blocker_reason is None
+
+
+def test_blocked_transition_requires_typed_reason():
+    state = CoordinationState(goal="goal", tasks=(Task(id="work"),))
+
+    with pytest.raises(ValueError, match="blocker category"):
+        apply_task_transition(state, "work", AcceptanceDecision("BLOCKED", "blocked"))

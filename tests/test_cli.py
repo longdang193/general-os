@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from general_os import cli
 from general_os.cli import main
 from general_os.git import GitSnapshot
@@ -101,12 +103,17 @@ def test_accept_persists_material_blocker_but_not_retryable_failure(
                 "work",
                 "--status",
                 "blocked",
+                "--blocker-category",
+                "dependency",
+                "--blocker-reason",
+                "waiting on prerequisite",
             ]
         )
         == 0
     )
     capsys.readouterr()
     assert load_state(state_path).tasks[0].state == "blocked"
+    assert load_state(state_path).tasks[0].blocker_category == "dependency"
 
 
 def test_accept_requires_verifier_snapshot_identity(tmp_path, monkeypatch, capsys):
@@ -149,11 +156,19 @@ def test_accept_requires_verifier_snapshot_identity(tmp_path, monkeypatch, capsy
     assert load_state(state_path).tasks[0].state == "active"
 
 
+def test_accept_cli_does_not_accept_free_form_boundary_evidence():
+    with pytest.raises(SystemExit):
+        main(["accept", "--boundary-evidence", '{"kind":"orca"}'])
+
+
 def test_accept_persists_blocked_retry_recovery(tmp_path, monkeypatch, capsys):
     state_path = tmp_path / "coordination.json"
     save_state(
         state_path,
-        CoordinationState(goal="goal", tasks=(Task(id="work", state="blocked"),)),
+        CoordinationState(
+            goal="goal",
+            tasks=(Task(id="work", state="blocked", blocker_category="external", blocker_reason="offline"),),
+        ),
     )
     monkeypatch.setattr(
         cli,
@@ -180,3 +195,28 @@ def test_accept_persists_blocked_retry_recovery(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
 
     assert load_state(state_path).tasks[0].state == "pending"
+
+
+def test_accept_rejects_blocked_without_category_or_reason(tmp_path, monkeypatch):
+    state_path = tmp_path / "coordination.json"
+    save_state(state_path, CoordinationState(goal="goal", tasks=(Task(id="work"),)))
+    monkeypatch.setattr(
+        cli,
+        "inspect_git",
+        lambda _: GitSnapshot("main", "abc123", (), (), True),
+    )
+
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "accept",
+                "--state",
+                str(state_path),
+                "--repo",
+                ".",
+                "--task-id",
+                "work",
+                "--status",
+                "blocked",
+            ]
+        )

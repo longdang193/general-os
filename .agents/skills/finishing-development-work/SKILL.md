@@ -13,7 +13,7 @@ This skill owns Git reconciliation and Git-managed branch/worktree cleanup after
 ## Preconditions
 
 Require a fresh accepted task-proof handoff for branch or PR publication, and a
-fresh `verified` result from `skill-verification-before-completion` before final
+fresh `verified` result from `verification-before-completion` before final
 merge or cleanup. The evidence must contain:
 
 - workspace path and creation mechanism
@@ -31,7 +31,7 @@ If verification is missing, stale, incomplete, or blocked, stop.
 When verified work used external worker runtime or another delegated executor:
 
 - Treat executor output as claims. Require current Git evidence and the verified
-  handoff from `skill-verification-before-completion` before disposition.
+  handoff from `verification-before-completion` before disposition.
 - Never stage executor-local runtime state, credentials, provider bindings, or
   user-local handoff artifacts. Canonical in-scope
   repository configuration such as `agents/*.toml` remains eligible.
@@ -345,5 +345,5 @@ Stop when:
 
 - `workspace-isolation` provides workspace identity and creation mechanism.
 - `executing-work` completes implementation tasks.
-- `skill-verification-before-completion` produces required `verified` handoff.
+- `verification-before-completion` produces required `verified` handoff.
 - publication remains owned by repository publication workflow.

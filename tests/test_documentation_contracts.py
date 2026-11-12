@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 
@@ -203,15 +204,34 @@ def test_maintained_skills_use_minimal_frontmatter_and_no_generated_rules():
 def test_migrated_skills_use_current_owners_and_available_resources():
     root = Path(__file__).parents[1]
     skill_root = root / ".agents" / "skills"
-    contents = "\n".join(
-        (skill_root / name / "SKILL.md").read_text(encoding="utf-8")
-        for name in ("brainstorming", "spec-drafting", "writing-skills")
+    active_paths = sorted(skill_root.rglob("*.md"))
+    all_skills = "\n".join(path.read_text(encoding="utf-8") for path in active_paths)
+    forbidden = (
+        "repository operating guidance",
+        "scripts/ocr_delegate_adapter.py",
+        "skill-dispatching-parallel-agents",
+        "skill-subagent-driven-development",
+        "skill-verification-before-completion",
     )
+    assert not any(value in all_skills for value in forbidden)
 
-    all_skills = "\n".join(
-        path.read_text(encoding="utf-8") for path in skill_root.rglob("*.md")
-    )
-    assert "skill-writing-plans" not in all_skills
-    assert "skill-executing-plans" not in all_skills
-    assert "validate_agent_metadata_schema.py" not in contents
-    assert "repository operating guidance/templates/" not in contents
+    reference_pattern = re.compile(r"`([^`\n]*(?:/|\\|\.md|\.py|\.toml)[^`\n]*)`")
+    for path in active_paths:
+        for reference in reference_pattern.findall(path.read_text(encoding="utf-8")):
+            if (
+                reference.startswith(("http://", "https://", "~/", "$", "<"))
+                or "*" in reference
+                or reference.endswith("/")
+                or "<" in reference
+            ):
+                continue
+            if reference.startswith((".agents/", "docs/", "src/", "tests/", "state/", "repo_config/", "AGENTS.md", "README")):
+                target = root / reference
+            elif reference.startswith("scripts/"):
+                target = path.parent / reference
+            else:
+                continue
+            assert target.exists(), f"missing active skill reference: {path} -> {reference}"
+
+    assert (root / "docs" / "runtime-adapters.md").exists()
+    assert not (root / "docs" / "rules" / "backend-verification.md").exists()

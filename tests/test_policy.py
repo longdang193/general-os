@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 
 from general_os.policy import (
     PolicyError,
@@ -17,10 +18,38 @@ def test_policy_uses_safe_defaults():
 
 
 def test_policy_applies_material_side_effect_exception():
-    policy = resolve_policy({"remote_side_effects": "allow"})
+    policy = resolve_policy(
+        {
+            "remote_side_effects": "allow",
+            "scope": "github:general-os",
+            "provenance": "user-approval",
+            "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+        }
+    )
 
     assert policy.remote_side_effects == "allow"
     assert policy.orca_enabled is False
+
+
+def test_policy_rejects_unscoped_or_expired_allow():
+    with pytest.raises(PolicyError, match="scope, provenance, and expiry"):
+        resolve_policy({"remote_side_effects": "allow"})
+
+    with pytest.raises(PolicyError, match="expired"):
+        resolve_policy(
+            {
+                "remote_side_effects": "allow",
+                "scope": "github:general-os",
+                "provenance": "user-approval",
+                "expires_at": "2000-01-01T00:00:00+00:00",
+            }
+        )
+
+
+def test_configured_allow_does_not_require_exception_metadata():
+    policy = resolve_policy(config=RuntimeConfig(remote_side_effects="allow"))
+
+    assert policy.remote_side_effects == "allow"
 
 
 def test_local_deny_is_a_hard_policy_ceiling():

@@ -8,12 +8,16 @@ import os
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
 
 TASK_STATES = frozenset({"pending", "active", "blocked", "completed"})
-POLICY_EXCEPTION_KEYS = frozenset({"remote_side_effects"})
+BLOCKER_CATEGORIES = frozenset({"authority", "dependency", "git", "external"})
+POLICY_EXCEPTION_KEYS = frozenset(
+    {"remote_side_effects", "scope", "provenance", "expires_at"}
+)
 SIDE_EFFECT_POLICIES = frozenset({"ask", "allow", "deny"})
 STATE_VERSION = 1
 
@@ -41,6 +45,8 @@ class Task:
     acceptance: tuple[str, ...] = ()
     profile: str | None = None
     requires_independent_boundary: bool = False
+    blocker_category: str | None = None
+    blocker_reason: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.id, str) or not self.id.strip():
@@ -63,6 +69,16 @@ class Task:
             raise StateError("profile must be a non-empty string when provided")
         if not isinstance(self.requires_independent_boundary, bool):
             raise StateError("requires_independent_boundary must be boolean")
+        if self.state == "blocked":
+            if self.blocker_category not in BLOCKER_CATEGORIES:
+                raise StateError("blocked tasks require a valid blocker category")
+            if (
+                not isinstance(self.blocker_reason, str)
+                or not self.blocker_reason.strip()
+            ):
+                raise StateError("blocked tasks require a non-empty blocker reason")
+        elif self.blocker_category is not None or self.blocker_reason is not None:
+            raise StateError("only blocked tasks may carry blocker data")
         object.__setattr__(self, "depends_on", depends_on)
         object.__setattr__(self, "acceptance", acceptance)
 
@@ -76,6 +92,8 @@ class Task:
             "acceptance",
             "profile",
             "requires_independent_boundary",
+            "blocker_category",
+            "blocker_reason",
         }
         unknown = set(value) - allowed
         if unknown:
@@ -90,6 +108,8 @@ class Task:
             requires_independent_boundary=value.get(
                 "requires_independent_boundary", False
             ),
+            blocker_category=value.get("blocker_category"),
+            blocker_reason=value.get("blocker_reason"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -105,6 +125,9 @@ class Task:
             result["profile"] = self.profile
         if self.requires_independent_boundary:
             result["requires_independent_boundary"] = True
+        if self.blocker_category is not None:
+            result["blocker_category"] = self.blocker_category
+            result["blocker_reason"] = self.blocker_reason
         return result
 
 
@@ -130,8 +153,33 @@ class CoordinationState:
         if unknown:
             raise StateError(f"unknown policy exception: {sorted(unknown)[0]}")
         for key, value in exceptions.items():
-            if value not in SIDE_EFFECT_POLICIES:
-                raise StateError(f"invalid policy value for {key}: {value}")
+            if not isinstance(value, str) or not value.strip():
+                raise StateError(
+                    f"policy exception values must be non-empty strings: {key}"
+                )
+        if exceptions.get("remote_side_effects") == "allow":
+            missing = {"scope", "provenance", "expires_at"} - set(exceptions)
+            if missing:
+                raise StateError(
+                    "allow policy exception requires scope, provenance, and expiry"
+                )
+            try:
+                expiry = datetime.fromisoformat(
+                    exceptions["expires_at"].replace("Z", "+00:00")
+                )
+            except ValueError as exc:
+                raise StateError("policy exception expiry must be ISO-8601") from exc
+            if expiry.tzinfo is None or expiry.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+                raise StateError("policy exception expiry must be in the future")
+        elif any(key in exceptions for key in ("scope", "provenance", "expires_at")):
+            raise StateError("policy metadata requires remote_side_effects=allow")
+        if (
+            "remote_side_effects" in exceptions
+            and exceptions["remote_side_effects"] not in SIDE_EFFECT_POLICIES
+        ):
+            raise StateError(
+                f"invalid policy value for remote_side_effects: {exceptions['remote_side_effects']}"
+            )
         object.__setattr__(self, "tasks", tasks)
         object.__setattr__(self, "policy_exceptions", exceptions)
         self.validate()
@@ -261,6 +309,8 @@ def save_state(path: str | os.PathLike[str], state: CoordinationState) -> None:
     with _state_lock(destination):
         current = destination.read_bytes() if destination.exists() else None
         expected = state._source_digest
+        if expected is None and current is not None:
+            raise StateError("existing state requires loaded source provenance")
         if expected is not None and _digest(current or b"") != expected:
             raise StateError("state changed since it was loaded")
         serialized = (json.dumps(state.to_dict(), indent=2) + "\n").encode("utf-8")

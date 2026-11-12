@@ -359,7 +359,7 @@ Bug found? Write failing test reproducing it. Follow TDD cycle. Test proves fix 
 
 Never fix bugs without a test.
 
-For material backend behavior, TDD owns implementation loop while `backend-verification` owns direct boundary, failure, state, dependency, contract, and representative-operation evidence required by `repository operating guidance/rules/backend-verification-rule.md`.
+For material backend behavior, TDD owns implementation loop while `backend-verification` owns direct boundary, failure, state, dependency, contract, and representative-operation evidence.
 
 ## Testing Anti-Patterns
 

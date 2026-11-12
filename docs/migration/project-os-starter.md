@@ -61,7 +61,7 @@ the unprefixed target name; excluded control-plane material is retired.
 | --- | --- |
 | `agent-memory-rule.md` | fold durable-memory boundary into `AGENTS.md` |
 | `audit-evidence-mandate-rule.md` | fold evidence ownership into verification skills |
-| `backend-verification-rule.md` | migrate semantic contract to `docs/rules/backend-verification.md` |
+| `backend-verification-rule.md` | fold semantic contract into `.agents/skills/backend-verification/` |
 | `command-execution-rule.md` | fold native command safety into `AGENTS.md` |
 | `doc-contracts-rule.md` | fold documentation contract checks into `writing-skills` and tests |
 | `frontend-backend-integration-rule.md` | fold contract boundary into `full-stack-integration` |
