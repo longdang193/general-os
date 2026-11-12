@@ -1,15 +1,4 @@
 {
   "goal": "Implement the bounded change",
-  "tasks": [
-    {
-      "id": "implement-change",
-      "objective": "Implement the smallest correct change",
-      "state": "pending",
-      "depends_on": [],
-      "acceptance": [
-        "focused tests pass"
-      ],
-      "profile": "normal"
-    }
-  ]
+  "tasks": []
 }

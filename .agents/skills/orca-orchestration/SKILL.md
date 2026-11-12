@@ -61,5 +61,5 @@ the current Orca observation as a blocker. Do not mutate `orca_enabled` in
 response to transient runtime health.
 
 General-os does not provide a Python dispatch, inspection, cancellation, or
-worker registry seam. The native Orca skill owns real worker inspection and
-lifecycle; general-os may retain only read-only CLI health observation.
+ worker registry seam. The native Orca skill owns real worker inspection and
+ lifecycle; general-os may retain only read-only CLI health observation.

@@ -1,5 +1,8 @@
+import pytest
+
 from general_os.acceptance import (
     AcceptanceDecision,
+    BoundaryEvidence,
     VerificationResult,
     apply_task_transition,
     evaluate_acceptance,
@@ -8,8 +11,8 @@ from general_os.git import GitSnapshot
 from general_os.state import CoordinationState, Task
 
 
-def snapshot(revision="abc123"):
-    return GitSnapshot("main", revision, (), (), True)
+def snapshot(revision="abc123", identity=None):
+    return GitSnapshot("main", revision, (), (), True, identity)
 
 
 def test_acceptance_passes_fresh_required_proof():
@@ -17,8 +20,8 @@ def test_acceptance_passes_fresh_required_proof():
 
     decision = evaluate_acceptance(
         task,
-        snapshot(),
-        VerificationResult("pass", ("tests pass",), "abc123"),
+        snapshot(identity="snapshot-id"),
+        VerificationResult("pass", ("tests pass",), "abc123", snapshot_identity="snapshot-id"),
     )
 
     assert decision == AcceptanceDecision("PASS", "required proof is current")
@@ -42,8 +45,8 @@ def test_acceptance_treats_missing_proof_as_retryable_failure():
 
     decision = evaluate_acceptance(
         task,
-        snapshot(),
-        VerificationResult("pass", (), "abc123"),
+        snapshot(identity="snapshot-id"),
+        VerificationResult("pass", (), "abc123", snapshot_identity="snapshot-id"),
     )
 
     assert decision.status == "FAIL"
@@ -92,3 +95,52 @@ def test_acceptance_updates_only_durable_task_state_idempotently():
 
     assert completed.tasks[0].state == "completed"
     assert repeated == completed
+
+
+def test_acceptance_requires_matching_worktree_identity():
+    task = Task(id="work")
+
+    decision = evaluate_acceptance(
+        task,
+        snapshot(identity="snapshot-id"),
+        VerificationResult("pass", snapshot_identity="other"),
+    )
+
+    assert decision.status == "FAIL"
+    assert "worktree evidence" in decision.reason
+
+
+def test_required_boundary_needs_typed_matching_evidence():
+    task = Task(id="work", requires_independent_boundary=True)
+    evidence = BoundaryEvidence("orca", "snapshot-id", "worker receipt")
+
+    assert evaluate_acceptance(
+        task,
+        snapshot(identity="snapshot-id"),
+        VerificationResult("pass", snapshot_identity="snapshot-id", boundary_evidence=evidence),
+    ).status == "PASS"
+    assert evaluate_acceptance(
+        task,
+        snapshot(identity="snapshot-id"),
+        VerificationResult("pass", snapshot_identity="snapshot-id"),
+    ).status == "FAIL"
+
+
+def test_pass_cannot_complete_before_dependencies():
+    state = CoordinationState(
+        goal="goal",
+        tasks=(Task(id="dependency"), Task(id="work", depends_on=("dependency",))),
+    )
+
+    with pytest.raises(ValueError, match="dependencies are incomplete"):
+        apply_task_transition(state, "work", AcceptanceDecision("PASS", "ok"))
+
+
+def test_failed_blocked_task_returns_to_pending():
+    state = CoordinationState(goal="goal", tasks=(Task(id="work", state="blocked"),))
+
+    updated = apply_task_transition(
+        state, "work", AcceptanceDecision("FAIL", "retryable failure")
+    )
+
+    assert updated.tasks[0].state == "pending"

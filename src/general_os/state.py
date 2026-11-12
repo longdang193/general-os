@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
@@ -13,6 +15,7 @@ from typing import Any, Mapping
 TASK_STATES = frozenset({"pending", "active", "blocked", "completed"})
 POLICY_EXCEPTION_KEYS = frozenset({"remote_side_effects"})
 SIDE_EFFECT_POLICIES = frozenset({"ask", "allow", "deny"})
+STATE_VERSION = 1
 
 
 class StateError(ValueError):
@@ -110,10 +113,14 @@ class CoordinationState:
     goal: str
     tasks: tuple[Task, ...] = ()
     policy_exceptions: dict[str, str] = field(default_factory=dict)
+    version: int = STATE_VERSION
+    _source_digest: str | None = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.goal, str) or not self.goal.strip():
             raise StateError("goal must be a non-empty string")
+        if self.version != STATE_VERSION:
+            raise StateError(f"unsupported state version: {self.version}")
         tasks = tuple(self.tasks)
         task_ids = [task.id for task in tasks]
         if len(set(task_ids)) != len(task_ids):
@@ -131,7 +138,7 @@ class CoordinationState:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "CoordinationState":
-        allowed = {"goal", "tasks", "policy_exceptions"}
+        allowed = {"version", "goal", "tasks", "policy_exceptions"}
         unknown = set(value) - allowed
         if unknown:
             raise StateError(f"unknown state field: {sorted(unknown)[0]}")
@@ -143,10 +150,14 @@ class CoordinationState:
         exceptions = value.get("policy_exceptions", {})
         if not isinstance(exceptions, Mapping):
             raise StateError("policy_exceptions must be an object")
+        version = value.get("version", STATE_VERSION)
+        if version != STATE_VERSION:
+            raise StateError(f"unsupported state version: {version}")
         return cls(
             goal=value.get("goal", ""),
             tasks=tuple(Task.from_dict(task) for task in raw_tasks),
             policy_exceptions=dict(exceptions),
+            version=version,
         )
 
     def validate(self) -> None:
@@ -156,6 +167,16 @@ class CoordinationState:
                 if dependency not in tasks_by_id:
                     raise StateError(
                         f"unknown dependency {dependency} for task {task.id}"
+                    )
+            if task.state == "completed":
+                incomplete = [
+                    dependency
+                    for dependency in task.depends_on
+                    if tasks_by_id[dependency].state != "completed"
+                ]
+                if incomplete:
+                    raise StateError(
+                        f"completed task has incomplete dependencies: {task.id}"
                     )
 
         visiting: set[str] = set()
@@ -177,6 +198,7 @@ class CoordinationState:
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
+            "version": self.version,
             "goal": self.goal,
             "tasks": [task.to_dict() for task in self.tasks],
         }
@@ -188,40 +210,79 @@ class CoordinationState:
 def load_state(path: str | os.PathLike[str]) -> CoordinationState:
     state_path = Path(path)
     try:
-        raw = json.loads(state_path.read_text(encoding="utf-8"))
+        source = state_path.read_bytes()
+        raw = json.loads(source)
     except FileNotFoundError as exc:
         raise StateError(f"state file not found: {state_path}") from exc
     except json.JSONDecodeError as exc:
         raise StateError(f"invalid JSON state: {state_path}") from exc
     if not isinstance(raw, Mapping):
         raise StateError("state root must be an object")
-    return CoordinationState.from_dict(raw)
+    state = CoordinationState.from_dict(raw)
+    object.__setattr__(state, "_source_digest", _digest(source))
+    return state
+
+
+def _digest(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+@contextmanager
+def _state_lock(destination: Path):
+    lock_name = hashlib.sha256(str(destination.resolve()).encode("utf-8")).hexdigest()
+    lock_path = Path(tempfile.gettempdir()) / f"general-os-state-{lock_name}.lock"
+    with lock_path.open("a+b") as handle:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0, os.SEEK_END)
+            if handle.tell() == 0:
+                handle.write(b"\0")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def save_state(path: str | os.PathLike[str], state: CoordinationState) -> None:
     state.validate()
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=destination.parent,
-            prefix=f".{destination.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as handle:
-            temporary_path = handle.name
-            json.dump(state.to_dict(), handle, indent=2)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary_path, destination)
-        temporary_path = None
-    finally:
-        if temporary_path:
-            try:
-                os.unlink(temporary_path)
-            except FileNotFoundError:
-                pass
+    with _state_lock(destination):
+        current = destination.read_bytes() if destination.exists() else None
+        expected = state._source_digest
+        if expected is not None and _digest(current or b"") != expected:
+            raise StateError("state changed since it was loaded")
+        serialized = (json.dumps(state.to_dict(), indent=2) + "\n").encode("utf-8")
+        temporary_path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=destination.parent,
+                prefix=f".{destination.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                temporary_path = handle.name
+                handle.write(serialized)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_path, destination)
+            temporary_path = None
+            object.__setattr__(state, "_source_digest", _digest(serialized))
+        finally:
+            if temporary_path:
+                try:
+                    os.unlink(temporary_path)
+                except FileNotFoundError:
+                    pass

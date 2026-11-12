@@ -27,5 +27,17 @@ the current Codex runtime. Inspect the explicit projection with `python -m
 general_os profile resolve --name high --directory agents`; the command is
 read-only and does not infer runtime model or effort values.
 
-`project-OS-starter` is a read-only migration reference, not a runtime or
-schema dependency. It must remain unmodified.
+The predecessor repository is a read-only migration reference, not a runtime
+or schema dependency. It remains unmodified.
+
+## Maintained SSOT
+
+Reusable skills live under `.agents/skills/`; active shared rules live under
+`docs/rules/`; and the source-pinned migration manifest is
+`docs/migration/project-os-starter.md`. The migration accounts for all 33
+predecessor skills and 11 predecessor rules without importing generated adapter
+trees or a second orchestration authority.
+
+Before acceptance, run `pytest -q`,
+`python -m general_os state validate state/coordination.json`, and the focused
+contract suite documented in the active implementation plan.

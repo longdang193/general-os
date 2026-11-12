@@ -23,6 +23,15 @@ def test_policy_applies_material_side_effect_exception():
     assert policy.orca_enabled is False
 
 
+def test_local_deny_is_a_hard_policy_ceiling():
+    policy = resolve_policy(
+        {"remote_side_effects": "allow"},
+        RuntimeConfig(remote_side_effects="deny"),
+    )
+
+    assert policy.remote_side_effects == "deny"
+
+
 def test_policy_rejects_unknown_exception():
     with pytest.raises(PolicyError, match="unknown policy exception"):
         resolve_policy({"orca": "allow"})

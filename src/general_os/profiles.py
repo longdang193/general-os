@@ -41,8 +41,8 @@ def _optional_text(raw: object, field: str, path: Path) -> str | None:
 def load_profiles(directory: str | Path) -> dict[str, ProfileSpec]:
     profile_dir = Path(directory)
     profiles: dict[str, ProfileSpec] = {}
-    if not profile_dir.exists():
-        return profiles
+    if not profile_dir.is_dir():
+        raise ProfileError(f"profile directory not found: {profile_dir}")
     for path in sorted(profile_dir.glob("*.toml")):
         try:
             raw = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -51,16 +51,36 @@ def load_profiles(directory: str | Path) -> dict[str, ProfileSpec]:
         name = raw.get("name", path.stem)
         if not isinstance(name, str) or not name:
             raise ProfileError(f"profile name must be non-empty: {path}")
+        unknown = set(raw) - {
+            "name",
+            "rank",
+            "model",
+            "provider",
+            "harness",
+            "effort",
+            "instructions",
+        }
+        if unknown:
+            raise ProfileError(f"unknown profile field: {sorted(unknown)[0]}")
+        rank = raw.get("rank")
+        if rank is not None and (isinstance(rank, bool) or not isinstance(rank, int)):
+            raise ProfileError(f"rank must be an integer: {path}")
+        provider = _optional_text(raw.get("provider"), "provider", path)
+        instructions = raw.get("instructions", "")
+        if not isinstance(instructions, str) or (
+            "instructions" in raw and not instructions.strip()
+        ):
+            raise ProfileError(f"instructions must be a string: {path}")
         if name in profiles:
             raise ProfileError(f"duplicate profile: {name}")
         profiles[name] = ProfileSpec(
             name=name,
-            rank=raw.get("rank"),
+            rank=rank,
             model=_optional_text(raw.get("model"), "model", path),
-            provider=raw.get("provider"),
+            provider=provider,
             harness=_optional_text(raw.get("harness"), "harness", path),
             effort=_optional_text(raw.get("effort"), "effort", path),
-            instructions=raw.get("instructions", ""),
+            instructions=instructions,
         )
     return profiles
 
@@ -70,8 +90,6 @@ def resolve_profile(
     profiles: dict[str, ProfileSpec],
 ) -> ProfileSpec:
     requested = name or "normal"
-    if not profiles and requested == "normal":
-        return ProfileSpec(name="normal")
     try:
         return profiles[requested]
     except KeyError as exc:

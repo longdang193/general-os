@@ -3,7 +3,7 @@ layer: change
 artifact_type: plan
 template_id: implementation-plan
 contract_version: "1"
-status: proposed
+status: completed
 name: general-os-ssot-migration-and-coordination-hardening
 targets:
   - AGENTS.md
@@ -25,8 +25,9 @@ targets:
 
 Make `general-os` the semantic SSOT for reusable skills and active shared
 rules, while preserving its native-first Codex/Orca architecture and fixing
-the validated durable-coordination failure modes found at
-`450b51ed4626ec67ffd420807b416c9500102ace`.
+the validated durable-coordination failure modes found at implementation
+baseline `450b51ed4626ec67ffd420807b416c9500102ace`. Execution is reconciled
+against current HEAD `ea2a07cee21d3502b0e097bf950dd3b215091327`.
 
 The migration is semantic, not a 1:1 copy: migrate methods and domain
 knowledge, retire duplicated orchestration, and keep `project-OS-starter` as
@@ -48,6 +49,8 @@ read-only historical evidence.
   `00b825ba95af4a44f0a33d528ea42593f3fc1dc1`. That source contains 33 skill
   directories and 11 rule files; its uncommitted changes are not migration
   input.
+- Review findings were reconciled against execution HEAD before acceptance;
+  plan/state bookkeeping is coordination scope, not product behavior.
 - Existing `general-os` tests pass: `53 passed`. Focused probes reproduce:
   missing acceptance evidence can pass, required boundaries are unenforced,
   dependencies do not gate completion, blocked `FAIL` is sticky, a durable
@@ -123,24 +126,39 @@ behavior. Focused regression tests and documentation prove the contracts.
 - Coordination owner: `single lead controller`
 - Coordination schema: `2`
 - Branch: `main`
-- Base commit: `450b51ed4626ec67ffd420807b416c9500102ace`
+- Review baseline: `450b51ed4626ec67ffd420807b416c9500102ace`
+- Execution HEAD: `ea2a07cee21d3502b0e097bf950dd3b215091327`
 - Expected workspace: preserve unrelated untracked `.serena/`; preserve all
   existing `general-os` changes if they appear; treat the dirty
   `project-OS-starter` checkout as read-only source context
-- Next action: Task 1, establish the committed migration inventory and freeze
-  ownership before copying any skill or rule
+- Next action: none; final verification complete
 - Blockers: none for plan execution; publication of source changes is outside
   this plan's authority
+- Publication: no publication required; commit/push was not authorized during
+  execution.
 
 | Task | State | Workspace | Executor | Depends On | Required Proof | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| Task 1 | `pending` | current | `unresolved` | none | committed source inventory and migration manifest tests | pending |
-| Task 2 | `pending` | current | `unresolved` | Task 1 | core/docs/template contract tests | pending |
-| Task 3 | `pending` | current | `unresolved` | Task 1, Task 2 | skill/rule inventory and forbidden-reference checks | pending |
-| Task 4 | `pending` | current | `unresolved` | Task 2 | acceptance/state regression tests | pending |
-| Task 5 | `pending` | current | `unresolved` | Task 2 | policy/profile/Orca regression tests | pending |
-| Task 6 | `pending` | current | `unresolved` | Tasks 3–5 | docs, CLI, and migration acceptance checks | pending |
-| Task 7 | `pending` | current | `unresolved` | Task 6 | full suite and final reconciliation | pending |
+| Task 1 | `completed` | current | `codex` | none | committed source inventory and migration manifest tests | `8 passed`; source inventory `33` skills / `11` rules |
+| Task 2 | `completed` | current | `codex` | Task 1 | core/docs/template contract tests | `8 passed`; goal-only template validated |
+| Task 3 | `completed` | current | `codex` | Task 1, Task 2 | skill/rule inventory and forbidden-reference checks | `29` maintained skill directories; no `.agents/rules/`; scans clean |
+| Task 4 | `completed` | current | `codex` | Task 2 | acceptance/state regression tests | `28 passed`; Git/acceptance/state/CLI checks |
+| Task 5 | `completed` | current | `codex` | Task 2 | policy/profile/Orca regression tests | `44 passed`; concurrency, ceiling, fail-closed, timeout checks |
+| Task 6 | `completed` | current | `codex` | Tasks 3–5 | docs, CLI, and migration acceptance checks | `63 passed`; CLI valid; active scan clean |
+| Task 7 | `completed` | current | `codex` | Task 6 | full suite and final reconciliation | `70 passed`; diff/status reconciliation complete |
+
+## Final Reconciliation
+
+- Verification result: `verified` at execution HEAD
+  `ea2a07cee21d3502b0e097bf950dd3b215091327` on `main`.
+- Review baseline remains `450b51ed4626ec67ffd420807b416c9500102ace`; the
+  implementation was validated against the newer execution HEAD.
+- The policy contract is explicit: durable exceptions are narrowly scoped,
+  carry provenance and expiry when supported, and cannot widen configured
+  local `remote_side_effects="deny"`.
+- All changed files are within declared plan targets. Untracked `.serena/` is
+  unrelated preserved workspace state; no generated/runtime artifact was
+  added. No publication was performed.
 
 ## Task Breakdown
 
@@ -167,8 +185,9 @@ behavior. Focused regression tests and documentation prove the contracts.
 - `skill-writing-skills`, `skill-code-standards`
 
 **Files And Symbols:**
-- Inspect: `C:/Users/HOANG PHI LONG DANG/repos/project-OS-starter@00b825ba95af4a44f0a33d528ea42593f3fc1dc1/.agents/skills/`
-- Inspect: `C:/Users/HOANG PHI LONG DANG/repos/project-OS-starter@00b825ba95af4a44f0a33d528ea42593f3fc1dc1/docs/operating_system/rules/`
+- Inspect the predecessor only at commit
+  `00b825ba95af4a44f0a33d528ea42593f3fc1dc1` using `git show` or `git archive`;
+  never read its dirty working tree as migration input.
 - Modify: `docs/migration/project-os-starter.md`
 - Verify: `tests/test_documentation_contracts.py`
 
@@ -180,23 +199,23 @@ behavior. Focused regression tests and documentation prove the contracts.
 - Stop for: a request to publish/clean source changes or a source revision different from `00b825ba95af4a44f0a33d528ea42593f3fc1dc1`.
 
 **Steps:**
-- [ ] Step 1: Record the source commit, count 33 committed skill directories
+- [x] Step 1: Record the source commit, count 33 committed skill directories
   and 11 committed rule files, and preserve the source worktree's unrelated
   modifications.
-- [ ] Step 2: Add a migration manifest to
+- [x] Step 2: Add a migration manifest to
   `docs/migration/project-os-starter.md` mapping all 11 rules and 33 skills to
   an existing core skill, a new specialist skill, a small shared rule, or an
   explicit retirement decision.
-- [ ] Step 3: Record the cutover criteria: no maintained runtime dependency
+- [x] Step 3: Record the cutover criteria: no maintained runtime dependency
   on `project-OS-starter`, no maintained skill reference to
   `docs/operating_system/*`, no generated `.agents/rules/`, native Codex
   default, Codex-owned native children, Orca-only independent orchestration,
   `agents/*.toml` profile SSOT, and Git recovery truth.
 
 **Verification:**
-- [ ] `git -C "C:/Users/HOANG PHI LONG DANG/repos/project-OS-starter" ls-tree -r --name-only 00b825ba95af4a44f0a33d528ea42593f3fc1dc1 -- .agents/skills | Select-String '/SKILL.md$' | Measure-Object -Line`
+- [x] `git -C "C:/Users/HOANG PHI LONG DANG/repos/project-OS-starter" ls-tree -r --name-only 00b825ba95af4a44f0a33d528ea42593f3fc1dc1 -- .agents/skills | Select-String '/SKILL.md$' | Measure-Object -Line`
 - Expected: 33 committed skill directories are represented by the inventory.
-- [ ] `pytest -q tests/test_documentation_contracts.py`
+- [x] `pytest -q tests/test_documentation_contracts.py`
 - Expected: migration ownership and acceptance assertions pass.
 
 **Exit Criteria:**
@@ -244,25 +263,25 @@ behavior. Focused regression tests and documentation prove the contracts.
 - Stop for: a proposal to add a second registry, generated rule tree, scheduler, runtime ledger, or mandatory meta-skill.
 
 **Steps:**
-- [ ] Step 1: Keep `AGENTS.md` limited to Git ownership, durable general-os
+- [x] Step 1: Keep `AGENTS.md` limited to Git ownership, durable general-os
   facts, native Codex default, Codex child ownership, Orca independence,
   profile SSOT, runtime-state boundaries, fresh verification, and authority.
-- [ ] Step 2: Merge useful planning, execution, verification, and CoS
+- [x] Step 2: Merge useful planning, execution, verification, and CoS
   guidance into the existing five core skills; remove Project-OS-only
   metadata such as `required_reads` and `distribution_tier` unless a current
   general-os consumer proves it is needed.
-- [ ] Step 3: Keep Orca selection optional unless independence is required or
+- [x] Step 3: Keep Orca selection optional unless independence is required or
   materially useful, and state that required independence blocks rather than
   silently falling back.
-- [ ] Step 4: Change `docs/templates/coordination-state.json` to a goal-only
+- [x] Step 4: Change `docs/templates/coordination-state.json` to a goal-only
   example with `"tasks": []`; keep task-graph examples inside
   `defining-work`.
 
 **Verification:**
-- [ ] `pytest -q tests/test_documentation_contracts.py`
+- [x] `pytest -q tests/test_documentation_contracts.py`
 - Expected: core ownership, native execution, Orca boundary, and goal-only
   template contracts pass.
-- [ ] `rg -n "required_reads|distribution_tier|generated_agents|Herdr|Runtime Grant|DeepAgents" AGENTS.md .agents/skills`
+- [x] `rg -n "required_reads|distribution_tier|generated_agents|Herdr|Runtime Grant|DeepAgents" AGENTS.md .agents/skills`
 - Expected: no forbidden Project-OS control-plane dependency remains in the
   maintained core surfaces.
 
@@ -333,28 +352,28 @@ behavior. Focused regression tests and documentation prove the contracts.
 - Stop for: copying generated adapters, importing source runtime machinery, or changing the source repository.
 
 **Steps:**
-- [ ] Step 1: Merge the five old core skills into their existing general-os
+- [x] Step 1: Merge the five old core skills into their existing general-os
   owners instead of creating duplicate names.
-- [ ] Step 2: Port the 24 reusable specialist capabilities under the target
+- [x] Step 2: Port the 24 reusable specialist capabilities under the target
   names above; soften absolute gates so they apply only when the task has the
   stated material risk or unresolved design.
-- [ ] Step 3: Fold backend, full-stack, Python, documentation-contract,
+- [x] Step 3: Fold backend, full-stack, Python, documentation-contract,
   review, and coordination guidance into owning skills; create a shared rule
   file only when at least two maintained skills need the same rule.
-- [ ] Step 4: Retire the three explicitly excluded control-plane skills and do
+- [x] Step 4: Retire the three explicitly excluded control-plane skills and do
   not create `.agents/rules/`, `generated_agents/`, or a sync generator in
   `general-os`.
-- [ ] Step 5: Keep Git worktree guidance native-first: current checkout for
+- [x] Step 5: Keep Git worktree guidance native-first: current checkout for
   small reversible work, native worktrees for useful isolation, and Orca-owned
   independent worker worktrees.
 
 **Verification:**
-- [ ] `rg -n "project-OS-starter|docs/operating_system|generated_agents|Herdr|Runtime Grant|DeepAgents|Project Secretary|lane ledger|MAIN AGENT" .agents/skills docs/rules AGENTS.md`
+- [x] `rg -n "project-OS-starter|docs/operating_system|generated_agents|Herdr|Runtime Grant|DeepAgents|Project Secretary|lane ledger|MAIN AGENT" .agents/skills docs/rules AGENTS.md`
 - Expected: only explicitly historical migration references remain; no
   maintained skill depends on the retired control plane.
-- [ ] `Get-ChildItem .agents/rules -ErrorAction SilentlyContinue`
+- [x] `Get-ChildItem .agents/rules -ErrorAction SilentlyContinue`
 - Expected: no generated `.agents/rules/` directory exists.
-- [ ] Parse every maintained `SKILL.md` frontmatter and assert each target has
+- [x] Parse every maintained `SKILL.md` frontmatter and assert each target has
   exactly `name` and `description` unless a current general-os consumer proves
   another field is required.
 
@@ -403,32 +422,32 @@ behavior. Focused regression tests and documentation prove the contracts.
 - Stop for: changing task-state names, silently deleting existing state fields, or introducing a runtime scheduler.
 
 **Steps:**
-- [ ] Step 1: Add one canonical repository/worktree identity to
+- [x] Step 1: Add one canonical repository/worktree identity to
   `GitSnapshot`, derived from `HEAD`, status, tracked diff, and untracked-file
   content; require `VerificationResult` to carry the matching evidence for a
   repository-bound `PASS`. Do not require a clean tree when the verified
   worktree is intentionally dirty; require identity equality instead.
-- [ ] Step 2: Add typed independent-boundary evidence to verification and
+- [x] Step 2: Add typed independent-boundary evidence to verification and
   reject or block `PASS` for `requires_independent_boundary=True` when the
   evidence is absent or does not identify the selected boundary. Keep the
   library fail-closed; do not add an unchecked boolean escape hatch.
-- [ ] Step 3: In `apply_task_transition` and `CoordinationState.validate`,
+- [x] Step 3: In `apply_task_transition` and `CoordinationState.validate`,
   require every dependency of a completing task to be `completed` and reject
   persisted completed tasks whose prerequisites are not complete.
-- [ ] Step 4: Make a retryable `FAIL` move a previously `blocked` task back to
+- [x] Step 4: Make a retryable `FAIL` move a previously `blocked` task back to
   `pending`; keep `BLOCKED` reserved for the current material blocker and
   preserve idempotency for repeated transitions.
-- [ ] Step 5: Update the CLI to produce the same snapshot identity used by
+- [x] Step 5: Update the CLI to produce the same snapshot identity used by
   the library and to refuse acceptance of required-boundary tasks without
   runtime-produced boundary evidence.
 
 **Verification:**
-- [ ] Add tests for missing/stale worktree evidence, dirty-tree identity
+- [x] Add tests for missing/stale worktree evidence, dirty-tree identity
   changes, missing/valid required-boundary evidence, incomplete dependencies,
   blocked-to-pending recovery, and repeated transitions.
 - Expected: every false-positive scenario reproduced by the review fails or
   blocks, while valid dirty-tree verification with matching identity passes.
-- [ ] `pytest -q tests/test_git.py tests/test_acceptance.py tests/test_state.py tests/test_cli.py`
+- [x] `pytest -q tests/test_git.py tests/test_acceptance.py tests/test_state.py tests/test_cli.py`
 - Expected: focused acceptance and state tests pass.
 
 **Exit Criteria:**
@@ -477,30 +496,30 @@ behavior. Focused regression tests and documentation prove the contracts.
 - Stop for: adding a second durable ledger, persisting runtime IDs, or widening remote-side-effect authority beyond the declared policy contract.
 
 **Steps:**
-- [ ] Step 1: Add a schema version with an explicit legacy-read path for the
+- [x] Step 1: Add a schema version with an explicit legacy-read path for the
   current unversioned `state/coordination.json`, reject unsupported future
   versions, and write the current version on save.
-- [ ] Step 2: Add optimistic concurrency to `save_state` using the loaded
+- [x] Step 2: Add optimistic concurrency to `save_state` using the loaded
   state generation/digest; reject a save when the on-disk generation moved
   instead of silently replacing a newer update. Keep atomic temp-file replace
   for partial-write protection.
-- [ ] Step 3: Treat configured local `remote_side_effects="deny"` as a hard
+- [x] Step 3: Treat configured local `remote_side_effects="deny"` as a hard
   ceiling. If durable exceptions remain supported, require a narrow scope,
   explicit provenance, and expiry; otherwise reject the exception rather than
   silently upgrading `deny` to `allow`.
-- [ ] Step 4: Fail profile loading when the configured directory or default
+- [x] Step 4: Fail profile loading when the configured directory or default
   profile is absent; validate `rank`, `provider`, and `instructions`; reject
   unknown TOML keys and whitespace-only values. Keep `agents/*.toml` as the
   only registry and preserve one-way projection.
-- [ ] Step 5: Give `OrcaCliStatusObserver.observe` a finite default timeout,
+- [x] Step 5: Give `OrcaCliStatusObserver.observe` a finite default timeout,
   preserve caller overrides, and return a bounded actionable observation for
   malformed/unsupported status envelopes.
 
 **Verification:**
-- [ ] `pytest -q tests/test_state.py tests/test_policy.py tests/test_profiles.py tests/test_orca.py`
+- [x] `pytest -q tests/test_state.py tests/test_policy.py tests/test_profiles.py tests/test_orca.py`
 - Expected: version migration, stale-save rejection, policy ceiling,
   fail-closed profile loading, and timeout/schema failure tests pass.
-- [ ] Run two read-modify-write processes against one temporary state file.
+- [x] Run two read-modify-write processes against one temporary state file.
 - Expected: exactly one stale writer is rejected and no accepted update is
   lost.
 
@@ -547,19 +566,19 @@ behavior. Focused regression tests and documentation prove the contracts.
 - Stop for: documenting a behavior not proven by source/tests or changing historical plan content solely to remove old references.
 
 **Steps:**
-- [ ] Step 1: Document the exact state identity/version, dependency,
+- [x] Step 1: Document the exact state identity/version, dependency,
   required-boundary, blocked-recovery, policy-ceiling, profile, and Orca
   semantics in the owning docs.
-- [ ] Step 2: Replace substring-only migration assertions with checks that
+- [x] Step 2: Replace substring-only migration assertions with checks that
   enumerate maintained skills, validate the migration manifest, reject
   forbidden active references, and cover critical acceptance/state behavior.
-- [ ] Step 3: Update README and migration acceptance criteria to distinguish
+- [x] Step 3: Update README and migration acceptance criteria to distinguish
   active SSOT sources from historical references.
 
 **Verification:**
-- [ ] `pytest -q tests/test_documentation_contracts.py tests/test_acceptance.py tests/test_state.py tests/test_profiles.py tests/test_policy.py tests/test_orca.py`
+- [x] `pytest -q tests/test_documentation_contracts.py tests/test_acceptance.py tests/test_state.py tests/test_profiles.py tests/test_policy.py tests/test_orca.py`
 - Expected: documentation and behavior tests agree with the canonical source.
-- [ ] `rg -n "project-OS-starter|Herdr|Runtime Grant|DeepAgents|docs/operating_system|generated_agents" .agents/skills docs/rules AGENTS.md README.md`
+- [x] `rg -n "project-OS-starter|Herdr|Runtime Grant|DeepAgents|docs/operating_system|generated_agents" .agents/skills docs/rules AGENTS.md`
 - Expected: no forbidden active dependency; historical migration references
   are limited to the migration documentation.
 
@@ -601,20 +620,20 @@ behavior. Focused regression tests and documentation prove the contracts.
 - Stop for: failed required proof, unreviewed scope expansion, stale Git/base identity, or any request to publish without explicit authorization.
 
 **Steps:**
-- [ ] Step 1: Run the full test suite and CLI validation against the current
+- [x] Step 1: Run the full test suite and CLI validation against the current
   state file.
-- [ ] Step 2: Re-run the source-pinned inventory and forbidden-reference scans;
+- [x] Step 2: Re-run the source-pinned inventory and forbidden-reference scans;
   confirm no generated rule mirror or retired control-plane dependency exists.
-- [ ] Step 3: Compare changed files with the plan targets, record deviations,
+- [x] Step 3: Compare changed files with the plan targets, record deviations,
   and leave plan status `proposed` or `active` until
   `skill-verification-before-completion` returns `verified`.
 
 **Verification:**
-- [ ] `pytest -q`
+- [x] `pytest -q`
 - Expected: all tests pass with no unrelated failures.
-- [ ] `python -m general_os state validate state/coordination.json`
+- [x] `python -m general_os state validate state/coordination.json`
 - Expected: JSON output reports `"status": "valid"`.
-- [ ] `git status --short --branch`
+- [x] `git status --short --branch`
 - Expected: only declared plan/migration implementation changes plus preserved
   unrelated work are present; no generated or runtime artifact is silently
   added.

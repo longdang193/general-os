@@ -60,9 +60,7 @@ def resolve_policy(
     unknown = set(values) - {"remote_side_effects"}
     if unknown:
         raise PolicyError(f"unknown policy exception: {sorted(unknown)[0]}")
-    remote_side_effects = values.get(
-        "remote_side_effects", resolved.remote_side_effects
-    )
+    remote_side_effects = values.get("remote_side_effects", resolved.remote_side_effects)
     if remote_side_effects is None:
         remote_side_effects = resolved.remote_side_effects
     if remote_side_effects not in SIDE_EFFECT_POLICIES:
@@ -71,6 +69,8 @@ def resolve_policy(
         raise PolicyError(
             f"invalid remote_side_effects: {resolved.remote_side_effects}"
         )
+    if resolved.remote_side_effects == "deny" and remote_side_effects != "deny":
+        remote_side_effects = "deny"
     if not isinstance(resolved.native_subagents_enabled, bool):
         raise PolicyError("native_subagents_enabled must be boolean")
     if not isinstance(resolved.orca_enabled, bool):
