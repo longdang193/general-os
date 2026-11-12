@@ -17,15 +17,14 @@ This skill produces design artifacts only.
 ## Conditional References
 
 - For unresolved material visual direction, interaction design, responsive behavior, or accessibility behavior, follow `docs/rules/frontend-ui.md`. If `impeccable` is explicitly selected, use it without also invoking overlapping design skills; otherwise preserve existing `ui-ux-pro-max` eligibility. Skip design-skill invocation for text-only design questions.
-- Read `repository operating guidance/planning/planning-dispatch.md` to choose the smallest truthful planning tier.
-- Read `repository operating guidance/templates/brainstorming-detailed-report-template.md` only when user requests a saved detailed brainstorming report.
-- Read `repository operating guidance/governance/repo-governance.md` only when ownership or publication boundaries are in scope.
+- Use `defining-work` to choose the smallest truthful planning tier.
+- Use `AGENTS.md` when ownership or publication boundaries are in scope.
 - If guidance conflicts with current source or tests, current executable truth wins.
 
 ## Artifact Boundaries
 
 - Brainstorming owns problem exploration, options, trade-offs, recommendations, assumptions, and unresolved questions.
-- When approved direction still needs prototype validation, hand off to `spec-drafting` and `repository operating guidance/templates/draft-specification-template.md`; do not create a second permanent brainstorming or UI-intent artifact.
+- When approved direction still needs prototype validation, hand off to `spec-drafting`; do not create a second permanent brainstorming or UI-intent artifact.
 - Approved behavior, interfaces, decisions, and invariants belong in specifications.
 - Exact tasks, sequencing, dependencies, and execution approach belong in implementation plans.
 
@@ -33,9 +32,8 @@ This skill produces design artifacts only.
 
 State minimum capability and evidence before selecting a tool. Prefer native
 source, tests, and repository inspection. Resolve unmet capabilities through
-`repository operating guidance/tooling/runtime-tool-resolution.md`; optional tool
-failure never blocks safe source-first design, but never replaces mandatory
-evidence.
+currently configured native tooling; optional tool failure never blocks safe
+source-first design, but never replaces mandatory evidence.
 
 ## Brainstorming Process
 
@@ -70,8 +68,7 @@ evidence.
 6. Present the current situation, core problem, options, comparison, recommendation, unresolved questions, and immediate next decision.
 7. Ask the user to approve, revise, or reject the recommendation.
 8. Do not create a report by default. If the user requests a detailed report:
-   - scaffold with `.\\scripts\\new_brainstorming_report.ps1 -ReportId <report_id>`
-   - write report to `docs/superpowers/plans/brainstorming/<report_id>/report.md` using `repository operating guidance/templates/brainstorming-detailed-report-template.md`
+   - write report to `docs/superpowers/plans/brainstorming/<report_id>/report.md`
    - link supporting files directly only when they materially help
 9. Restate accepted recommendations in approved direct scope or a specification; do not treat the report as design truth.
 10. Request approval before implementation planning when a plan is needed. Direct approved scope may proceed without a saved spec or plan when the change is local, reversible, and design-clear.

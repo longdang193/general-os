@@ -104,3 +104,51 @@ def test_snapshot_identity_changes_with_tracked_and_untracked_content(tmp_path):
 
     assert first.identity != second.identity
     assert second.identity != third.identity
+
+
+def test_snapshot_identity_hashes_quoted_untracked_paths(tmp_path):
+    run_git(tmp_path, "init", "--initial-branch", "main")
+    path = tmp_path / "new file.txt"
+    path.write_text("first\n", encoding="utf-8")
+
+    first = GitRepository(tmp_path).inspect()
+    path.write_text("second\n", encoding="utf-8")
+    second = GitRepository(tmp_path).inspect()
+
+    assert first.identity != second.identity
+
+
+def test_snapshot_identity_hashes_staged_content_in_unborn_repository(tmp_path):
+    run_git(tmp_path, "init", "--initial-branch", "main")
+    path = tmp_path / "staged.txt"
+    path.write_text("first\n", encoding="utf-8")
+    run_git(tmp_path, "add", "staged.txt")
+
+    first = GitRepository(tmp_path).inspect()
+    path.write_text("second\n", encoding="utf-8")
+    run_git(tmp_path, "add", "staged.txt")
+    second = GitRepository(tmp_path).inspect()
+
+    assert first.identity != second.identity
+
+
+def test_snapshot_identity_handles_utf8_tracked_diff(tmp_path):
+    run_git(tmp_path, "init", "--initial-branch", "main")
+    path = tmp_path / "file.txt"
+    path.write_text("initial\n", encoding="utf-8")
+    run_git(tmp_path, "add", "file.txt")
+    run_git(
+        tmp_path,
+        "-c",
+        "user.name=Test User",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "initial",
+    )
+    path.write_text("ā\n", encoding="utf-8")
+
+    snapshot = GitRepository(tmp_path).inspect()
+
+    assert snapshot.clean is False

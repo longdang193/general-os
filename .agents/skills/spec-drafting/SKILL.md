@@ -49,12 +49,12 @@ Implementation plan owns exact files, task order, commands, dependencies, rollou
 
 ## Draft To Final Lifecycle
 
-- Use `repository operating guidance/templates/draft-specification-template.md` when behavior, UI intent, or state transitions still need prototype validation.
+- Use a Markdown file under `docs/superpowers/specs/` when behavior, UI intent, or state transitions still need prototype validation.
 - Save draft under final `docs/superpowers/specs/*.md` path with `template_id: draft-specification` and `status: proposed`.
 - Keep assumptions, open questions, prototype reference, and findings in same file while design remains unsettled.
-- After explicit approval, complete every explicitly applicable post-approval input before promotion. Keep the draft `status: proposed` while required Design Export or other approved inputs remain incomplete. Then replace draft content in place with `repository operating guidance/templates/detailed-specification-template.md`, set `template_id: detailed-specification` and `status: active`, and preserve accepted prototype evidence and approved deferrals.
+- After explicit approval, complete every explicitly applicable post-approval input before promotion. Keep the draft `status: proposed` while required validation inputs remain incomplete. Then promote the same Markdown file in place, set `template_id: detailed-specification` and `status: active`, and preserve accepted prototype evidence and approved deferrals.
 - Do not keep parallel permanent draft/final files. Git history preserves draft state.
-- For material backend behavior, define verification claims using `repository operating guidance/rules/backend-verification-rule.md`; frontend proof never replaces backend proof.
+- For material backend behavior, define verification claims using `backend-verification`; frontend proof never replaces backend proof.
 - Spec status is `proposed` while behavior or design remains unsettled, `active` for the approved contract under implementation, `completed` after implementation is verified against that contract, and `superseded` when a newer specification replaces it. Revise only `proposed` or `active` specifications; use completed or superseded specifications as historical baseline evidence for new work.
 
 ### Promotion Mapping
@@ -79,7 +79,7 @@ Unresolved questions that change required behavior or design block `status: acti
 
 - State minimum capability and required evidence before selecting a tool.
 - Prefer native tools for direct file inspection, local search, configuration, tests, and repository state.
-- Resolve unmet code, external-service, database, model, report, or platform capabilities through `repository operating guidance/tooling/runtime-tool-resolution.md`.
+- Resolve unmet code, external-service, database, model, report, or platform capabilities through currently configured native tooling; do not invent a fallback authority.
 - Under external worker runtime, Codex supplies validated handoff facts within the existing permission boundary.
 - Do not query every tool by default. Source and tests remain authoritative; unavailable optional tools never replace mandatory evidence.
 
@@ -296,8 +296,8 @@ Use only applicable optional metadata. Do not add metadata without active consum
 1. Present draft findings or detailed specification and unresolved approved deferrals.
 2. Request explicit approval; when draft exists, resolve applicable post-approval inputs, then promote the same file to detailed active specification.
 3. For cross-cutting, data-sensitive, operational, starter/public-sync, or expensive-to-reverse specifications, use `plan-document-reviewer` before approval or planning handoff.
-4. After detailed specification is active, hand off to `skill-writing-plans`.
-5. `skill-executing-plans` starts only after executable plan or explicit approved task sequence exists.
+4. After detailed specification is active, hand off to `defining-work`.
+5. `executing-work` starts only after an executable plan or explicit approved task sequence exists.
 6. `skill-verification-before-completion` later proves acceptance and completion criteria.
 7. `finishing-development-work` owns authorized Git disposition after verified implementation.
 
@@ -319,8 +319,8 @@ Use only applicable optional metadata. Do not add metadata without active consum
 - `brainstorming`: clarify problem, options, and recommendation.
 - `systematic-debugging`: establish reproducible symptom and root cause.
 - `plan-document-reviewer`: review specification correctness and readiness.
-- `skill-writing-plans`: convert approved specification into executable tasks.
-- `skill-executing-plans`: implement approved plan.
+- `defining-work`: convert approved specification into executable tasks.
+- `executing-work`: implement approved plan.
 - `skill-verification-before-completion`: prove required behavior and completion.
 - `finishing-development-work`: perform authorized Git closure.
 

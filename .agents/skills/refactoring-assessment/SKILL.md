@@ -31,9 +31,9 @@ Read only references needed for current assessment:
 - `repository operating guidance/templates/audit-report-with-evidence-template.md` only when a formal audit bundle is required
 - `brainstorming` when desired behavior or design direction remains unclear
 - `spec-drafting` when behavior, interfaces, schemas, defaults, compatibility, or invariants require a decision contract
-- `skill-writing-plans` when design is settled but execution needs ordered tasks
+- `defining-work` when design is settled but execution needs ordered tasks
 - `test-driven-development` before a bounded behavior-preserving patch
-- `skill-executing-plans` only after a plan is approved
+- `executing-work` only after a plan is approved
 - `skill-dispatching-parallel-agents` only when selected actions have disjoint write ownership
 - `skill-verification-before-completion` after implementation
 - `finishing-development-work` only after fresh verification and explicit Git authorization
@@ -96,8 +96,8 @@ Route rather than perform next stage:
 |---|---|
 | Small, bounded, behavior-preserving patch | `test-driven-development`, then direct implementation |
 | Unresolved behavior, interface, schema, default, compatibility, or invariant | `spec-drafting` |
-| Settled design with multi-step execution | `skill-writing-plans` |
-| Approved implementation plan | `skill-executing-plans` |
+| Settled design with multi-step execution | `defining-work` |
+| Approved implementation plan | `executing-work` |
 | Independent actions with disjoint write ownership | `skill-dispatching-parallel-agents` |
 | Completed implementation | `skill-verification-before-completion` |
 | Verified work needing authorized Git disposition | `finishing-development-work` |

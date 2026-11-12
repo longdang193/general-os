@@ -129,7 +129,7 @@ Record:
 - repository remote when relevant
 - pre-existing working-tree changes
 
-This identity is passed to `skill-executing-plans`, then verification and branch finishing.
+This identity is passed to `executing-work`, then verification and branch finishing.
 
 ## 7. Prepare Project
 

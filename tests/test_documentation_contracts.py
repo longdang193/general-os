@@ -198,3 +198,20 @@ def test_maintained_skills_use_minimal_frontmatter_and_no_generated_rules():
             if ":" in line
         }
         assert fields == {"name", "description"}, path
+
+
+def test_migrated_skills_use_current_owners_and_available_resources():
+    root = Path(__file__).parents[1]
+    skill_root = root / ".agents" / "skills"
+    contents = "\n".join(
+        (skill_root / name / "SKILL.md").read_text(encoding="utf-8")
+        for name in ("brainstorming", "spec-drafting", "writing-skills")
+    )
+
+    all_skills = "\n".join(
+        path.read_text(encoding="utf-8") for path in skill_root.rglob("*.md")
+    )
+    assert "skill-writing-plans" not in all_skills
+    assert "skill-executing-plans" not in all_skills
+    assert "validate_agent_metadata_schema.py" not in contents
+    assert "repository operating guidance/templates/" not in contents

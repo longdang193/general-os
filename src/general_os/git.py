@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import hashlib
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,18 +27,20 @@ class GitRepository:
     def __init__(self, root: str | Path):
         self.root = Path(root)
 
-    def _run(self, *args: str) -> str:
+    def _run_bytes(self, *args: str) -> bytes:
         try:
             result = subprocess.run(
                 ["git", *args],
                 cwd=self.root,
                 check=True,
                 capture_output=True,
-                text=True,
             )
         except (OSError, subprocess.CalledProcessError) as exc:
             raise GitError(f"Git command failed in {self.root}: {' '.join(args)}") from exc
-        return result.stdout.strip()
+        return result.stdout
+
+    def _run(self, *args: str) -> str:
+        return self._run_bytes(*args).decode("utf-8", errors="surrogateescape").strip()
 
     def inspect(self) -> GitSnapshot:
         branch = self._run("branch", "--show-current") or "HEAD"
@@ -81,21 +84,25 @@ class GitRepository:
         for value in (branch, revision or "", status):
             digest.update(value.encode("utf-8"))
             digest.update(b"\0")
-        try:
-            tracked_diff = self._run("diff", "HEAD", "--binary")
-        except GitError:
-            tracked_diff = ""
-        digest.update(tracked_diff.encode("utf-8"))
+        if revision is None:
+            tracked_diff = self._run_bytes("diff", "--cached", "--binary")
+            tracked_diff += b"\0" + self._run_bytes("diff", "--binary")
+        else:
+            tracked_diff = self._run_bytes("diff", "HEAD", "--binary")
+        digest.update(tracked_diff)
         digest.update(b"\0")
+        untracked_status = self._run_bytes(
+            "status", "--porcelain=v1", "--untracked-files=all", "-z"
+        )
         untracked = [
-            line[3:]
-            for line in status.splitlines()
-            if line.startswith("?? ")
+            os.fsdecode(record[3:])
+            for record in untracked_status.split(b"\0")
+            if record.startswith(b"?? ")
         ]
         for path in sorted(untracked):
             candidate = self.root / path
             if candidate.is_file():
-                digest.update(path.encode("utf-8"))
+                digest.update(os.fsencode(path))
                 digest.update(b"\0")
                 digest.update(candidate.read_bytes())
                 digest.update(b"\0")

@@ -24,10 +24,10 @@ Skip for tiny, local, reversible tasks with settled behavior and obvious proof.
 ## Ownership Boundaries
 
 - `spec-drafting` creates approved behavior, interfaces, decisions, invariants, acceptance criteria, and validation intent.
-- `skill-writing-plans` creates exact tasks, files, commands, dependencies, and task-local verification.
+- `defining-work` creates exact tasks, files, commands, dependencies, and task-local verification.
 - this skill identifies readiness defects in those artifacts without silently rewriting them
 - `workspace-isolation` optionally establishes isolated workspace identity
-- `skill-executing-plans` discovers implementation reality and performs task-local proof
+- `executing-work` discovers implementation reality and performs task-local proof
 - `skill-verification-before-completion` runs final proof and produces verified, incomplete, or blocked result
 - `finishing-development-work` owns authorized Git disposition after verified result
 - `requesting-code-review` initiates implementation-diff review; `receiving-code-review` evaluates returned findings; neither reviews proposed documents
@@ -190,5 +190,5 @@ State exactly one readiness verdict and short reason.
 
 ## Integration
 
-Use after `spec-drafting` or `skill-writing-plans` when review cost is justified and before `skill-executing-plans` or external handoff.
+Use after `spec-drafting` or `defining-work` when review cost is justified and before `executing-work` or external handoff.
 

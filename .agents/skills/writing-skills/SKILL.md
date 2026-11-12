@@ -94,7 +94,8 @@ skills/
 ## SKILL.md Structure
 
 **Frontmatter (YAML):**
-- Must satisfy `scripts/validate_agent_metadata_schema.py`.
+- Must use only `name` and `description` frontmatter, as enforced by the
+  maintained documentation contract tests.
 - `name` and `description` are the only required skill frontmatter fields.
 - `name`: Use letters, numbers, and hyphens only (no parentheses, special chars)
 - `description`: Third-person, describes ONLY when to use (NOT what it does)

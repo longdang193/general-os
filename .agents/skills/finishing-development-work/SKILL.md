@@ -344,7 +344,7 @@ Stop when:
 ## Integration
 
 - `workspace-isolation` provides workspace identity and creation mechanism.
-- `skill-executing-plans` completes implementation tasks.
+- `executing-work` completes implementation tasks.
 - `skill-verification-before-completion` produces required `verified` handoff.
 - publication remains owned by repository publication workflow.
 

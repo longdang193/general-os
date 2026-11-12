@@ -27,7 +27,7 @@ Before opening a map, record evidence for all conditions:
 
 If destination or problem framing is unknown, use `brainstorming`.
 If behavior and design are settled, use `spec-drafting`. If approved
-behavior needs implementation sequencing, use `skill-writing-plans`. Local,
+behavior needs implementation sequencing, use `defining-work`. Local,
 reversible, design-clear work uses the existing direct execution route.
 
 ## Map Ownership
@@ -78,7 +78,7 @@ Close only when all conditions hold:
 
 After closure, return to `repository operating guidance/planning/planning-dispatch.md`
 and apply its next applicable gate. If implementation sequencing is needed,
-use `skill-writing-plans`. Wayfinding does not pre-author plan tasks,
+use `defining-work`. Wayfinding does not pre-author plan tasks,
 dependency order, write ownership, executor choice, or verification commands.
 
 ## Verification

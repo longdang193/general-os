@@ -48,12 +48,13 @@ def run_accept(args: argparse.Namespace) -> int:
         status=args.status,
         passed=tuple(args.check),
         evidence_revision=args.revision or snapshot.revision,
-        snapshot_identity=snapshot.identity,
+        snapshot_identity=args.snapshot_identity,
         boundary_evidence=boundary_evidence,
     )
     decision = evaluate_acceptance(task, snapshot, verification)
-    if decision.status in {"PASS", "BLOCKED"}:
-        save_state(args.state, apply_task_transition(state, task.id, decision))
+    updated_state = apply_task_transition(state, task.id, decision)
+    if updated_state != state:
+        save_state(args.state, updated_state)
     _print(asdict(decision))
     return 0
 
@@ -98,6 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     accept.add_argument("--status", choices=("pass", "fail", "blocked"), required=True)
     accept.add_argument("--check", action="append", default=[])
     accept.add_argument("--revision")
+    accept.add_argument("--snapshot-identity")
     accept.add_argument("--boundary-evidence")
     accept.set_defaults(handler=run_accept)
 
