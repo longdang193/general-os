@@ -1,8 +1,6 @@
 ---
 name: defining-work
 description: Use when a general-os request needs a durable goal, a small dependency graph, or a detailed plan before execution.
-required_reads: []
-distribution_tier: starter_kit
 ---
 
 # Defining Work
@@ -63,7 +61,7 @@ executor sessions, runtime IDs, temporary checklists, and progress out of it.
   what may happen.
 - Select profiles by name from `agents/*.toml`; do not persist runtime-specific
   model, effort, worker, or lifecycle mirrors.
-- Do not add an execution strategy, worker registry, runtime grant, heartbeat,
+- Do not add an execution strategy, worker registry, authority grant, heartbeat,
   or mirror of native runtime state.
 - Prefer defaults and omission over repeated configuration.
 

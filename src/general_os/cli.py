@@ -6,7 +6,12 @@ import argparse
 import json
 from dataclasses import asdict
 
-from general_os.acceptance import VerificationResult, apply_task_transition, evaluate_acceptance
+from general_os.acceptance import (
+    BoundaryEvidence,
+    VerificationResult,
+    apply_task_transition,
+    evaluate_acceptance,
+)
 from general_os.git import inspect_git
 from general_os.orca import OrcaCliStatusObserver
 from general_os.profiles import load_profiles, project_profile, resolve_profile
@@ -29,10 +34,22 @@ def run_accept(args: argparse.Namespace) -> int:
     if task is None:
         raise StateError(f"unknown task: {args.task_id}")
     snapshot = inspect_git(args.repo)
+    boundary_evidence = None
+    if args.boundary_evidence:
+        raw_boundary = json.loads(args.boundary_evidence)
+        if not isinstance(raw_boundary, dict):
+            raise ValueError("boundary evidence must be a JSON object")
+        boundary_evidence = BoundaryEvidence(
+            kind=raw_boundary.get("kind", ""),
+            snapshot_identity=raw_boundary.get("snapshot_identity", ""),
+            evidence=raw_boundary.get("evidence", ""),
+        )
     verification = VerificationResult(
         status=args.status,
         passed=tuple(args.check),
         evidence_revision=args.revision or snapshot.revision,
+        snapshot_identity=snapshot.identity,
+        boundary_evidence=boundary_evidence,
     )
     decision = evaluate_acceptance(task, snapshot, verification)
     if decision.status in {"PASS", "BLOCKED"}:
@@ -81,6 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
     accept.add_argument("--status", choices=("pass", "fail", "blocked"), required=True)
     accept.add_argument("--check", action="append", default=[])
     accept.add_argument("--revision")
+    accept.add_argument("--boundary-evidence")
     accept.set_defaults(handler=run_accept)
 
     orca = commands.add_parser("orca")

@@ -1,8 +1,6 @@
 ---
 name: executing-work
 description: Use when a general-os task is ready for native Codex execution, bounded native delegation, verification, or optional independent Orca handoff.
-required_reads: []
-distribution_tier: starter_kit
 ---
 
 # Executing Work

@@ -57,3 +57,23 @@ Acceptance uses the current task, current Git snapshot, and fresh verification:
 
 Runtime completion never changes durable acceptance by itself. Repeated
 successful transitions are idempotent.
+
+## Verification evidence
+
+`GitSnapshot.identity` binds `HEAD`, branch, tracked diff, status, and untracked
+file content. A repository-bound `PASS` must carry the same identity. A task
+with `requires_independent_boundary` must also carry ephemeral typed boundary
+evidence containing a boundary kind, matching snapshot identity, and non-empty
+evidence. These values are not persisted in durable state.
+
+Completed tasks must have completed dependencies. A retryable `FAIL` leaves an
+active task unchanged and returns a blocked task to `pending`; `BLOCKED` is
+reserved for a current material blocker.
+
+State version `1` is the only supported durable schema. Saves are compare-and-
+write operations guarded by an interprocess lock and atomic replacement.
+
+The configured local `remote_side_effects = "deny"` policy cannot be widened by
+durable state. Missing profile directories, missing requested profiles, unknown
+profile fields, invalid ranks, and invalid runtime text fail closed. Orca
+status observation defaults to a finite 30-second timeout.

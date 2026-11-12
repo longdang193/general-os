@@ -39,23 +39,7 @@ def test_root_guidance_and_templates_define_durable_ownership():
 
     assert template["goal"]
     assert isinstance(template["tasks"], list)
-    task = template["tasks"][0]
-    assert {
-        "id",
-        "objective",
-        "state",
-        "depends_on",
-        "acceptance",
-    } <= set(task)
-    assert set(task) <= {
-        "id",
-        "objective",
-        "state",
-        "depends_on",
-        "acceptance",
-        "profile",
-        "requires_independent_boundary",
-    }
+    assert template["tasks"] == []
 
 
 def test_core_governance_skills_define_native_ownership():
@@ -132,3 +116,85 @@ def test_profile_projection_is_canonical_and_one_way():
         assert "project" in text.lower() or "projected" in text.lower()
         assert "defaults" in text
     assert "no second Orca profile registry" in architecture
+
+
+def test_migration_manifest_accounts_for_every_predecessor_surface():
+    root = Path(__file__).parents[1]
+    migration = (root / "docs" / "migration" / "project-os-starter.md").read_text(
+        encoding="utf-8"
+    )
+    skills = {
+        "skill-backend-verification",
+        "skill-brainstorming",
+        "skill-central-config-layer",
+        "skill-chief-of-staff",
+        "skill-code-standards",
+        "skill-creating-learning-materials",
+        "skill-dashboard-reporting",
+        "skill-deepagents-executing-plans",
+        "skill-dispatching-parallel-agents",
+        "skill-disposable-artifact-cleanup",
+        "skill-distinctive-frontend-design",
+        "skill-executing-plans",
+        "skill-finishing-a-development-branch",
+        "skill-frontend-component-engineering",
+        "skill-full-stack-integration",
+        "skill-github-browser-reviews",
+        "skill-performance-optimization",
+        "skill-plan-document-reviewer",
+        "skill-project-secretary",
+        "skill-receiving-code-review",
+        "skill-refactoring-assessment",
+        "skill-requesting-code-review",
+        "skill-reviewing-pull-requests",
+        "skill-spec-drafting",
+        "skill-subagent-driven-development",
+        "skill-systematic-debugging",
+        "skill-test-driven-development",
+        "skill-using-git-worktrees",
+        "skill-using-superpowers",
+        "skill-verification-before-completion",
+        "skill-wayfinding",
+        "skill-writing-plans",
+        "skill-writing-skills",
+    }
+    rules = {
+        "agent-memory-rule.md",
+        "audit-evidence-mandate-rule.md",
+        "backend-verification-rule.md",
+        "command-execution-rule.md",
+        "doc-contracts-rule.md",
+        "frontend-backend-integration-rule.md",
+        "frontend-ui-rule.md",
+        "git-tracked-coordination-rule.md",
+        "prompt-cache-contract-rule.md",
+        "publication-boundary-rule.md",
+        "python-contracts-rule.md",
+    }
+
+    assert len(skills) == 33
+    assert len(rules) == 11
+    assert "00b825ba95af4a44f0a33d528ea42593f3fc1dc1" in migration
+    assert all(skill in migration for skill in skills)
+    assert all(rule in migration for rule in rules)
+    assert migration.count("| `skill-") == 33
+    assert migration.count("| `") >= 44
+
+
+def test_maintained_skills_use_minimal_frontmatter_and_no_generated_rules():
+    root = Path(__file__).parents[1]
+    skill_root = root / ".agents" / "skills"
+    skills = sorted(path.parent.name for path in skill_root.glob("*/SKILL.md"))
+
+    assert len(skills) == 29
+    assert not (skill_root.parent / "rules").exists()
+    for path in sorted(skill_root.glob("*/SKILL.md")):
+        text = path.read_text(encoding="utf-8")
+        assert text.startswith("---\n")
+        frontmatter = text.split("---\n", 2)[1]
+        fields = {
+            line.split(":", 1)[0]
+            for line in frontmatter.splitlines()
+            if ":" in line
+        }
+        assert fields == {"name", "description"}, path

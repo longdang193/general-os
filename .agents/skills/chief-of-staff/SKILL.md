@@ -1,8 +1,6 @@
 ---
 name: chief-of-staff
 description: Use when a durable general-os goal needs dependency-aware work selection, execution-boundary choice, continuation, escalation, or acceptance.
-required_reads: []
-distribution_tier: starter_kit
 ---
 
 # Chief Of Staff

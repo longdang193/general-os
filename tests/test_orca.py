@@ -34,11 +34,11 @@ def test_orca_status_observer_prefers_explicit_executable(tmp_path, monkeypatch)
 
 
 def test_orca_status_observer_maps_ready_and_optional_diagnostics():
+    observed_timeout = []
     observer = OrcaCliStatusObserver(
         executable="orca",
-        runner=lambda command, timeout: completed(
-            {"ok": True, "result": {"runtime": {"reachable": True}}}
-        ),
+        runner=lambda command, timeout: observed_timeout.append(timeout)
+        or completed({"ok": True, "result": {"runtime": {"reachable": True}}}),
     )
 
     observation = observer.observe()
@@ -47,6 +47,7 @@ def test_orca_status_observer_maps_ready_and_optional_diagnostics():
     assert observation.reachable is True
     assert observation.state is None
     assert observation.app_version is None
+    assert observed_timeout == [30.0]
 
 
 def test_orca_status_observer_reports_missing_executable(tmp_path, monkeypatch):

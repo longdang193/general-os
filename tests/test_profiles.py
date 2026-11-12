@@ -50,15 +50,39 @@ def test_empty_runtime_fact_fails(field, tmp_path):
         load_profiles(tmp_path)
 
 
-def test_resolve_profile_defaults_to_normal():
-    profile = resolve_profile(None, {})
+def test_missing_default_profile_fails_closed():
+    with pytest.raises(ProfileError, match="unknown profile: normal"):
+        resolve_profile(None, {})
 
-    assert profile.name == "normal"
+
+def test_missing_profile_directory_fails_closed(tmp_path):
+    with pytest.raises(ProfileError, match="profile directory not found"):
+        load_profiles(tmp_path / "missing")
 
 
 def test_unknown_profile_fails_clearly():
     with pytest.raises(ProfileError, match="unknown profile"):
         resolve_profile("missing", {})
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("rank", '"high"', "rank must be an integer"),
+        ("provider", "true", "provider must be a non-empty string"),
+        ("instructions", "1", "instructions must be a string"),
+        ("blank_instructions", '" "', "instructions must be a string"),
+        ("unknown", '"value"', "unknown profile field"),
+    ],
+)
+def test_profile_schema_rejects_invalid_fields(tmp_path, field, value, message):
+    toml_field = "instructions" if field == "blank_instructions" else field
+    (tmp_path / "invalid.toml").write_text(
+        f'name = "invalid"\n{toml_field} = {value}\n', encoding="utf-8"
+    )
+
+    with pytest.raises(ProfileError, match=message):
+        load_profiles(tmp_path)
 
 
 @pytest.mark.parametrize(

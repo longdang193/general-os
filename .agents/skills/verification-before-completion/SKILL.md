@@ -1,8 +1,6 @@
 ---
 name: verification-before-completion
 description: Use when a Codex or Orca assignment reports completion and fresh Git, acceptance, and failure evidence must determine whether the durable task is accepted.
-required_reads: []
-distribution_tier: starter_kit
 ---
 
 # Verification Before Completion

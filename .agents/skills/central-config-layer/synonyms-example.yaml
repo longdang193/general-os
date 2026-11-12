@@ -1,0 +1,9 @@
+postgresql:
+  - postgres
+  - postgresql
+
+google_cloud:
+  - gcp
+  - google cloud
+  - google cloud platform
+

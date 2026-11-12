@@ -60,6 +60,7 @@ def build_orca_launch(projection: ProfileProjection) -> OrcaLaunch:
 
 
 Runner = Callable[[Sequence[str], float | None], subprocess.CompletedProcess[str]]
+DEFAULT_STATUS_TIMEOUT = 30.0
 
 
 class OrcaCliStatusObserver:
@@ -85,7 +86,7 @@ class OrcaCliStatusObserver:
         try:
             completed = self.runner(
                 (executable, "status", "--json"),
-                timeout,
+                DEFAULT_STATUS_TIMEOUT if timeout is None else timeout,
             )
         except subprocess.TimeoutExpired:
             return OrcaStatusObservation(

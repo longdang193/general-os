@@ -44,5 +44,14 @@ The maintained Python Orca surface only observes `orca status --json` for
 read-only smoke evidence. It does not dispatch, inspect, cancel, or mirror
 workers. Transient Orca failure does not mutate policy.
 
+Orca status observation uses a 30-second default timeout unless the caller
+supplies another timeout. Malformed or unsupported status envelopes return a
+bounded failed observation with an actionable message.
+
+Acceptance does not infer independent execution from Orca reachability. The
+native verifier or controller must provide ephemeral typed boundary evidence
+bound to the current Git snapshot identity; no worker or runtime identifier is
+persisted.
+
 Neither adapter writes runtime IDs, heartbeats, progress, or lifecycle mirrors
 into `state/coordination.json`.

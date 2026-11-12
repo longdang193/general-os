@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,7 @@ class GitSnapshot:
     changed_files: tuple[str, ...]
     conflicts: tuple[str, ...]
     clean: bool
+    identity: str | None = None
 
 
 class GitRepository:
@@ -59,13 +61,45 @@ class GitRepository:
             revision = None
         changed = tuple(dict.fromkeys(changed_files))
         conflict_paths = tuple(dict.fromkeys(conflicts))
+        identity = self._identity(branch, revision, status)
         return GitSnapshot(
             branch=branch,
             revision=revision,
             changed_files=changed,
             conflicts=conflict_paths,
             clean=not changed and not conflict_paths,
+            identity=identity,
         )
+
+    def _identity(
+        self,
+        branch: str,
+        revision: str | None,
+        status: str,
+    ) -> str:
+        digest = hashlib.sha256()
+        for value in (branch, revision or "", status):
+            digest.update(value.encode("utf-8"))
+            digest.update(b"\0")
+        try:
+            tracked_diff = self._run("diff", "HEAD", "--binary")
+        except GitError:
+            tracked_diff = ""
+        digest.update(tracked_diff.encode("utf-8"))
+        digest.update(b"\0")
+        untracked = [
+            line[3:]
+            for line in status.splitlines()
+            if line.startswith("?? ")
+        ]
+        for path in sorted(untracked):
+            candidate = self.root / path
+            if candidate.is_file():
+                digest.update(path.encode("utf-8"))
+                digest.update(b"\0")
+                digest.update(candidate.read_bytes())
+                digest.update(b"\0")
+        return digest.hexdigest()
 
 
 def inspect_git(root: str | Path) -> GitSnapshot:

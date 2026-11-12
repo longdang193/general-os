@@ -46,3 +46,14 @@ The current Codex runtime is the normal interactive execution path. General-os
 does not maintain a Python Codex/CoS/dispatch runtime or a second interactive
 scheduler. Its Orca surface is limited to optional native orchestration guidance
 and read-only health observation; worker lifecycle remains native Orca.
+
+Durable state is schema version `1`. Legacy unversioned state is read as version
+`1` and rewritten with the version; unsupported future versions fail closed.
+Loaded state carries an in-memory source digest, and saves compare that digest
+under an interprocess lock before atomic replacement.
+
+Acceptance uses the current Git snapshot identity. Required independent work
+also needs typed ephemeral boundary evidence tied to that identity; a runtime
+completion report alone is not acceptance. Profiles fail closed when the
+registry or requested default is missing, and local `deny` is a hard ceiling
+for durable policy exceptions.

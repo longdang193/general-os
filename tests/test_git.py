@@ -79,3 +79,28 @@ def test_inspect_git_reports_conflicting_index_status(tmp_path):
 
     assert snapshot.conflicts == ("file.txt",)
     assert snapshot.clean is False
+
+
+def test_snapshot_identity_changes_with_tracked_and_untracked_content(tmp_path):
+    run_git(tmp_path, "init", "--initial-branch", "main")
+    (tmp_path / "file.txt").write_text("initial\n", encoding="utf-8")
+    run_git(tmp_path, "add", "file.txt")
+    run_git(
+        tmp_path,
+        "-c",
+        "user.name=Test User",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "initial",
+    )
+
+    first = GitRepository(tmp_path).inspect()
+    (tmp_path / "file.txt").write_text("changed\n", encoding="utf-8")
+    second = GitRepository(tmp_path).inspect()
+    (tmp_path / "untracked.txt").write_text("untracked\n", encoding="utf-8")
+    third = GitRepository(tmp_path).inspect()
+
+    assert first.identity != second.identity
+    assert second.identity != third.identity

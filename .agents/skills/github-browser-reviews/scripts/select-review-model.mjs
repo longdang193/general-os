@@ -1,0 +1,224 @@
+const SUPPORTED_MODELS = new Set(["GPT-5.6-Sol", "GPT-6"]);
+const SUPPORTED_EFFORTS = new Set(["Instant", "Medium", "High"]);
+const MODEL_LABELS = { "GPT-5.6-Sol": "GPT-5.6 Sol", "GPT-6": "GPT-6" };
+const EFFORT_ORDER = ["Instant", "Medium", "High"];
+export const UI_ACTION_TIMEOUT_MS = 5000;
+export const MENU_TRANSITION_TIMEOUT_MS = 5000;
+export const MODEL_MENU_TIMEOUT_MS = 10000;
+export const MODEL_MENU_INTERACTION_TIMEOUT_MS = UI_ACTION_TIMEOUT_MS;
+
+function assertSupported(value, supported, label) {
+  if (!supported.has(value)) {
+    throw new Error(`${label} must be one of: ${[...supported].join(", ")}`);
+  }
+}
+
+function normalizeText(value) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function createModelSelectionError(message, code) {
+  return Object.assign(new Error(message), { code });
+}
+
+export async function openModelMenu(page) {
+  const menu = page.getByRole("menu", { name: "Select ChatGPT model" }).first();
+  if (await menu.isVisible()) return menu;
+
+  const control = page.getByRole("button", { name: "Select ChatGPT model" }).first();
+  try {
+    await control.waitFor({ state: "visible", timeout: MODEL_MENU_TIMEOUT_MS });
+  } catch {
+    throw new Error("Visible ChatGPT model selector was not found");
+  }
+
+  await control.click({ timeout: UI_ACTION_TIMEOUT_MS });
+  try {
+    await menu.waitFor({ state: "visible", timeout: MODEL_MENU_TIMEOUT_MS });
+  } catch {
+    throw new Error("ChatGPT model menu did not open");
+  }
+  return menu;
+}
+
+export async function openModelList(menu, { model } = {}) {
+  const visibleModelOptions = menu.locator('[role="menuitemradio"]:visible');
+  if (await visibleModelOptions.count()) {
+    try {
+      const requestedOption = model
+        ? await findModelOption(menu, model)
+        : visibleModelOptions.first();
+      await requestedOption.click({ trial: true, timeout: UI_ACTION_TIMEOUT_MS });
+      return menu;
+    } catch (error) {
+      if (error?.code === "MODEL_UNAVAILABLE") throw error;
+      // A visible but covered option may mean the effort subview is already active.
+      for (const selector of [
+        '[role="menuitem"][aria-label="Power"]:visible',
+        '[role="slider"]:visible',
+      ]) {
+        try {
+          const control = menu.locator(selector).first();
+          if (await control.isVisible()) return menu;
+        } catch {
+        }
+      }
+      throw createModelSelectionError(
+        "Visible model options are covered and require one bounded reopen",
+        "MODEL_MENU_TRANSIENT",
+      );
+    }
+  }
+
+  const modelControl = menu.getByRole("menuitem", { name: "Select model", exact: true }).first();
+  if ((await modelControl.count()) > 0 && (await modelControl.isVisible())) {
+    try {
+      await modelControl.click({ timeout: UI_ACTION_TIMEOUT_MS });
+    } catch (error) {
+      throw createModelSelectionError(error?.message || "Model view could not be opened", "MODEL_MENU_TRANSIENT");
+    }
+  }
+
+  return menu;
+}
+
+export async function findModelOption(menu, model) {
+  const options = menu.locator('[role="menuitemradio"]:visible');
+  const expectedLabel = MODEL_LABELS[model];
+  for (let index = 0; index < await options.count(); index += 1) {
+    const option = options.nth(index);
+    if (normalizeText(await option.innerText()) === expectedLabel) {
+      return option;
+    }
+  }
+
+  throw createModelSelectionError(`Visible model option was not found: ${expectedLabel}`, "MODEL_UNAVAILABLE");
+}
+
+async function selectModel(menu, model) {
+  const option = await findModelOption(menu, model);
+  if ((await option.getAttribute("aria-checked")) !== "true") {
+    try {
+      await option.click({ position: { x: 12, y: 12 }, timeout: UI_ACTION_TIMEOUT_MS });
+    } catch (error) {
+      throw createModelSelectionError(error?.message || "Model selection click was intercepted", "MODEL_MENU_TRANSIENT");
+    }
+  }
+
+  const selectedOption = await findModelOption(menu, model);
+  if ((await selectedOption.getAttribute("aria-checked")) !== "true") {
+    throw createModelSelectionError(
+      `Selected model is not visibly confirmed: ${MODEL_LABELS[model]}`,
+      "MODEL_MENU_TRANSIENT",
+    );
+  }
+}
+
+async function readEffort(menu) {
+  const status = menu.locator('[role="status"]').first();
+  if (await status.isVisible()) {
+    const statusText = normalizeText(await status.innerText());
+    const effort = EFFORT_ORDER.find((candidate) => statusText.startsWith(candidate));
+    if (effort) return effort;
+  }
+
+  const modelControl = menu.getByRole("menuitem", { name: "Select model", exact: true }).first();
+  if (await modelControl.isVisible()) {
+    const modelText = normalizeText(await modelControl.innerText());
+    const effort = EFFORT_ORDER.find((candidate) => modelText.endsWith(candidate));
+    if (effort) return effort;
+  }
+
+  throw new Error("Visible thinking effort was not found");
+}
+
+export async function setEffort(menu, effort) {
+  const currentEffort = await readEffort(menu);
+  if (currentEffort === effort) return;
+  const controls = [];
+  try {
+    controls.push(menu.getByRole("menuitem", { name: "Power", exact: true }).first());
+  } catch {
+  }
+  for (const selector of [
+    '[role="menuitem"][aria-label="Power"]:visible',
+    `[role="menuitem"][aria-label="${currentEffort}"]:visible`,
+    '[role="slider"]:visible',
+  ]) {
+    try {
+      controls.push(menu.locator(selector).first());
+    } catch {
+    }
+  }
+  try {
+    controls.push(menu.getByRole("menuitem", { name: currentEffort, exact: true }).first());
+  } catch {
+  }
+
+  let control;
+  for (const candidate of controls) {
+    if (await candidate.isVisible()) {
+      control = candidate;
+      break;
+    }
+  }
+  if (!control) {
+    throw new Error("Visible thinking-effort control was not found");
+  }
+
+  const delta = EFFORT_ORDER.indexOf(effort) - EFFORT_ORDER.indexOf(currentEffort);
+  await control.focus({ timeout: UI_ACTION_TIMEOUT_MS });
+
+  const key = delta < 0 ? "ArrowLeft" : "ArrowRight";
+  for (let index = 0; index < Math.abs(delta); index += 1) {
+    await control.press(key, { timeout: UI_ACTION_TIMEOUT_MS });
+  }
+}
+
+async function verifySelection(menu, model, effort) {
+  const option = await findModelOption(menu, model);
+  if ((await option.getAttribute("aria-checked")) !== "true") {
+    throw new Error(`Selected model is not visibly confirmed: ${MODEL_LABELS[model]}`);
+  }
+
+  if ((await readEffort(menu)) !== effort) {
+    throw new Error(`Selected reasoning effort is not visibly confirmed: ${effort}`);
+  }
+}
+
+/**
+ * Select and verify the GitHub review model and thinking effort.
+ *
+ * The caller owns the authenticated browser tab and supplies an existing
+ * Playwright Page. This helper never launches a browser, reads hidden state,
+ * retries indefinitely, or submits a review request.
+ */
+export async function selectReviewModel(page, { model, effort }) {
+  assertSupported(model, SUPPORTED_MODELS, "model");
+  assertSupported(effort, SUPPORTED_EFFORTS, "effort");
+
+  let menu = await openModelMenu(page);
+  const reopenModelMenu = async () => {
+    await page.keyboard.press("Escape");
+    await menu.waitFor({ state: "hidden", timeout: MENU_TRANSITION_TIMEOUT_MS });
+    const reopenedMenu = await openModelMenu(page);
+    const modelControl = reopenedMenu.getByRole("menuitem", { name: "Select model", exact: true }).first();
+    if (await modelControl.isVisible()) await modelControl.click({ timeout: UI_ACTION_TIMEOUT_MS });
+    return reopenedMenu;
+  };
+  try {
+    menu = await openModelList(menu, { model });
+    await selectModel(menu, model);
+  } catch (error) {
+    if (error?.code !== "MODEL_MENU_TRANSIENT") throw error;
+    menu = await reopenModelMenu();
+    await selectModel(menu, model);
+  }
+  await setEffort(menu, effort);
+  await verifySelection(menu, model, effort);
+
+  return { model, effort };
+}
+
+export { SUPPORTED_MODELS, SUPPORTED_EFFORTS };
+
