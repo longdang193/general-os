@@ -17,6 +17,7 @@ targets:
   - docs/migration/project-os-starter.md
   - docs/rules/publication-boundary.md
   - .agents/skills/finishing-development-work/SKILL.md
+  - scripts/validate_migration_manifest.py
   - tests/
 ---
 
@@ -65,6 +66,28 @@ Runner artifacts are retained outside the repository at:
 - `C:\tmp\general-os-review-d32cd2c9-ssot-migration\run-KMLVN7\response.md`
 - `C:\tmp\general-os-review-d32cd2c9-ssot-migration\run-Idc3UE\result.json`
 - `C:\tmp\general-os-review-d32cd2c9-ssot-migration\run-Idc3UE\response.md`
+
+### Plan review evidence
+
+The plan itself was reviewed read-only after publication at
+`longdang193/general-os@b2eda201ad08ea084ecf348fad21f3e023d9303a`.
+
+| Model | Effort | Runner result | Chat identity | Completion evidence |
+| --- | --- | --- | --- | --- |
+| `GPT-5.6-Sol` | `High` | `run-UbcKcy`, `completed`, `acknowledged`, `confirmed`, cleanup completed | `6af59850-ad78-83ed-9d6e-f247c6d4e669` | Visible response cited `## Review Evidence Gate`, `## Task Breakdown`, plan blob `1ca228a43f10f8b93aedc6b4145fe31153692883`, and source blobs for `acceptance.py` and `cli.py` |
+
+The review found all 15 included findings substantially grounded in the pinned
+tree, but blocked the plan as written on four executable-plan gaps: the Task 1
+trust/replay model was undefined, completed-task revalidation had no failure
+handling or baseline, the predecessor and runner probes lacked reproducible
+inputs and commands, and Task 1 required worktree proof before Task 3 supplied
+repository/worktree identity. It also identified one low-risk wording defect
+that conflated expired authority with malformed authority.
+
+No incomplete or ambiguous run was included. The runner artifact is retained
+outside the repository at
+`C:\tmp\general-os-plan-review-b2eda201\run-UbcKcy\result.json` and
+`C:\tmp\general-os-plan-review-b2eda201\run-UbcKcy\response.md`.
 
 ## Validated Findings
 
@@ -170,8 +193,8 @@ prove.
   discard, or changes to the approved architecture
 - Parallel ownership: none; acceptance, policy, state, Git identity, and
   documentation contracts share verification boundaries and run serially
-- Sequential fallback: execute Tasks 1–5 in order, then run Task 6 as the sole
-  final verification gate
+- Sequential fallback: execute Task 2, Task 3, Task 1, Task 4, Task 5, then
+  Task 6 as the sole final verification gate
 
 ## Task Breakdown
 
@@ -201,7 +224,8 @@ current Git remains the evidence authority; native Codex remains the default.
 - Inspect and modify `src/general_os/cli.py:run_accept` and the `accept` parser.
 - Verify `tests/test_acceptance.py` and `tests/test_cli.py`.
 
-**Dependencies:** None.
+**Dependencies:** Tasks 2 and 3. Task 3 must establish repository/worktree
+identity before Task 1 can verify wrong-worktree evidence.
 
 **Authority:**
 - Preauthorized local actions: edit acceptance/CLI code and focused tests; run local unit and contract checks.
@@ -210,17 +234,29 @@ current Git remains the evidence authority; native Codex remains the default.
 **Steps:**
 - [ ] Define the existing verifier-to-acceptance handoff so a `PASS` cannot be
   assembled from free-form CLI claims; preserve `FAIL` and `BLOCKED` semantics.
+- [ ] Use a concrete in-process verifier handoff: the CLI accepts no caller
+  supplied pass/check/snapshot claims, and only the current verifier adapter
+  constructs the acceptance result consumed by `evaluate_acceptance`. Enforce
+  this with a module-private, non-durable verifier capability or equivalent
+  in-process provenance marker; do not add signatures, a nonce store, a receipt
+  registry, or another durable runtime ledger.
 - [ ] Bind independent-boundary evidence to the task and repository/worktree
-  identity without persisting worker IDs, heartbeats, or runtime lifecycle.
-- [ ] Reject forged, replayed, cross-task, wrong-worktree, and unsupported
-  boundary evidence before `apply_task_transition` can complete a task.
+  identity without persisting worker IDs, heartbeats, or runtime lifecycle;
+  task binding may be an ephemeral evidence field validated alongside the
+  snapshot identity.
+- [ ] Define replay narrowly as reuse of evidence for a different task or a
+  different `GitSnapshot.identity`; reuse for the same task and same snapshot
+  remains valid and idempotent. Reject cross-task, wrong-worktree, stale, and
+  unsupported boundary evidence before `apply_task_transition` can complete a
+  task.
 - [ ] Keep repeated successful transitions idempotent and preserve dependency
   and blocker validation.
 
 **Verification:**
-- [ ] Add tests for missing verifier output, forged check names, valid evidence,
-  replayed evidence, cross-task evidence, and wrong-worktree evidence.
-- Expected: only verifier-produced evidence for the current task and snapshot
+- [ ] Add tests for missing verifier output, CLI pass/check injection, valid
+  verifier output, same-task/same-snapshot idempotence, cross-task reuse,
+  stale-snapshot reuse, and wrong-worktree evidence.
+- Expected: only the current verifier handoff for the current task and snapshot
   can yield `PASS`; ordinary Codex work remains usable without Orca.
 
 **Exit Criteria:** The CLI and Python acceptance path cannot manufacture a
@@ -253,7 +289,8 @@ single durable state object; no second permission system.
   `from_dict`, `validate`, `to_dict`, `load_state`, and `save_state`.
 - Verify `tests/test_policy.py` and `tests/test_state.py`.
 
-**Dependencies:** Task 1 for the acceptance-facing authority contract.
+**Dependencies:** None. Its policy/state contract is independently testable and
+must be complete before acceptance tests consume it.
 
 **Authority:**
 - Preauthorized local actions: edit policy/state code, schema tests, and contract documentation; run local state and policy checks.
@@ -274,8 +311,9 @@ single durable state object; no second permission system.
 - [ ] Test authorized and unauthorized scope resolution, expired-state loading,
   post-load mutation followed by save, malformed metadata, deny ceilings, and
   `version: true`.
-- Expected: expired or invalid authority cannot block recovery or widen policy,
-  and invalid mutations cannot be persisted.
+- Expected: expired-but-well-formed authority remains loadable and falls back
+  to the safer local policy; malformed authority fails closed and cannot be
+  persisted; invalid mutations cannot widen policy or be saved.
 
 **Exit Criteria:** State remains recoverable after authority expiry, policy
 exceptions cannot bypass validation, and version/schema checks are strict.
@@ -306,7 +344,8 @@ acceptance; graceful but fail-visible diagnostics; no recovery ledger.
 - Update `docs/contracts.md` and `docs/recovery.md`.
 - Verify `tests/test_git.py`, `tests/test_acceptance.py`, and recovery-contract tests.
 
-**Dependencies:** Tasks 1–2.
+**Dependencies:** Task 2. Task 3 precedes Task 1 because acceptance evidence
+must use the repository/worktree-bound identity it establishes.
 
 **Authority:**
 - Preauthorized local actions: edit Git evidence and recovery documentation/tests; run disposable local repository probes.
@@ -322,10 +361,18 @@ acceptance; graceful but fail-visible diagnostics; no recovery ledger.
   not only `HEAD`, when reusing evidence.
 - [ ] Define recovery-time revalidation for completed tasks after checkout,
   reset, or other material Git divergence without adding a task-history ledger.
+- [ ] Persist only the accepted `GitSnapshot.identity` on completed task
+  semantics (not runtime IDs or worker history). On recovery, treat a completed
+  task with missing or mismatched accepted identity as stale, move it to
+  `pending`, and invalidate completed dependents transitively until they are
+  reaccepted against the current snapshot.
 
 **Verification:**
 - [ ] Compare two clean clones at the same branch and `HEAD`; mutate tracked
   and untracked content; probe large, unreadable, and symlinked files.
+- [ ] Verify recovery of a completed task with matching identity, stale-task
+  demotion on mismatch or missing identity, and transitive dependent
+  invalidation after checkout/reset-style divergence.
 - Expected: distinct worktrees cannot share acceptance identity, content
   changes remain detectable, and snapshot work stays bounded and diagnosable.
 
@@ -422,12 +469,28 @@ rules; no predecessor runtime dependency; historical evidence bound to SHA.
 - [ ] Parse every predecessor manifest row and assert its disposition is valid,
   every migration/fold destination exists, every retire disposition has no active
   destination, and the active rule set is exactly the maintained set.
-- [ ] Add an offline operator probe that compares the manifest with the pinned
-  predecessor tree at `00b825ba95af4a44f0a33d528ea42593f3fc1dc1`; keep network
-  access out of unit tests.
+- [ ] Add the small offline operator probe
+  `scripts/validate_migration_manifest.py` that compares the manifest with a
+  caller-supplied predecessor checkout and requires the exact source SHA;
+  keep network access out of unit tests.
+- [ ] Run the predecessor probe with an explicit source checkout, never an
+  implicit local path:
+  ```powershell
+  $predecessorRoot = Join-Path $env:TEMP "project-OS-starter-00b825ba"
+  git clone --no-checkout https://github.com/longdang193/project-OS-starter.git $predecessorRoot
+  git -C $predecessorRoot fetch --depth 1 origin 00b825ba95af4a44f0a33d528ea42593f3fc1dc1
+  git -C $predecessorRoot checkout --detach 00b825ba95af4a44f0a33d528ea42593f3fc1dc1
+  python scripts/validate_migration_manifest.py --manifest docs/migration/project-os-starter.md --predecessor-root $predecessorRoot --predecessor-sha 00b825ba95af4a44f0a33d528ea42593f3fc1dc1
+  ```
 - [ ] Scan maintained skills and docs for retired control-plane references and
-  exercise the migrated executable GitHub-review runner through its existing
-  bounded test surface.
+  exercise the migrated executable GitHub-review runner without submitting a
+  review:
+  ```powershell
+  Get-ChildItem .agents/skills/github-browser-reviews/scripts/*.mjs | ForEach-Object { node --check $_.FullName }
+  node .agents/skills/github-browser-reviews/scripts/run-review-prompt-cli.mjs --help
+  ```
+  Expected: every script parses, the CLI exits `0`, and help lists the pinned
+  repository, commit, review URL, model, effort, and output arguments.
 - [ ] Link the publication-boundary rule from its single maintained owner and
   remove duplicated ownership claims without changing publication authority.
 - [ ] Correct recovery wording to require `GitSnapshot.identity` and label
@@ -436,7 +499,8 @@ rules; no predecessor runtime dependency; historical evidence bound to SHA.
 
 **Verification:**
 - [ ] Run manifest-to-tree, destination, active-owner, and forbidden-reference
-  probes; inspect the exact plan SHA and all updated claims.
+  probes with the explicit predecessor command above; run the bounded runner
+  parse/help probes; inspect the exact plan SHA and all updated claims.
 - Expected: every source surface has one explicit disposition, every active
   destination exists, shared rules have one discoverable owner, and verification
   statements identify the revision they prove.
