@@ -76,10 +76,10 @@ Close only when all conditions hold:
 - approved behavior has been promoted once through `spec-drafting`;
 - handoff is recorded.
 
-After closure, return to the current plan and resolve the next task through the
-repository's `AGENTS.md` routing rules.
-and apply its next applicable gate. If implementation sequencing is needed,
-use `defining-work`. Wayfinding does not pre-author plan tasks,
+After closure, return to the current plan and resolve the next task through
+the chief-of-staff decision flow and `defining-work` when implementation
+sequencing is needed. Apply the next applicable gate from current `AGENTS.md`
+guidance. Wayfinding does not pre-author plan tasks,
 dependency order, write ownership, executor choice, or verification commands.
 
 ## Verification

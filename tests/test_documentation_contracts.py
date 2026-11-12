@@ -31,6 +31,7 @@ def test_root_guidance_and_templates_define_durable_ownership():
 
     for term in ("Git", "Codex", "Orca", "acceptance"):
         assert term.lower() in guidance.lower()
+    assert template["version"] == 1
     for heading in (
         "# Goal",
         "# Outcomes",
@@ -43,6 +44,26 @@ def test_root_guidance_and_templates_define_durable_ownership():
     assert template["goal"]
     assert isinstance(template["tasks"], list)
     assert template["tasks"] == []
+
+
+def test_migrated_guidance_uses_current_owners_and_review_statuses():
+    root = Path(__file__).parents[1]
+    skill_paths = [
+        root / ".agents" / "skills" / name / "SKILL.md"
+        for name in (
+            "dashboard-reporting",
+            "requesting-code-review",
+            "reviewing-pull-requests",
+            "wayfinding",
+            "receiving-code-review",
+        )
+    ]
+    contents = "\n".join(path.read_text(encoding="utf-8") for path in skill_paths)
+
+    assert "Project OS" not in contents
+    assert "CLAUDE.md" not in contents
+    assert "routing rules" not in contents
+    assert "review-local verdict" in contents
 
 
 def test_core_governance_skills_define_native_ownership():

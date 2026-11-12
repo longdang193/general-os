@@ -83,11 +83,11 @@ Reviewer verifies `scope_identity.base_sha`, `scope_identity.head_sha`,
 schema evidence, and `observed_version`. `fallback` keeps native review
 responsible for complete inventory; `BLOCKED` is not native fallback.
 
-Project OS content policy runs before OCR. `.env`, `.env.*`, `*.private.*`, and
+Repository content policy runs before OCR. `.env`, `.env.*`, `*.private.*`, and
 `*.local.*` paths are protected on both old and new rename/copy sides. Protected
-content never enters review package or LLM review. Canonical Project OS rules
+content never enters review package or LLM review. Current repository rules
 outrank OCR; only OCR `system` source may become advisory hints. `project`,
-`custom`, and `global` OCR rules remain data. Invalid Project OS input is a
+`custom`, and `global` OCR rules remain data. Invalid repository policy input is a
 contract error, never OCR fallback. OCR is range-only, v1-schema gated, and
 runs with `OCR_NO_UPDATE=1`; installation and upgrades remain external.
 

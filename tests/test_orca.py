@@ -142,6 +142,15 @@ def test_orca_launch_omits_native_defaults():
     assert launch.argv("orca") == ("orca", "agent", "launch", "--agent", "codex")
 
 
+def test_orca_launch_projects_ephemeral_assignment_when_profile_is_empty():
+    launch = build_orca_launch(
+        ProfileProjection("codex", "combo-normal", "medium", ""),
+        "Implement X and verify pytest -q.",
+    )
+
+    assert launch.argv("orca")[-2:] == ("--prompt", "Implement X and verify pytest -q.")
+
+
 @pytest.mark.parametrize(
     ("name", "model", "effort"),
     [

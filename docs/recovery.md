@@ -9,7 +9,9 @@ Git, not from Codex or Orca session history:
 3. Determine the unfinished dependency-ready task, or use the global goal when
    the task graph is empty.
 4. Revalidate every completed task against its accepted `GitSnapshot.identity`
-   and the current complete snapshot identity. If evidence is missing or
+   and the current work snapshot identity. The identity includes implementation
+   changes and untracked content but excludes `state/coordination.json`, which
+   is the durable semantic state written by acceptance itself. If evidence is missing or
    mismatched after checkout, reset, or other material Git divergence, move the
    task to `pending` and invalidate completed dependents transitively.
 5. Reuse required evidence only after checking that it is fresh and applies to

@@ -55,7 +55,8 @@ def test_orca_smoke_reports_observed_status_without_claiming_worker_completion(
     output = json.loads(capsys.readouterr().out)
     assert output["status"] == "ready"
     assert output["reachable"] is True
-    assert output["verified"] is True
+    assert output["probe_ok"] is True
+    assert "verified" not in output
 
 
 def test_accept_persists_material_blocker_but_not_retryable_failure(

@@ -28,7 +28,7 @@ Inspect the exact diff, changed-file scope, tests, required checks, security or
 data-loss risks, and approved deviations. Do not infer approval from CI alone.
 Record known limits and unverified claims.
 
-Return one Project OS verdict:
+Return one review-local verdict:
 
 - `PASS`: no blocking finding within approved scope
 - `FAIL`: finding requires correction or rerun
@@ -42,7 +42,7 @@ The review-requesting skill owns optional OCR preparation semantics. PR review
 may consume one `[REVIEW_PREPARATION_FILE]` as advisory input, but does not own
 OCR invocation or installation. Verify preparation `base_sha`, `head_sha`,
 inventory digest, and status before hints. Preserve caller-owned Git inventory;
-apply Project OS content policy and canonical rules before OCR. Protected
+apply repository content policy and canonical rules before OCR. Protected
 content is never review input, including both old and new rename/copy paths.
 Only OCR `system` rules become advisory hints; other OCR provenance stays data.
 For committed review, use exact base/head identity. For working-tree review,
@@ -51,7 +51,7 @@ digest.
 
 ## GitHub Review State
 
-Project OS review is separate from GitHub review state. Submit GitHub
+Review-local status is separate from GitHub review state. Submit GitHub
 `APPROVE` only when reviewer identity is eligible, differs from PR author when
 required, and repository rules allow the approval to count. Otherwise submit
 `COMMENT` or no GitHub action. Required distinct-identity approval returns
@@ -66,6 +66,7 @@ does not complete a task or update the active plan ledger.
 
 ## Output
 
-Return the structured review evidence, exact reviewed head SHA, Project OS
+Return the structured review evidence, exact reviewed head SHA, review-local
 verdict, optional GitHub review action result, and rerun condition when head
-changes.
+changes. A stale head is a retryable review failure; it is not durable task
+acceptance or a permanent project blocker.

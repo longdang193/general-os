@@ -32,19 +32,21 @@ defaults. Profile selection does not create an Orca registry or a durable
 runtime configuration mirror.
 
 The projection shape is `{harness, model, effort, instructions}` plus the
-resolved profile name. Each runtime field is either explicitly configured or
-`null`; `model = "codex"` is not a valid substitute for the `codex` harness.
-The supplied capability profiles explicitly configure the Claude gateway
-combos `combo-low`, `combo-normal`, `combo-high`, and `combo-xhigh` with their
+resolved profile name. Missing model, harness, or effort values are `null` in
+the projection; missing instructions serialize as the empty string sentinel.
+`model = "codex"` is not a valid substitute for the `codex` harness. The
+supplied capability profiles explicitly configure the Codex model identifiers
+`combo-low`, `combo-normal`, `combo-high`, and `combo-xhigh` with their
 corresponding effort levels; these values are owned by `agents/*.toml`, not
 reconstructed from rank or profile name.
 
 The optional Orca handoff consumes that projection once and maps it to native
 `orca agent launch` arguments: `harness` becomes `--agent`, explicit `model`
-and `effort` become their matching flags, and `instructions` becomes the
-launch prompt. Missing fields are omitted; no Orca profile registry or runtime
-state is created. Orca rejects an incomplete launch when the harness is absent
-or effort is supplied without an explicit model.
+and `effort` become their matching flags, and the ephemeral task assignment
+plus any explicit `instructions` become the launch prompt. Missing fields are
+omitted; no Orca profile registry or runtime state is created. Orca rejects an
+incomplete launch when the harness is absent or effort is supplied without an
+explicit model.
 
 ## Acceptance
 
@@ -62,18 +64,23 @@ context when it returns a blocked task to `pending`.
 Runtime completion never changes durable acceptance by itself. Repeated
 successful transitions are idempotent.
 
-Only the in-process verifier handoff may produce a passing verification result.
-The CLI accepts retryable `FAIL` and material `BLOCKED` transitions, but it
-cannot manufacture `PASS` from status, check names, revision, or snapshot
-arguments. Reuse of evidence is rejected across tasks or snapshot identities;
-repeating the same verified task/snapshot transition remains idempotent.
+Only the public in-process `create_verification_result` handoff may produce a
+passing verification result. It binds evidence to the task ID and current Git
+observation. The CLI accepts retryable `FAIL` and material `BLOCKED` transitions,
+but it cannot manufacture `PASS` from status, check names, revision, or
+snapshot arguments. Reuse of evidence is rejected across tasks or snapshot
+identities; repeating the same verified task/snapshot transition remains
+idempotent.
 
 ## Verification evidence
 
 `GitSnapshot.identity` binds canonical repository/worktree provenance, `HEAD`,
-branch, tracked diff, status, and untracked file content. Untracked files are
-hashed in bounded chunks; symlink targets and unreadable paths have explicit
-diagnostics. A repository-bound `PASS` must carry the same identity. A task
+branch, status, separate staged and unstaged tracked diffs, and untracked file
+content. The tracked `state/coordination.json` file is excluded from this work
+identity because acceptance writes durable semantic state after verification.
+Untracked files are hashed in bounded chunks; symlink targets and unreadable
+paths have explicit diagnostics. A repository-bound `PASS` must carry the same
+identity. A task
 with `requires_independent_boundary` must also carry ephemeral typed boundary
 evidence containing the task ID, supported `orca` boundary kind, matching
 snapshot identity, and non-empty evidence. These values are not persisted as

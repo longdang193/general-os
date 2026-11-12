@@ -134,6 +134,80 @@ def test_snapshot_identity_hashes_staged_content_in_unborn_repository(tmp_path):
     assert first.identity != second.identity
 
 
+def test_snapshot_identity_distinguishes_staged_content_with_same_worktree(tmp_path):
+    run_git(tmp_path, "init", "--initial-branch", "main")
+    path = tmp_path / "file.txt"
+    path.write_text("initial\n", encoding="utf-8")
+    run_git(tmp_path, "add", "file.txt")
+    run_git(
+        tmp_path,
+        "-c",
+        "user.name=Test User",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "initial",
+    )
+    path.write_text("index-a\n", encoding="utf-8")
+    run_git(tmp_path, "add", "file.txt")
+    path.write_text("worktree\n", encoding="utf-8")
+    first = GitRepository(tmp_path).inspect()
+
+    path.write_text("index-b\n", encoding="utf-8")
+    run_git(tmp_path, "add", "file.txt")
+    path.write_text("worktree\n", encoding="utf-8")
+    second = GitRepository(tmp_path).inspect()
+
+    assert first.changed_files == second.changed_files == ("file.txt",)
+    assert first.identity != second.identity
+
+
+def test_snapshot_identity_preserves_first_unstaged_path(tmp_path):
+    run_git(tmp_path, "init", "--initial-branch", "main")
+    path = tmp_path / "example.txt"
+    path.write_text("initial\n", encoding="utf-8")
+    run_git(tmp_path, "add", "example.txt")
+    run_git(
+        tmp_path,
+        "-c",
+        "user.name=Test User",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "initial",
+    )
+    path.write_text("changed\n", encoding="utf-8")
+
+    assert GitRepository(tmp_path).inspect().changed_files == ("example.txt",)
+
+
+def test_snapshot_identity_ignores_tracked_coordination_state(tmp_path):
+    run_git(tmp_path, "init", "--initial-branch", "main")
+    state_path = tmp_path / "state" / "coordination.json"
+    state_path.parent.mkdir()
+    state_path.write_text('{"version":1,"goal":"g","tasks":[]}\n', encoding="utf-8")
+    run_git(tmp_path, "add", ".")
+    run_git(
+        tmp_path,
+        "-c",
+        "user.name=Test User",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "initial",
+    )
+    first = GitRepository(tmp_path).inspect()
+    state_path.write_text('{"version":1,"goal":"updated","tasks":[]}\n', encoding="utf-8")
+
+    second = GitRepository(tmp_path).inspect()
+
+    assert second.changed_files == ("state/coordination.json",)
+    assert first.identity == second.identity
+
+
 def test_snapshot_identity_handles_utf8_tracked_diff(tmp_path):
     run_git(tmp_path, "init", "--initial-branch", "main")
     path = tmp_path / "file.txt"

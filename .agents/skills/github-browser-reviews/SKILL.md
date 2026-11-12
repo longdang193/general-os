@@ -37,8 +37,10 @@ that the review inspected local state.
 
 1. **Explicit-invocation invariant:** Do not use this skill unless the user
    explicitly requested it by name or explicitly requested its workflow.
-2. **Publication invariant:** Commit and push the selected plan or code changes
-   to the intended branch before opening the review.
+2. **Publication invariant:** Review an exact revision already reachable from
+   GitHub without mutation. If publication is needed, commit or push only
+   after the owning Git disposition workflow establishes separate explicit
+   authority; this review skill never grants publication authority.
 3. **Revision invariant:** Give the reviewer an exact branch or commit and an
    exact file URL. The review request must include the file path or GitHub file URL.
    Pin URLs to a commit when reproducibility matters.
@@ -92,10 +94,12 @@ cause.
 
 ### 1. Prepare the revision
 
-Inspect the selected changes locally, then commit and push them to the intended
-branch. Record the repository, branch, commit, and file paths used for review.
-The review request must identify the repository and exact branch or commit. Do
-not start the review until the pushed revision is reachable from GitHub.
+Inspect the selected changes locally. If the exact revision is already
+reachable from GitHub, record it and do not mutate Git. If publication is
+needed, stop until the owning Git disposition workflow grants separate commit
+and push authority; then record the repository, branch, commit, and file paths
+used for review. The review request must identify the repository and exact
+branch or commit, and the reviewed revision must be reachable from GitHub.
 
 ### 2. Select the model and reasoning level
 

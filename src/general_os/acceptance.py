@@ -9,6 +9,7 @@ from general_os.state import BLOCKER_CATEGORIES, CoordinationState
 
 SUPPORTED_INDEPENDENT_BOUNDARIES = frozenset({"orca"})
 _VERIFIER_TOKEN = object()
+_DECISION_TOKEN = object()
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class VerificationResult:
     passed: tuple[str, ...] = ()
     evidence_revision: str | None = None
     message: str = ""
+    task_id: str | None = None
     snapshot_identity: str | None = None
     boundary_evidence: BoundaryEvidence | None = None
     blocker_category: str | None = None
@@ -44,6 +46,25 @@ class VerificationResult:
         return cls(**values, _verifier_token=_VERIFIER_TOKEN)
 
 
+def create_verification_result(
+    task,
+    snapshot: GitSnapshot,
+    *,
+    passed: tuple[str, ...] = (),
+    boundary_evidence: BoundaryEvidence | None = None,
+) -> VerificationResult:
+    """Create trusted evidence from a task and current Git observation."""
+
+    return VerificationResult._from_verifier(
+        status="pass",
+        passed=tuple(passed),
+        evidence_revision=snapshot.revision,
+        task_id=task.id,
+        snapshot_identity=snapshot.identity,
+        boundary_evidence=boundary_evidence,
+    )
+
+
 @dataclass(frozen=True)
 class AcceptanceDecision:
     status: str
@@ -51,6 +72,8 @@ class AcceptanceDecision:
     blocker_category: str | None = None
     blocker_reason: str | None = None
     accepted_snapshot_identity: str | None = None
+    task_id: str | None = field(default=None, compare=False, repr=False)
+    _decision_token: object | None = field(default=None, compare=False, repr=False)
 
 
 def evaluate_acceptance(
@@ -83,6 +106,8 @@ def evaluate_acceptance(
         return AcceptanceDecision("FAIL", "verification result is unknown")
     if verification._verifier_token is not _VERIFIER_TOKEN:
         return AcceptanceDecision("FAIL", "verification result is not verifier-produced")
+    if verification.task_id != task.id:
+        return AcceptanceDecision("FAIL", "verification result is bound to another task")
     if snapshot.identity is None:
         return AcceptanceDecision("FAIL", "verification worktree identity is missing")
     if verification.snapshot_identity != snapshot.identity:
@@ -105,6 +130,8 @@ def evaluate_acceptance(
         "PASS",
         "required proof is current",
         accepted_snapshot_identity=snapshot.identity,
+        task_id=task.id,
+        _decision_token=_DECISION_TOKEN,
     )
 
 
@@ -142,6 +169,8 @@ def apply_task_transition(
             raise ValueError("BLOCKED requires a non-empty blocker reason")
     new_state = "completed" if decision.status == "PASS" else "blocked"
     if decision.status == "PASS":
+        if decision.task_id != task_id or decision._decision_token is not _DECISION_TOKEN:
+            raise ValueError("PASS requires verifier-produced task-bound evidence")
         if not decision.accepted_snapshot_identity:
             raise ValueError("PASS requires verifier snapshot identity")
         incomplete = [dependency for dependency in target.depends_on if next(task for task in state.tasks if task.id == dependency).state != "completed"]
@@ -153,6 +182,9 @@ def apply_task_transition(
             target.blocker_category == decision.blocker_category
             and target.blocker_reason == decision.blocker_reason
         )
+    ) and (
+        decision.status != "PASS"
+        or target.accepted_snapshot_identity == decision.accepted_snapshot_identity
     ):
         return state
     updated = replace(

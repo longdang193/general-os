@@ -30,16 +30,20 @@ second runtime scheduler.
 1. Read `state/coordination.json` and inspect current Git directly.
 2. Select the first unfinished dependency-ready task. An empty task graph is a
    valid goal-only assignment.
-3. Resolve the semantic profile without translating missing metadata into
+3. Resolve effective runtime policy, including `orca_enabled`, before choosing
+   an independent boundary. A disabled Orca capability keeps ordinary work on
+   Codex and blocks only work whose durable contract requires independence.
+4. Resolve the semantic profile without translating missing metadata into
    guessed runtime model or effort settings.
-4. Select the current Codex runtime by default. Let Codex decide whether native
+5. Select the current Codex runtime by default. Let Codex decide whether native
    subagents help its bounded assignment.
-5. Select Orca when independent ownership is required or materially useful.
+6. Select Orca when independent ownership is required or materially useful and
+   `orca_enabled` permits that boundary.
    `requires_independent_boundary: true` is a hard requirement, not the whole
    Orca-selection algorithm.
-6. If the required independent boundary is unavailable, return a real
+7. If the required independent boundary is unavailable, return a real
    blocker. Do not mutate permission because runtime health changed.
-7. Reconcile runtime evidence with current Git and fresh verification before
+8. Reconcile runtime evidence with current Git and fresh verification before
    accepting durable task state.
 
 ## Acceptance

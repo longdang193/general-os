@@ -5,6 +5,7 @@ from general_os.acceptance import (
     BoundaryEvidence,
     VerificationResult,
     apply_task_transition,
+    create_verification_result,
     evaluate_acceptance,
     revalidate_completed_tasks,
 )
@@ -26,7 +27,13 @@ def test_acceptance_passes_fresh_required_proof():
     decision = evaluate_acceptance(
         task,
         snapshot(identity="snapshot-id"),
-        verified(status="pass", passed=("tests pass",), evidence_revision="abc123", snapshot_identity="snapshot-id"),
+        verified(
+            status="pass",
+            passed=("tests pass",),
+            evidence_revision="abc123",
+            task_id="work",
+            snapshot_identity="snapshot-id",
+        ),
     )
 
     assert decision == AcceptanceDecision(
@@ -53,7 +60,12 @@ def test_acceptance_treats_missing_proof_as_retryable_failure():
     decision = evaluate_acceptance(
         task,
         snapshot(identity="snapshot-id"),
-        verified(status="pass", evidence_revision="abc123", snapshot_identity="snapshot-id"),
+        verified(
+            status="pass",
+            task_id="work",
+            evidence_revision="abc123",
+            snapshot_identity="snapshot-id",
+        ),
     )
 
     assert decision.status == "FAIL"
@@ -75,7 +87,7 @@ def test_acceptance_preserves_material_blocker():
     decision = evaluate_acceptance(
         task,
         GitSnapshot("main", "abc123", (), ("conflict",), False),
-        verified(status="pass"),
+        verified(status="pass", task_id="work"),
     )
 
     assert decision.status == "BLOCKED"
@@ -95,8 +107,10 @@ def test_failed_transition_leaves_task_unfinished_for_retry():
 
 def test_acceptance_updates_only_durable_task_state_idempotently():
     state = CoordinationState(goal="goal", tasks=(Task(id="work", state="active"),))
-    decision = AcceptanceDecision(
-        "PASS", "required proof is current", accepted_snapshot_identity="snapshot-id"
+    decision = evaluate_acceptance(
+        Task(id="work"),
+        snapshot(identity="snapshot-id"),
+        verified(status="pass", task_id="work", snapshot_identity="snapshot-id"),
     )
 
     completed = apply_task_transition(state, "work", decision)
@@ -113,7 +127,7 @@ def test_acceptance_requires_matching_worktree_identity():
     decision = evaluate_acceptance(
         task,
         snapshot(identity="snapshot-id"),
-        verified(status="pass", snapshot_identity="other"),
+        verified(status="pass", task_id="work", snapshot_identity="other"),
     )
 
     assert decision.status == "FAIL"
@@ -126,7 +140,7 @@ def test_acceptance_requires_worktree_identity_for_pass():
     decision = evaluate_acceptance(
         task,
         snapshot(),
-        verified(status="pass"),
+        verified(status="pass", task_id="work"),
     )
 
     assert decision.status == "FAIL"
@@ -140,7 +154,12 @@ def test_required_boundary_needs_typed_matching_evidence():
     assert evaluate_acceptance(
         task,
         snapshot(identity="snapshot-id"),
-        verified(status="pass", snapshot_identity="snapshot-id", boundary_evidence=evidence),
+        verified(
+            status="pass",
+            task_id="work",
+            snapshot_identity="snapshot-id",
+            boundary_evidence=evidence,
+        ),
     ).status == "PASS"
     assert evaluate_acceptance(
         task,
@@ -157,7 +176,12 @@ def test_required_boundary_rejects_unsupported_evidence(kind):
     decision = evaluate_acceptance(
         task,
         snapshot(identity="snapshot-id"),
-        verified(status="pass", snapshot_identity="snapshot-id", boundary_evidence=evidence),
+        verified(
+            status="pass",
+            task_id="work",
+            snapshot_identity="snapshot-id",
+            boundary_evidence=evidence,
+        ),
     )
 
     assert decision.status == "FAIL"
@@ -174,7 +198,11 @@ def test_pass_cannot_complete_before_dependencies():
         apply_task_transition(
             state,
             "work",
-            AcceptanceDecision("PASS", "ok", accepted_snapshot_identity="snapshot-id"),
+            evaluate_acceptance(
+                Task(id="work", depends_on=("dependency",)),
+                snapshot(identity="snapshot-id"),
+                verified(status="pass", task_id="work", snapshot_identity="snapshot-id"),
+            ),
         )
 
 
@@ -218,7 +246,12 @@ def test_boundary_evidence_is_task_bound():
     decision = evaluate_acceptance(
         task,
         snapshot(identity="snapshot-id"),
-        verified(status="pass", snapshot_identity="snapshot-id", boundary_evidence=evidence),
+        verified(
+            status="pass",
+            task_id="work",
+            snapshot_identity="snapshot-id",
+            boundary_evidence=evidence,
+        ),
     )
 
     assert decision.status == "FAIL"
@@ -251,3 +284,45 @@ def test_revalidate_completed_tasks_keeps_matching_evidence():
     )
 
     assert revalidate_completed_tasks(state, snapshot(identity="snapshot-id")) == state
+
+
+def test_pass_transition_rejects_caller_forged_decision():
+    state = CoordinationState(goal="goal", tasks=(Task(id="work"),))
+
+    with pytest.raises(ValueError, match="verifier-produced"):
+        apply_task_transition(
+            state,
+            "work",
+            AcceptanceDecision("PASS", "ok", accepted_snapshot_identity="snapshot-id"),
+        )
+
+
+def test_verifier_evidence_is_bound_to_task():
+    evidence = create_verification_result(
+        Task(id="first"), snapshot(identity="snapshot-id"), passed=("check",)
+    )
+
+    decision = evaluate_acceptance(
+        Task(id="second", acceptance=("check",)),
+        snapshot(identity="snapshot-id"),
+        evidence,
+    )
+
+    assert decision.status == "FAIL"
+    assert "another task" in decision.reason
+
+
+def test_successful_reverification_refreshes_snapshot_identity():
+    state = CoordinationState(
+        goal="goal",
+        tasks=(Task(id="work", state="completed", accepted_snapshot_identity="old"),),
+    )
+    decision = evaluate_acceptance(
+        Task(id="work"),
+        snapshot(identity="new"),
+        verified(status="pass", task_id="work", snapshot_identity="new"),
+    )
+
+    updated = apply_task_transition(state, "work", decision)
+
+    assert updated.tasks[0].accepted_snapshot_identity == "new"

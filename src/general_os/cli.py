@@ -62,7 +62,7 @@ def run_orca_smoke(args: argparse.Namespace) -> int:
             "app_version": observation.app_version,
             "executable": observation.executable,
             "message": observation.message,
-            "verified": observation.reachable is True,
+            "probe_ok": observation.reachable is True,
         }
     )
     return 0 if observation.status == "ready" else 1

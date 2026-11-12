@@ -8,7 +8,7 @@ description: migrated specialist procedure for dashboard-reporting
 ## Role
 
 Turn analytical intent into the smallest correct report, dashboard, scorecard,
-analysis, or export. Project OS owns the method for establishing meaning and
+analysis, or export. general-os owns the method for establishing meaning and
 acceptance. The consuming project owns metric truth, semantic models, data,
 provider implementation, generated artifacts, and deployment.
 
@@ -113,7 +113,7 @@ Reuse existing project capability:
 - one-time analysis → use table, report, notebook, or export
 - no semantic definitions → resolve semantics before provider selection
 
-Do not choose Wren, Power BI, or another provider because Project OS knows it.
+Do not choose Wren, Power BI, or another provider because general-os knows it.
 When a provider is selected, retrieve its current local or installed workflow
 guidance. Do not copy provider command inventories into this skill, and do not
 invent provider fields, APIs, deployment steps, or generated-file formats.

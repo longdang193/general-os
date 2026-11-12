@@ -48,14 +48,19 @@ class OrcaLaunch:
         return tuple(command)
 
 
-def build_orca_launch(projection: ProfileProjection) -> OrcaLaunch:
-    """Project explicit general-os profile facts into native Orca launch data."""
+def build_orca_launch(
+    projection: ProfileProjection,
+    assignment: str = "",
+) -> OrcaLaunch:
+    """Project profile facts and an ephemeral assignment into native Orca data."""
 
     return OrcaLaunch(
         agent=projection.harness,
         model=projection.model,
         effort=projection.effort,
-        prompt=projection.instructions,
+        prompt="\n\n".join(
+            value for value in (assignment.strip(), projection.instructions) if value
+        ),
     )
 
 
