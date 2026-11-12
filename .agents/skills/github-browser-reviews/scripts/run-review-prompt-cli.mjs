@@ -137,7 +137,6 @@ export function parseArguments(argv) {
     userDataDir: userDataDir ? resolve(userDataDir) : undefined,
   };
 }
-
 export function deriveProjectKey(repository) {
   if (typeof repository !== "string") throw new Error("repository must be an owner/repository identifier");
   const match = repository.trim().match(/^([^/\s]+)\/([^/\s]+)$/);

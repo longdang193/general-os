@@ -52,4 +52,3 @@ if [[ -f "$PID_FILE" ]]; then
 else
   echo '{"status": "not_running"}'
 fi
-

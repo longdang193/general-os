@@ -38,7 +38,6 @@ function withFailureScope(error, failureScope) {
   }
   return wrapped;
 }
-
 function normalizeComposerText(value) {
   return value.replace(/\s+/g, " ").trim();
 }
