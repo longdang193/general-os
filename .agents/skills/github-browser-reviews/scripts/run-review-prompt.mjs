@@ -510,4 +510,3 @@ export async function runReviewPromptInNewTab(context, options) {
     throw withFailureScope(error, "review");
   }
 }
-
