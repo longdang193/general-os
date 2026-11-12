@@ -53,7 +53,6 @@ const GITHUB_BLOB_URL_PATTERN = /https:\/\/github\.com\/[^\s<>"']+/gi;
 function usageError(message) {
   throw new Error(`${message}\n${USAGE}`);
 }
-
 export function parseArguments(argv) {
   const argumentsByName = new Map();
   for (let index = 0; index < argv.length; index += 1) {

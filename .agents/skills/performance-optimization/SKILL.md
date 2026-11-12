@@ -65,4 +65,3 @@ A checkout p95 regression uses the alarm's production dimensions and last health
 - `systematic-debugging` owns root-cause investigation.
 - `skill-verification-before-completion` owns final completion claims.
 - `docs/rules/frontend-ui.md` owns browser tool routing and UI invariants.
-

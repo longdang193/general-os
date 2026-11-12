@@ -39,4 +39,3 @@ Prove backend behavior directly before consumer or frontend integration. Follow 
 - remaining blocker or `none`
 
 Frontend, browser, client, mock, and MCP output may support evidence but never replace direct backend proof.
-

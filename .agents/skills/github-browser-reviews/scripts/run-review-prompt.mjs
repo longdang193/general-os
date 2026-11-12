@@ -24,7 +24,6 @@ export class ReviewPromptError extends Error {
     if (cause) this.cause = cause;
   }
 }
-
 function withFailureScope(error, failureScope) {
   if (error?.failureScope) return error;
   const message = error instanceof Error ? error.message : String(error);

@@ -57,4 +57,3 @@ A searchable table whose filters, sort, page, and tab must survive refresh and s
 - optimistic UI without rollback, conflict handling, or duplicate-action control
 - global mutation locks or whole-list rollback for an entity-scoped action
 - speculative memoization, caching, virtualization, prefetching, or lazy loading
-

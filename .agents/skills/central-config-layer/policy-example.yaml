@@ -11,4 +11,3 @@ weights:
 defaults:
   missing_score: 0.0
   unknown_category: "unknown"
-

@@ -323,4 +323,3 @@ Use only applicable optional metadata. Do not add metadata without active consum
 - `executing-work`: implement approved plan.
 - `skill-verification-before-completion`: prove required behavior and completion.
 - `finishing-development-work`: perform authorized Git closure.
-

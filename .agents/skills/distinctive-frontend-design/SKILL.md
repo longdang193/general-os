@@ -65,4 +65,3 @@ For an operations dashboard, "modern dark dashboard" is not a direction. "Night-
 ## Provenance
 
 Inspired by Anthropic's Apache-2.0 `frontend-design` skill: `https://github.com/anthropics/skills/tree/main/skills/frontend-design`.
-

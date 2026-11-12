@@ -59,4 +59,3 @@ Reference request and response schemas; do not copy them.
 - adding OpenAPI, MSW, registries, validators, or status systems not already needed
 - keeping completed sidecars as permanent parallel documentation
 - treating browser evidence as replacement for committed tests
-

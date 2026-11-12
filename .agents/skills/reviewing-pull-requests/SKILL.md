@@ -69,4 +69,3 @@ does not complete a task or update the active plan ledger.
 Return the structured review evidence, exact reviewed head SHA, Project OS
 verdict, optional GitHub review action result, and rerun condition when head
 changes.
-

@@ -298,4 +298,3 @@ Use mixed format when a topic benefits from several learning angles:
 - one drag-and-drop card for the sequence or handoff
 
 Mixed decks should still keep each card atomic.
-

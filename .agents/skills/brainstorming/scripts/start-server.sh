@@ -151,4 +151,3 @@ done
 # Timeout - server didn't start
 echo '{"error": "Server failed to start within 5 seconds"}'
 exit 1
-

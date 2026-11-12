@@ -12,7 +12,6 @@ if [[ -z "$SCREEN_DIR" ]]; then
   echo '{"error": "Usage: stop-server.sh <screen_dir>"}'
   exit 1
 fi
-
 PID_FILE="${SCREEN_DIR}/.server.pid"
 
 if [[ -f "$PID_FILE" ]]; then

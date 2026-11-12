@@ -84,4 +84,3 @@ source-first design, but never replaces mandatory evidence.
 - Keep this skill focused on design decisions.
 - Avoid duplicating lifecycle policy text already defined in templates/validators.
 - Do not auto-generate detailed report unless user explicitly asks for it after brainstorming output.
-

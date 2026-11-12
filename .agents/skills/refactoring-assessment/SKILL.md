@@ -183,4 +183,3 @@ End here. Do not execute action or expand full backlog into a specification or i
 - Do not recommend broad rewrites when bounded normalization preserves behavior.
 - Do not select multiple next actions.
 - End with what to refactor or patch next, not an executed backlog.
-

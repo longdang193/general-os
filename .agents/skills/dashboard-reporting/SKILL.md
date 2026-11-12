@@ -210,4 +210,3 @@ Before claiming completion, report:
 - preview or deployment result, including unverified states
 
 Final completion proof belongs to `skill-verification-before-completion`.
-

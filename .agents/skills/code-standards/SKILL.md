@@ -180,4 +180,3 @@ Do not claim quality from review alone. Fresh executable evidence owns completio
 - Prefer smallest root-cause change in shared owner.
 - Generated files follow generator; edit canonical source.
 - Language-specific commands belong in repository config, rules, or language-focused skills, not this general skill.
-

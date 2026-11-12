@@ -160,4 +160,3 @@ Subagent (controller-selected profile: <discovered-profile>):
 - `[HEAD_SHA]` — ending commit
 
 **Reviewer returns:** Strengths, Issues (Critical / Important / Minor), Recommendations, Assessment
-

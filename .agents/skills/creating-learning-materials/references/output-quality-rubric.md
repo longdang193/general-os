@@ -118,4 +118,3 @@ Before finalizing, ask:
 - Is the answer unambiguous?
 - Does the explanation teach something?
 - Would this help the learner answer a follow-up question?
-

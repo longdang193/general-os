@@ -284,4 +284,3 @@ If the session used `--project-dir`, mockup files persist in `.superpowers/brain
 
 - Frame template (CSS reference): `scripts/frame-template.html`
 - Helper script (client-side): `scripts/helper.js`
-

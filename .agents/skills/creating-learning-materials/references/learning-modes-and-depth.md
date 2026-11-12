@@ -70,4 +70,3 @@ Recommended order:
 1. Bloom `remember` or `understand` card for the core concept.
 2. Socratic question for reasoning.
 3. Interview question for job-ready explanation.
-

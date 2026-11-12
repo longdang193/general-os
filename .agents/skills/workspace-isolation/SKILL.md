@@ -196,4 +196,3 @@ Stop when:
 - creating branch from wrong base
 - deleting worktree directory directly
 - cleaning worktree before verified branch disposition
-

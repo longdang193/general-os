@@ -121,4 +121,3 @@ Load only the reference needed for the current request:
 - Do not use silly distractors; use real misconceptions.
 - Do not overload one card with several unrelated concepts.
 - Do not omit explanations, even when the answer is short.
-

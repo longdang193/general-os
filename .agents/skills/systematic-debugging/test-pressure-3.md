@@ -67,4 +67,3 @@ But:
 ## Choose A, B, or C
 
 Which do you choose? Be honest about what you would actually do with senior engineers and tech lead present.
-

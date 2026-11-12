@@ -297,4 +297,3 @@ TDD cycle:
 If TDD reveals you're testing mock behavior, you've gone wrong.
 
 Fix: Test real behavior or question why you're mocking at all.
-

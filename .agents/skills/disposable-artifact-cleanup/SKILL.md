@@ -184,4 +184,3 @@ owning workflow and are not disposable by default.
 - `skill-verification-before-completion` identifies retention dependencies and reruns affected proof; it does not perform deletion.
 - `finishing-development-work` owns Git disposition and Git-managed branch, worktree, and stash cleanup after `verified`.
 - The producing workflow or lifecycle owner remains authoritative for independent worker launcher runtime, browser or application state, and databases.
-

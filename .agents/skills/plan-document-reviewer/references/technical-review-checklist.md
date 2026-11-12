@@ -133,4 +133,3 @@ Use concrete example only when evidence needs illustration.
 Recommend smallest local change resolving finding. Prefer deletion, native functionality, reuse, centralization, boundary adaptation, parameterization, explicit contracts, or executable validation over new infrastructure.
 
 Provide full alternative design only when current proposal is fundamentally unsound. Otherwise do not rewrite document.
-

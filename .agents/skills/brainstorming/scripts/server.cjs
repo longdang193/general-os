@@ -336,4 +336,3 @@ if (require.main === module) {
 }
 
 module.exports = { computeAcceptKey, encodeFrame, decodeFrame, OPCODES };
-

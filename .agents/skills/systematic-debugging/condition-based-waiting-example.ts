@@ -156,4 +156,3 @@ export function waitForEventMatch(
 // expect(toolResults.length).toBe(2); // Always succeeds
 //
 // Result: 60% pass rate → 100%, 40% faster execution
-

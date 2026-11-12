@@ -147,4 +147,3 @@ You: [Fix progress indicators]
 - Request clarification
 
 See template at: `code-reviewer.md`
-

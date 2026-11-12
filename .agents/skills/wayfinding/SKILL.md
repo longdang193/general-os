@@ -95,4 +95,3 @@ Do not add or invoke separate `grilling`, `domain-modeling`, `research`, or
 brainstorming, and draft-specification mechanisms. Do not add detailed-spec
 template changes, custom orchestration, runtime/session systems, tracker
 adapters, CLIs, ticket generation, estimation, scheduling, or code execution.
-

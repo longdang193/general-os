@@ -347,4 +347,3 @@ Stop when:
 - `executing-work` completes implementation tasks.
 - `skill-verification-before-completion` produces required `verified` handoff.
 - publication remains owned by repository publication workflow.
-

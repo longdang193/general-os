@@ -191,4 +191,3 @@ State exactly one readiness verdict and short reason.
 ## Integration
 
 Use after `spec-drafting` or `defining-work` when review cost is justified and before `executing-work` or external handoff.
-
