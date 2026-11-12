@@ -1,7 +1,7 @@
 ---
 layer: change
 artifact_type: plan
-status: in_progress
+status: completed
 template_id: implementation-plan
 contract_version: "1"
 name: general-os-review-findings-remediation
@@ -75,7 +75,7 @@ owners. The state template emits schema version `1`.
 - Branch: `main`
 - Base commit: `1a33fddbfb058ccfdc4f244c2fb10aa8bae2e702`
 - Expected workspace: `published HEAD with unrelated .serena/ preserved`
-- Next action: `publish the accepted local fix, then complete Task 7 on that exact SHA`
+- Next action: `none; implementation and exact-SHA verification complete`
 - Blockers: `none`
 
 ## Review Evidence
@@ -111,7 +111,7 @@ acceptance probe confirmed all three. The review completed in chat
 | Task 4 | `completed` | current | `lead` | Task 3 | documentation and template tests | `28 passed; 44 manifest rows valid` |
 | Task 5 | `completed` | current | `lead` | Task 4 | full verification commands | `112 passed; state valid` |
 | Task 6 | `completed` | current | `lead` | Task 5 | acceptance-contract regression tests | `41 passed` |
-| Task 7 | `pending` | current | `lead` | Task 6 | exact-SHA clean-checkout verification and plan reconciliation | `pending` |
+| Task 7 | `completed` | current | `lead` | Task 6 | exact-SHA clean-checkout verification and plan reconciliation | `115 passed; state/migration valid; Orca ready` |
 
 ### Follow-up findings
 
@@ -418,17 +418,18 @@ being claimed, and completed inline tasks must have explicit profile status.
 - Stop for: failed proof, unreachable SHA, publication, or destructive cleanup.
 
 **Steps:**
-- [ ] Run the complete verification suite on a clean checkout of the exact
+- [x] Run the complete verification suite on a clean checkout of the exact
   published SHA.
-- [ ] Replace stale base-SHA evidence with the exact verified SHA and commands.
-- [ ] Mark prior inline task profile roles explicitly not applicable.
-- [ ] Mark this plan `completed` only after all required proof passes.
+- [x] Replace stale base-SHA evidence with the exact verified SHA and commands.
+- [x] Mark prior inline task profile roles explicitly not applicable.
+- [x] Mark this plan `completed` only after all required proof passes.
 
 **Verification:**
-- [ ] `python -m pytest -q`
-- [ ] `python -m general_os state validate state/coordination.json`
-- [ ] `python scripts/validate_migration_manifest.py --manifest docs/migration/project-os-starter.md`
-- [ ] `git diff --check; git status --short --branch; git rev-parse HEAD`
+- [x] `python -m pytest -q`
+- [x] `python -m general_os state validate state/coordination.json`
+- [x] `python scripts/validate_migration_manifest.py --manifest docs/migration/project-os-starter.md`
+- [x] `python -m general_os orca smoke --json`
+- [x] `git diff --check; git status --short --branch; git rev-parse HEAD`
 - Expected: all checks pass on the exact published SHA with no unrelated file
   changes.
 
@@ -462,8 +463,9 @@ git rev-parse HEAD
 
 ## Final Evidence
 
-- Current HEAD and `origin/main` are `1a33fddbfb058ccfdc4f244c2fb10aa8bae2e702`;
-  follow-up acceptance-fingerprint changes are intentionally uncommitted.
+- Published branch `codex/general-os-acceptance-contract-fingerprint` points to
+  `eb0731453e4fa3029c4aa605f6f24f9eea9978f6`; the exact SHA is reachable from
+  GitHub and was verified in clean detached worktree `C:\tmp\general-os-verify-eb07314`.
 - `python -m pytest -q`: `115 passed`.
 - `python -m pytest -q tests/test_acceptance.py tests/test_state.py`: `41 passed`.
 - `python -m general_os state validate state/coordination.json`: `valid`.
@@ -477,9 +479,10 @@ git rev-parse HEAD
 - `git diff --check`: passed. Untracked `.serena/` is unrelated and preserved.
 - Browser review runs were not rerun; their completed, pinned evidence remains
   the source review input for this local remediation.
-- Task 7 remains pending because exact-SHA clean-checkout verification requires
-  publishing the local fix, which is outside the current execution authority.
-- No follow-up commit, push, merge, CI, production-load, or external-service
-  claim is made. The Orca probe covered worker dispatch and the targeted test
-  only; it did not establish production-load or external-service behavior.
+- Clean-checkout verification on `eb0731453e4fa3029c4aa605f6f24f9eea9978f6`:
+  `115 passed`, state `valid`, migration `44` rows valid, Orca `ready` with
+  `probe_ok=true`, and clean Git status.
+- No merge, CI, production-load, or external-service claim is made. The Orca
+  probe covered worker dispatch and the targeted test only; it did not establish
+  production-load or external-service behavior.
 
