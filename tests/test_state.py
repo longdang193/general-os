@@ -177,9 +177,21 @@ def test_completed_snapshot_identity_round_trips():
         id="work",
         state="completed",
         accepted_snapshot_identity="repo/worktree/snapshot",
+        accepted_task_contract_identity="task-contract",
     )
 
     assert Task.from_dict(task.to_dict()) == task
+
+
+def test_task_contract_identity_changes_with_acceptance_semantics():
+    original = Task(id="work", objective="old", acceptance=("old check",))
+
+    assert original.contract_identity() != Task(
+        id="work", objective="new", acceptance=("old check",)
+    ).contract_identity()
+    assert original.contract_identity() != Task(
+        id="work", objective="old", acceptance=("new check",)
+    ).contract_identity()
 
 
 def test_blocker_context_round_trips():

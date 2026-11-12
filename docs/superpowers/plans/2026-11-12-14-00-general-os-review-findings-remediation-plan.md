@@ -29,7 +29,7 @@ targets:
 ## Goal
 
 Correct the findings independently validated against
-`longdang193/general-os@b9006885b57118a55980adddee707c7e0a3a2453` while
+`longdang193/general-os@1a33fddbfb058ccfdc4f244c2fb10aa8bae2e702` while
 preserving the small, native-first, fact-derived design. Do not add a runtime
 ledger, scheduler, profile registry, worker registry, or publication authority.
 
@@ -44,9 +44,10 @@ state does not invalidate the work it records.
 
 ### Trusted task-bound acceptance
 
-Verifier-produced PASS evidence is task-bound, a small public verifier handoff
-exists for CoS/native callers, and successful reverification updates the
-accepted identity rather than retaining stale evidence.
+Verifier-produced PASS evidence is task-bound to both the current Git work
+identity and a deterministic fingerprint of the acceptance-relevant task
+contract. Successful reverification updates both accepted identities rather
+than retaining stale evidence.
 
 ### Native boundary and documentation alignment
 
@@ -72,9 +73,9 @@ owners. The state template emits schema version `1`.
 - Coordination owner: `single lead controller`
 - Coordination schema: `2`
 - Branch: `main`
-- Base commit: `b9006885b57118a55980adddee707c7e0a3a2453`
+- Base commit: `1a33fddbfb058ccfdc4f244c2fb10aa8bae2e702`
 - Expected workspace: `published HEAD with unrelated .serena/ preserved`
-- Next action: `verified implementation; explicit Git disposition remains separate`
+- Next action: `none; implementation and exact-SHA verification complete`
 - Blockers: `none`
 
 ## Review Evidence
@@ -94,6 +95,12 @@ The suggestion to change `plan-document-reviewer` was not included: its
 repository-memory reference resolves through the current `AGENTS.md`, so source
 evidence does not establish a broken owner.
 
+A follow-up GPT-5.6-Sol review of this plan at
+`general-os@1a33fddbfb058ccfdc4f244c2fb10aa8bae2e702` found two high-severity
+issues and one low-severity audit issue. Source inspection and a targeted
+acceptance probe confirmed all three. The review completed in chat
+`6af5b190-1990-83ed-8681-0161a7680002` with run `run-QjOLiW`.
+
 ## Task Breakdown
 
 | Task | State | Workspace | Executor | Depends On | Required Proof | Evidence |
@@ -103,6 +110,18 @@ evidence does not establish a broken owner.
 | Task 3 | `completed` | current | `lead` | Task 2 | Orca/CLI tests and smoke | `33 passed; ready/reachable` |
 | Task 4 | `completed` | current | `lead` | Task 3 | documentation and template tests | `28 passed; 44 manifest rows valid` |
 | Task 5 | `completed` | current | `lead` | Task 4 | full verification commands | `112 passed; state valid` |
+| Task 6 | `completed` | current | `lead` | Task 5 | acceptance-contract regression tests | `41 passed` |
+| Task 7 | `completed` | current | `lead` | Task 6 | exact-SHA clean-checkout verification and plan reconciliation | `115 passed; state/migration valid; Orca ready` |
+
+### Follow-up findings
+
+- `state/coordination.json` must remain outside Git work identity while its
+  acceptance-relevant task semantics receive their own durable fingerprint.
+- Final verification must be rerun against the exact published remediation SHA,
+  not the pre-publication base SHA recorded by the earlier execution.
+- Completed inline tasks must not retain unresolved executor or validator
+  profile placeholders; mark those roles not applicable when no delegation was
+  used.
 
 ### Task 1: Repair Git snapshot identity and status parsing
 
@@ -112,11 +131,11 @@ status paths, and stable across durable coordination-state saves.
 **Task Function:** Git evidence correction.
 
 **Template Profile:**
-- Controller-selected: `unresolved`
+- Not applicable: inline lead; no delegated executor.
 - Selection basis: resolve from implementation risk before activation.
 
 **Validator Profile:**
-- Controller-selected: `unresolved`
+- Not applicable: inline lead; no delegated validator.
 - Selection basis: independently exercise isolated Git repositories.
 
 **Specification Coverage:** Git owns repository truth; accepted evidence must
@@ -156,11 +175,11 @@ verifier handoff, and keep completed-task evidence current.
 **Task Function:** Acceptance boundary correction.
 
 **Template Profile:**
-- Controller-selected: `unresolved`
+- Not applicable: inline lead; no delegated executor.
 - Selection basis: resolve from trust-boundary scope and test complexity.
 
 **Validator Profile:**
-- Controller-selected: `unresolved`
+- Not applicable: inline lead; no delegated validator.
 - Selection basis: independently exercise success, stale, replay, and idempotency paths.
 
 **Specification Coverage:** Acceptance remains outside workers; only current,
@@ -201,11 +220,11 @@ work its actual ephemeral assignment and precise diagnostics.
 **Task Function:** Runtime-boundary contract correction.
 
 **Template Profile:**
-- Controller-selected: `unresolved`
+- Not applicable: inline lead; no delegated executor.
 - Selection basis: resolve from adapter scope and optional-runtime risk.
 
 **Validator Profile:**
-- Controller-selected: `unresolved`
+- Not applicable: inline lead; no delegated validator.
 - Selection basis: verify command projection and graceful degradation.
 
 **Specification Coverage:** Codex remains default; Orca is optional and never a
@@ -245,11 +264,11 @@ profiles and the current publication boundary.
 **Task Function:** Documentation contract reconciliation.
 
 **Template Profile:**
-- Controller-selected: `unresolved`
+- Not applicable: inline lead; no delegated executor.
 - Selection basis: resolve from cross-surface documentation risk.
 
 **Validator Profile:**
-- Controller-selected: `unresolved`
+- Not applicable: inline lead; no delegated validator.
 - Selection basis: inspect references and run documentation contracts.
 
 **Specification Coverage:** general-os is the SSOT; no maintained skill points
@@ -289,11 +308,11 @@ unrelated files before claiming completion.
 **Task Function:** Completion verification.
 
 **Template Profile:**
-- Controller-selected: `unresolved`
+- Not applicable: inline lead; no delegated executor.
 - Selection basis: final changed-surface risk.
 
 **Validator Profile:**
-- Controller-selected: `unresolved`
+- Not applicable: inline lead; no delegated validator.
 - Selection basis: independent final evidence review.
 
 **Specification Coverage:** Fresh Git-bound proof and no unverified runtime claim.
@@ -325,6 +344,98 @@ unrelated files before claiming completion.
 **Exit Criteria:** Every included finding is fixed or explicitly excluded with
 source evidence, all required proof is fresh, and no unrelated change is made.
 
+### Task 6: Bind acceptance to the durable task contract
+
+**Purpose:** Prevent changes to objective, dependencies, acceptance criteria,
+profile, or independent-boundary requirements from reusing old completion proof
+while keeping coordination state outside the Git work identity.
+
+**Task Function:** Acceptance invariant correction.
+
+**Template Profile:** Not applicable: inline lead; no delegated executor.
+
+**Validator Profile:** Not applicable: inline lead; no delegated validator.
+
+**Specification Coverage:** Acceptance must bind both repository/work identity
+and the current acceptance-relevant task contract.
+
+**Required Skills:** `skill-backend-verification`, `skill-verification-before-completion`
+
+**Files And Symbols:**
+- Modify: `src/general_os/state.py`, `src/general_os/acceptance.py`,
+  `docs/contracts.md`.
+- Verify: `tests/test_acceptance.py`, `tests/test_state.py`.
+
+**Dependencies:** Tasks 1–5.
+
+**Authority:**
+- Preauthorized local actions: edit implementation, tests, and maintained
+  contract documentation; run focused and full verification.
+- Stop for: schema incompatibility, failed acceptance proof, publication, or
+  unrelated worktree changes.
+
+**Steps:**
+- [x] Add a deterministic task-contract fingerprint over task ID, objective,
+  dependencies, acceptance criteria, profile, and independent-boundary policy.
+- [x] Bind verifier evidence and durable completed-task state to that fingerprint.
+- [x] Demote completed tasks when either Git work identity or task-contract
+  fingerprint is missing or mismatched.
+- [x] Add regression coverage for semantic task edits and persistence.
+
+**Verification:**
+- [x] `python -m pytest -q tests/test_acceptance.py tests/test_state.py`
+- Expected: changed task semantics invalidate old completion evidence; unchanged
+  semantics remain idempotent.
+
+**Exit Criteria:** Durable task edits cannot bypass fresh acceptance, and no
+  runtime ledger or duplicate coordination authority is introduced.
+
+### Task 7: Verify the published revision and reconcile the plan
+
+**Purpose:** Replace stale pre-publication evidence with fresh proof for the
+exact GitHub-reachable revision and close the remaining audit inconsistency.
+
+**Task Function:** Final verification and plan reconciliation.
+
+**Template Profile:** Not applicable: inline lead; no delegated executor.
+
+**Validator Profile:** Not applicable: inline lead; no delegated validator.
+
+**Specification Coverage:** Final evidence must describe the exact revision
+being claimed, and completed inline tasks must have explicit profile status.
+
+**Required Skills:** `skill-verification-before-completion`, `skill-writing-plans`
+
+**Files And Symbols:**
+- Modify: this plan only for evidence and task-state reconciliation.
+- Verify: all changed code, tests, docs, state, and published Git revision.
+
+**Dependencies:** Task 6.
+
+**Authority:**
+- Preauthorized local actions: run clean-checkout verification and update this
+  plan with exact evidence.
+- Stop for: failed proof, unreachable SHA, publication, or destructive cleanup.
+
+**Steps:**
+- [x] Run the complete verification suite on a clean checkout of the exact
+  published SHA.
+- [x] Replace stale base-SHA evidence with the exact verified SHA and commands.
+- [x] Mark prior inline task profile roles explicitly not applicable.
+- [x] Mark this plan `completed` only after all required proof passes.
+
+**Verification:**
+- [x] `python -m pytest -q`
+- [x] `python -m general_os state validate state/coordination.json`
+- [x] `python scripts/validate_migration_manifest.py --manifest docs/migration/project-os-starter.md`
+- [x] `python -m general_os orca smoke --json`
+- [x] `git diff --check; git status --short --branch; git rev-parse HEAD`
+- Expected: all checks pass on the exact published SHA with no unrelated file
+  changes.
+
+**Exit Criteria:** Acceptance is contract-bound, verification is revision-bound,
+and the plan contains no unresolved placeholders or stale revision claims.
+
 ## Verification
 
 ```powershell
@@ -341,7 +452,8 @@ git rev-parse HEAD
 1. Git snapshot identity distinguishes staged and unstaged tracked contents,
    reports correct status paths, and is stable across coordination-state saves.
 2. PASS evidence is task-bound and produced through a documented in-process
-   handoff; stale and replayed evidence cannot complete work.
+   handoff; stale, replayed, or contract-mismatched evidence cannot complete
+   work.
 3. Orca assignment projection and policy boundaries match maintained guidance;
    reachability is not mislabeled as worker verification.
 4. Migrated documentation and templates refer only to current owners and
@@ -351,9 +463,12 @@ git rev-parse HEAD
 
 ## Final Evidence
 
-- Verified HEAD remains `b9006885b57118a55980adddee707c7e0a3a2453`; changes are
-  intentionally uncommitted and `origin/main` is unchanged.
-- `python -m pytest -q`: `112 passed`.
+- Implementation commit `eb0731453e4fa3029c4aa605f6f24f9eea9978f6` is reachable
+  from GitHub and was verified in clean detached worktree
+  `C:\tmp\general-os-verify-eb07314`. The later plan-only commit records that
+  evidence; it does not change executable implementation.
+- `python -m pytest -q`: `115 passed`.
+- `python -m pytest -q tests/test_acceptance.py tests/test_state.py`: `41 passed`.
 - `python -m general_os state validate state/coordination.json`: `valid`.
 - Migration validator: `44` valid rows.
 - `python -m general_os orca smoke --json`: `status=ready`,
@@ -365,7 +480,12 @@ git rev-parse HEAD
 - `git diff --check`: passed. Untracked `.serena/` is unrelated and preserved.
 - Browser review runs were not rerun; their completed, pinned evidence remains
   the source review input for this local remediation.
-- No commit, push, merge, publication, CI, production-load, or external-service
-  claim is made. The Orca probe covered worker dispatch and the targeted test
-  only; it did not establish production-load or external-service behavior.
+- Clean-checkout verification on implementation commit
+  `eb0731453e4fa3029c4aa605f6f24f9eea9978f6`: `115 passed`, state `valid`,
+  migration `44` rows valid, Orca `ready` with `probe_ok=true`, and clean Git
+  status. Final PR-head verification is recorded in the PR review evidence,
+  outside this self-referencing plan commit.
+- No merge, CI, production-load, or external-service claim is made. The Orca
+  probe covered worker dispatch and the targeted test only; it did not establish
+  production-load or external-service behavior.
 

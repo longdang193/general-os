@@ -46,6 +46,7 @@ class Task:
     profile: str | None = None
     requires_independent_boundary: bool = False
     accepted_snapshot_identity: str | None = None
+    accepted_task_contract_identity: str | None = None
     blocker_category: str | None = None
     blocker_reason: str | None = None
 
@@ -77,6 +78,13 @@ class Task:
             raise StateError(
                 "accepted_snapshot_identity must be a non-empty string when provided"
             )
+        if self.accepted_task_contract_identity is not None and (
+            not isinstance(self.accepted_task_contract_identity, str)
+            or not self.accepted_task_contract_identity.strip()
+        ):
+            raise StateError(
+                "accepted_task_contract_identity must be a non-empty string when provided"
+            )
         if self.state == "blocked":
             if self.blocker_category not in BLOCKER_CATEGORIES:
                 raise StateError("blocked tasks require a valid blocker category")
@@ -101,6 +109,7 @@ class Task:
             "profile",
             "requires_independent_boundary",
             "accepted_snapshot_identity",
+            "accepted_task_contract_identity",
             "blocker_category",
             "blocker_reason",
         }
@@ -118,9 +127,26 @@ class Task:
                 "requires_independent_boundary", False
             ),
             accepted_snapshot_identity=value.get("accepted_snapshot_identity"),
+            accepted_task_contract_identity=value.get("accepted_task_contract_identity"),
             blocker_category=value.get("blocker_category"),
             blocker_reason=value.get("blocker_reason"),
         )
+
+    def contract_identity(self) -> str:
+        payload = json.dumps(
+            {
+                "id": self.id,
+                "objective": self.objective,
+                "depends_on": list(self.depends_on),
+                "acceptance": list(self.acceptance),
+                "profile": self.profile,
+                "requires_independent_boundary": self.requires_independent_boundary,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
@@ -137,6 +163,8 @@ class Task:
             result["requires_independent_boundary"] = True
         if self.accepted_snapshot_identity is not None:
             result["accepted_snapshot_identity"] = self.accepted_snapshot_identity
+        if self.accepted_task_contract_identity is not None:
+            result["accepted_task_contract_identity"] = self.accepted_task_contract_identity
         if self.blocker_category is not None:
             result["blocker_category"] = self.blocker_category
             result["blocker_reason"] = self.blocker_reason

@@ -17,7 +17,9 @@ def snapshot(revision="abc123", identity=None):
     return GitSnapshot("main", revision, (), (), True, identity)
 
 
-def verified(**values):
+def verified(*, task=None, **values):
+    if task is not None:
+        values.setdefault("task_contract_identity", task.contract_identity())
     return VerificationResult._from_verifier(**values)
 
 
@@ -28,6 +30,7 @@ def test_acceptance_passes_fresh_required_proof():
         task,
         snapshot(identity="snapshot-id"),
         verified(
+            task=task,
             status="pass",
             passed=("tests pass",),
             evidence_revision="abc123",
@@ -37,7 +40,10 @@ def test_acceptance_passes_fresh_required_proof():
     )
 
     assert decision == AcceptanceDecision(
-        "PASS", "required proof is current", accepted_snapshot_identity="snapshot-id"
+        "PASS",
+        "required proof is current",
+        accepted_snapshot_identity="snapshot-id",
+        accepted_task_contract_identity=task.contract_identity(),
     )
 
 
@@ -61,6 +67,7 @@ def test_acceptance_treats_missing_proof_as_retryable_failure():
         task,
         snapshot(identity="snapshot-id"),
         verified(
+            task=task,
             status="pass",
             task_id="work",
             evidence_revision="abc123",
@@ -110,7 +117,7 @@ def test_acceptance_updates_only_durable_task_state_idempotently():
     decision = evaluate_acceptance(
         Task(id="work"),
         snapshot(identity="snapshot-id"),
-        verified(status="pass", task_id="work", snapshot_identity="snapshot-id"),
+        verified(task=Task(id="work"), status="pass", task_id="work", snapshot_identity="snapshot-id"),
     )
 
     completed = apply_task_transition(state, "work", decision)
@@ -127,7 +134,7 @@ def test_acceptance_requires_matching_worktree_identity():
     decision = evaluate_acceptance(
         task,
         snapshot(identity="snapshot-id"),
-        verified(status="pass", task_id="work", snapshot_identity="other"),
+        verified(task=task, status="pass", task_id="work", snapshot_identity="other"),
     )
 
     assert decision.status == "FAIL"
@@ -140,7 +147,7 @@ def test_acceptance_requires_worktree_identity_for_pass():
     decision = evaluate_acceptance(
         task,
         snapshot(),
-        verified(status="pass", task_id="work"),
+        verified(task=task, status="pass", task_id="work"),
     )
 
     assert decision.status == "FAIL"
@@ -155,6 +162,7 @@ def test_required_boundary_needs_typed_matching_evidence():
         task,
         snapshot(identity="snapshot-id"),
         verified(
+            task=task,
             status="pass",
             task_id="work",
             snapshot_identity="snapshot-id",
@@ -177,6 +185,7 @@ def test_required_boundary_rejects_unsupported_evidence(kind):
         task,
         snapshot(identity="snapshot-id"),
         verified(
+            task=task,
             status="pass",
             task_id="work",
             snapshot_identity="snapshot-id",
@@ -201,7 +210,12 @@ def test_pass_cannot_complete_before_dependencies():
             evaluate_acceptance(
                 Task(id="work", depends_on=("dependency",)),
                 snapshot(identity="snapshot-id"),
-                verified(status="pass", task_id="work", snapshot_identity="snapshot-id"),
+                verified(
+                    task=Task(id="work", depends_on=("dependency",)),
+                    status="pass",
+                    task_id="work",
+                    snapshot_identity="snapshot-id",
+                ),
             ),
         )
 
@@ -247,6 +261,7 @@ def test_boundary_evidence_is_task_bound():
         task,
         snapshot(identity="snapshot-id"),
         verified(
+            task=task,
             status="pass",
             task_id="work",
             snapshot_identity="snapshot-id",
@@ -278,12 +293,52 @@ def test_revalidate_completed_tasks_demotes_stale_dependents():
 
 
 def test_revalidate_completed_tasks_keeps_matching_evidence():
+    task = Task(id="work")
     state = CoordinationState(
         goal="goal",
-        tasks=(Task(id="work", state="completed", accepted_snapshot_identity="snapshot-id"),),
+        tasks=(
+            Task(
+                id="work",
+                state="completed",
+                accepted_snapshot_identity="snapshot-id",
+                accepted_task_contract_identity=task.contract_identity(),
+            ),
+        ),
     )
 
     assert revalidate_completed_tasks(state, snapshot(identity="snapshot-id")) == state
+
+
+def test_acceptance_rejects_stale_task_contract_evidence():
+    task = Task(id="work", acceptance=("new check",))
+    evidence = create_verification_result(
+        Task(id="work", acceptance=("old check",)),
+        snapshot(identity="snapshot-id"),
+        passed=("new check",),
+    )
+
+    decision = evaluate_acceptance(task, snapshot(identity="snapshot-id"), evidence)
+
+    assert decision.status == "FAIL"
+    assert "task contract" in decision.reason
+
+
+def test_revalidate_completed_tasks_demotes_changed_task_contract():
+    original = Task(id="work", objective="old")
+    changed = Task(
+        id="work",
+        objective="new",
+        state="completed",
+        accepted_snapshot_identity="snapshot-id",
+        accepted_task_contract_identity=original.contract_identity(),
+    )
+    state = CoordinationState(goal="goal", tasks=(changed,))
+
+    updated = revalidate_completed_tasks(state, snapshot(identity="snapshot-id"))
+
+    assert updated.tasks[0].state == "pending"
+    assert updated.tasks[0].accepted_snapshot_identity is None
+    assert updated.tasks[0].accepted_task_contract_identity is None
 
 
 def test_pass_transition_rejects_caller_forged_decision():
@@ -320,7 +375,7 @@ def test_successful_reverification_refreshes_snapshot_identity():
     decision = evaluate_acceptance(
         Task(id="work"),
         snapshot(identity="new"),
-        verified(status="pass", task_id="work", snapshot_identity="new"),
+        verified(task=Task(id="work"), status="pass", task_id="work", snapshot_identity="new"),
     )
 
     updated = apply_task_transition(state, "work", decision)
