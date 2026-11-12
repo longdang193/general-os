@@ -55,6 +55,10 @@ Acceptance uses the current task, current Git snapshot, and fresh verification:
 - `BLOCKED` persists only a material Git, authority, dependency, credential,
   user-decision, or required-runtime-boundary blocker.
 
+`BLOCKED` transitions require a durable category of `authority`, `dependency`,
+`git`, or `external`, plus a non-empty reason. Retryable `FAIL` clears that
+context when it returns a blocked task to `pending`.
+
 Runtime completion never changes durable acceptance by itself. Repeated
 successful transitions are idempotent.
 
@@ -63,8 +67,9 @@ successful transitions are idempotent.
 `GitSnapshot.identity` binds `HEAD`, branch, tracked diff, status, and untracked
 file content. A repository-bound `PASS` must carry the same identity. A task
 with `requires_independent_boundary` must also carry ephemeral typed boundary
-evidence containing a boundary kind, matching snapshot identity, and non-empty
-evidence. These values are not persisted in durable state.
+evidence containing the supported `orca` boundary kind, matching snapshot
+identity, and non-empty evidence. These values are not persisted in durable
+state, and the CLI cannot forge them from free-form input.
 
 Completed tasks must have completed dependencies. A retryable `FAIL` leaves an
 active task unchanged and returns a blocked task to `pending`; `BLOCKED` is
@@ -72,6 +77,11 @@ reserved for a current material blocker.
 
 State version `1` is the only supported durable schema. Saves are compare-and-
 write operations guarded by an interprocess lock and atomic replacement.
+
+Fresh in-memory state may create a missing file, but may not overwrite an
+existing file without loaded-state provenance. Durable `remote_side_effects =
+"allow"` exceptions require non-empty scope, provenance, and a future
+ISO-8601 expiry; a configured local `deny` ceiling remains absolute.
 
 The configured local `remote_side_effects = "deny"` policy cannot be widened by
 durable state. Missing profile directories, missing requested profiles, unknown

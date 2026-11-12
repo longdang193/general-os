@@ -19,7 +19,7 @@ evidence with Plan plus Git and the shared attempt contract before integration.
 - Before merge to main
 - When independent review is required by the active lifecycle or plan
 
-Task-scoped review in `skill-subagent-driven-development` owns per-task review;
+Task-scoped review in `executing-work` owns per-task review;
 do not dispatch a second whole-branch review for the same task.
 
 **Optional but valuable:**
@@ -69,7 +69,7 @@ class plus approved deviations.
 
 ## Optional OCR Preparation
 
-Review requesting may use shared `scripts/ocr_delegate_adapter.py` as optional
+Review requesting may use an active executor's configured review capability as optional
 advisory overlay for immutable Git range. Caller owns repository, `base_sha`,
 `head_sha`, and complete Git inventory; OCR never reconstructs, replaces, or
 narrows inventory.

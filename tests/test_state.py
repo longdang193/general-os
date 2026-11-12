@@ -127,6 +127,14 @@ def test_stale_loaded_state_is_rejected(tmp_path):
         save_state(path, CoordinationState(goal="second", tasks=second.tasks, version=second.version, _source_digest=second._source_digest))
 
 
+def test_fresh_state_cannot_overwrite_existing_state(tmp_path):
+    path = tmp_path / "coordination.json"
+    save_state(path, CoordinationState(goal="initial"))
+
+    with pytest.raises(StateError, match="loaded source provenance"):
+        save_state(path, CoordinationState(goal="replacement"))
+
+
 def test_two_process_writers_accept_one_update_and_reject_one_stale_writer(tmp_path):
     path = tmp_path / "coordination.json"
     save_state(path, CoordinationState(goal="initial"))
@@ -158,3 +166,35 @@ def test_task_without_objective_remains_backward_compatible():
         "depends_on": [],
         "acceptance": [],
     }
+
+
+def test_blocker_context_round_trips():
+    state = CoordinationState(
+        goal="goal",
+        tasks=(
+            Task(
+                id="work",
+                state="blocked",
+                blocker_category="external",
+                blocker_reason="service unavailable",
+            ),
+        ),
+    )
+
+    restored = CoordinationState.from_dict(state.to_dict())
+
+    assert restored.tasks[0].blocker_category == "external"
+    assert restored.tasks[0].blocker_reason == "service unavailable"
+
+
+def test_state_rejects_malformed_policy_expiry():
+    with pytest.raises(StateError, match="ISO-8601"):
+        CoordinationState(
+            goal="goal",
+            policy_exceptions={
+                "remote_side_effects": "allow",
+                "scope": "github:general-os",
+                "provenance": "user-approval",
+                "expires_at": "not-a-date",
+            },
+        )

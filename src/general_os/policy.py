@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
 
@@ -25,6 +26,9 @@ class RuntimeConfig:
 @dataclass(frozen=True)
 class AuthorityExceptions:
     remote_side_effects: str | None = None
+    scope: str | None = None
+    provenance: str | None = None
+    expires_at: str | None = None
 
 
 def load_runtime_config(path: str | Path) -> RuntimeConfig:
@@ -54,10 +58,19 @@ def resolve_policy(
     if isinstance(exceptions, AuthorityExceptions):
         values = {
             "remote_side_effects": exceptions.remote_side_effects,
+            "scope": exceptions.scope,
+            "provenance": exceptions.provenance,
+            "expires_at": exceptions.expires_at,
         }
+        values = {key: value for key, value in values.items() if value is not None}
     else:
         values = dict(exceptions or {})
-    unknown = set(values) - {"remote_side_effects"}
+    unknown = set(values) - {
+        "remote_side_effects",
+        "scope",
+        "provenance",
+        "expires_at",
+    }
     if unknown:
         raise PolicyError(f"unknown policy exception: {sorted(unknown)[0]}")
     remote_side_effects = values.get("remote_side_effects", resolved.remote_side_effects)
@@ -71,6 +84,28 @@ def resolve_policy(
         )
     if resolved.remote_side_effects == "deny" and remote_side_effects != "deny":
         remote_side_effects = "deny"
+    if values.get("remote_side_effects") == "allow" and remote_side_effects == "allow":
+        missing = {"scope", "provenance", "expires_at"} - set(values)
+        if missing:
+            raise PolicyError(
+                "allow policy exception requires scope, provenance, and expiry"
+            )
+        metadata_keys = {"scope", "provenance", "expires_at"}
+        if not all(
+            isinstance(values[key], str) and values[key].strip()
+            for key in metadata_keys
+        ):
+            raise PolicyError("allow policy exception metadata must be non-empty strings")
+        try:
+            expires_at = values["expires_at"].replace("Z", "+00:00")
+            expiry = datetime.fromisoformat(expires_at)
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise PolicyError("allow policy exception expiry must be ISO-8601") from exc
+        if (
+            expiry.tzinfo is None
+            or expiry.astimezone(timezone.utc) <= datetime.now(timezone.utc)
+        ):
+            raise PolicyError("allow policy exception is expired")
     if not isinstance(resolved.native_subagents_enabled, bool):
         raise PolicyError("native_subagents_enabled must be boolean")
     if not isinstance(resolved.orca_enabled, bool):

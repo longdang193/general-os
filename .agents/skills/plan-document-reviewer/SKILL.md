@@ -28,7 +28,7 @@ Skip for tiny, local, reversible tasks with settled behavior and obvious proof.
 - this skill identifies readiness defects in those artifacts without silently rewriting them
 - `workspace-isolation` optionally establishes isolated workspace identity
 - `executing-work` discovers implementation reality and performs task-local proof
-- `skill-verification-before-completion` runs final proof and produces verified, incomplete, or blocked result
+- `verification-before-completion` runs final proof and produces verified, incomplete, or blocked result
 - `finishing-development-work` owns authorized Git disposition after verified result
 - `requesting-code-review` initiates implementation-diff review; `receiving-code-review` evaluates returned findings; neither reviews proposed documents
 
@@ -36,11 +36,11 @@ Skip for tiny, local, reversible tasks with settled behavior and obvious proof.
 
 - Read target specification or plan in full.
 - Read linked specification when reviewing a plan.
-- Read `repository operating guidance/rules/git-tracked-coordination-rule.md` when the
+- Read `AGENTS.md` when the
   plan declares or requires Git-tracked coordination.
 - Inspect named source, tests, configuration, schemas, and scripts needed to verify material claims.
 - Read `references/technical-review-checklist.md` when proposal has substantial software, API, data, analytics, ML, optimization, storage, integration, platform, starter, or publication implications.
-- Search configured MCP memory only when active executor exposes it and proposal resembles a known reusable failure mode; follow `repository operating guidance/rules/agent-memory-rule.md`.
+- Search configured MCP memory only when active executor exposes it and proposal resembles a known reusable failure mode; follow the repository memory instructions in `AGENTS.md`.
 - Read governance only when ownership or publication boundaries are in scope.
 
 Do not load every reference for every review.
@@ -49,7 +49,7 @@ Do not load every reference for every review.
 
 Use native tools for direct evidence and local search. Resolve symbol,
 discovery, flow, or impact needs through
-`repository operating guidance/tooling/runtime-tool-resolution.md` only when the
+`docs/runtime-adapters.md` only when the
 question requires them. Source and tests remain authoritative.
 
 ## Review Process

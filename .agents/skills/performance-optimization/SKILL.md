@@ -32,7 +32,7 @@ For prompt-cache claims, apply `docs/rules/prompt-cache.md`. Equal local hashes 
 
 When performance work depends on an unfamiliar external GitHub repository, use
 available external-repository orientation capability only when needed and
-resolve it through `repository operating guidance/tooling/runtime-tool-resolution.md`.
+resolve it through `docs/runtime-adapters.md`.
 Measurements remain authoritative.
 
 | Surface | Useful evidence |
@@ -63,5 +63,5 @@ A checkout p95 regression uses the alarm's production dimensions and last health
 ## Integration
 
 - `systematic-debugging` owns root-cause investigation.
-- `skill-verification-before-completion` owns final completion claims.
+- `verification-before-completion` owns final completion claims.
 - `docs/rules/frontend-ui.md` owns browser tool routing and UI invariants.

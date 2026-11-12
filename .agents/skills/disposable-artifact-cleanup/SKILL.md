@@ -146,7 +146,7 @@ not recovery evidence.
 
 Cleanup requires explicit authorization for the named task-owned direct
 candidates or an approved task that names those candidates. Recursive delete
-or move still follows `command-execution-rule.md`.
+or move still follows the command-safety rules in `AGENTS.md`.
 
 Delegated candidates are not deleted by this skill. Route the exact identity to
 the named owner and record the owner's verified result before dependent cleanup.
@@ -181,6 +181,6 @@ owning workflow and are not disposable by default.
 ## Integration
 
 - `executing-work` may invoke this skill in Audit Mode only.
-- `skill-verification-before-completion` identifies retention dependencies and reruns affected proof; it does not perform deletion.
+- `verification-before-completion` identifies retention dependencies and reruns affected proof; it does not perform deletion.
 - `finishing-development-work` owns Git disposition and Git-managed branch, worktree, and stash cleanup after `verified`.
 - The producing workflow or lifecycle owner remains authoritative for independent worker launcher runtime, browser or application state, and databases.

@@ -51,7 +51,7 @@ Use for ANY technical issue:
 
 - Use `performance-optimization` when the defect is a measured latency, throughput, memory, query, bundle, rendering, or Core Web Vitals problem requiring comparable before/after proof.
 - Use `full-stack-integration` when the failure crosses frontend behavior, typed clients, API contracts, route handling, authorization, or backend responses.
-- Use `skill-dispatching-parallel-agents` only after evidence separates failures into independent problem domains.
+- Use `executing-work` only after evidence separates failures into independent problem domains.
 - Each dispatched investigator follows this debugging method inside its assigned domain.
 - Keep possibly shared-cause failures together until root-cause evidence proves independence.
 
@@ -59,7 +59,7 @@ Use for ANY technical issue:
 
 State minimum tracing capability and required evidence before selecting a tool.
 Prefer native source, tests, and reproduction evidence; resolve unmet
-capabilities through `repository operating guidance/tooling/runtime-tool-resolution.md`.
+capabilities through `docs/runtime-adapters.md`.
 Source, tests, and reproduction evidence remain authoritative.
 
 ## The Four Phases
@@ -82,7 +82,7 @@ You MUST complete each phase before proceeding to the next.
    - Does it happen every time?
    - If not reproducible → gather more data, don't guess
    - For browser-visible failures, use available browser-interaction capability when available to reproduce repeatable flows and capture semantic state
-   - If no suitable browser-diagnostic capability is currently available, use existing browser evidence and native logs before adding a new diagnostic path; otherwise resolve the needed capability through `repository operating guidance/tooling/runtime-tool-resolution.md`
+   - If no suitable browser-diagnostic capability is currently available, use existing browser evidence and native logs before adding a new diagnostic path; otherwise resolve the needed capability through `docs/runtime-adapters.md`
    - Browser replay is diagnostic evidence, not committed regression coverage; preserve the failure in the existing browser test suite before fixing when practical
 
 3. **Check Failure Memory When The Issue Looks Familiar**
@@ -115,8 +115,8 @@ You MUST complete each phase before proceeding to the next.
    ```
 
    **Audit gate (mandatory):**
-   - if trigger conditions in `repository operating guidance/rules/audit-evidence-mandate-rule.md` are met and no active audit exists, create or update `docs/superpowers/plans/audit/<audit_id>/report.md`
-   - use `repository operating guidance/templates/audit-report-with-evidence-template.md`
+   - if the current task explicitly requires audit evidence and no active audit exists, create or update the task-owned audit report
+   - use the approved task or plan format; do not assume an external audit template
    - add evidence or reproduction files only when they contain real artifacts needed by report
 
 
@@ -328,7 +328,7 @@ These techniques are part of systematic debugging and available in this director
 - **test-driven-development** - For creating failing test case (Phase 4, Step 1)
 - **performance-optimization** - Define representative workloads, metrics, targets, and comparable performance proof
 - **full-stack-integration** - Reconcile frontend intent, transport contracts, API impact, and browser evidence
-- **skill-verification-before-completion** - Verify fix worked before claiming success
+- **verification-before-completion** - Verify fix worked before claiming success
 
 ## Real-World Impact
 

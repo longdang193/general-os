@@ -40,7 +40,7 @@ findings to that writer. Do not allow concurrent map edits, merge competing
 maps, or copy settled decisions into the map, specification, and plan. Each
 artifact keeps one owner and links to the others.
 
-Use `repository operating guidance/templates/wayfinding-map-template.md`. Keep map
+Use a concise task-owned map in the current response or plan. Keep map
 entries short and provisional.
 
 ## Decision Frontier
@@ -76,7 +76,8 @@ Close only when all conditions hold:
 - approved behavior has been promoted once through `spec-drafting`;
 - handoff is recorded.
 
-After closure, return to `repository operating guidance/planning/planning-dispatch.md`
+After closure, return to the current plan and resolve the next task through the
+repository's `AGENTS.md` routing rules.
 and apply its next applicable gate. If implementation sequencing is needed,
 use `defining-work`. Wayfinding does not pre-author plan tasks,
 dependency order, write ownership, executor choice, or verification commands.

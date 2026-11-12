@@ -272,7 +272,8 @@ Only after reasoning is complete:
 
 1. choose draft template only when prototype validation remains; otherwise use detailed template after behavior approval and all applicable post-approval inputs are complete
 2. save once to `docs/superpowers/specs/YYYY-MM-DD-HH-MM-<topic>-spec.md`
-3. use frontmatter satisfying `repo_config/planning_artifact_schema.yaml`
+3. use the frontmatter contract defined by `defining-work` and the
+   current specification template
 4. select truthful layer and targets
 5. keep required sections non-empty
 6. promote draft in place after approval rather than creating second file
@@ -298,7 +299,7 @@ Use only applicable optional metadata. Do not add metadata without active consum
 3. For cross-cutting, data-sensitive, operational, starter/public-sync, or expensive-to-reverse specifications, use `plan-document-reviewer` before approval or planning handoff.
 4. After detailed specification is active, hand off to `defining-work`.
 5. `executing-work` starts only after an executable plan or explicit approved task sequence exists.
-6. `skill-verification-before-completion` later proves acceptance and completion criteria.
+6. `verification-before-completion` later proves acceptance and completion criteria.
 7. `finishing-development-work` owns authorized Git disposition after verified implementation.
 
 ## Red Flags
@@ -321,5 +322,5 @@ Use only applicable optional metadata. Do not add metadata without active consum
 - `plan-document-reviewer`: review specification correctness and readiness.
 - `defining-work`: convert approved specification into executable tasks.
 - `executing-work`: implement approved plan.
-- `skill-verification-before-completion`: prove required behavior and completion.
+- `verification-before-completion`: prove required behavior and completion.
 - `finishing-development-work`: perform authorized Git closure.

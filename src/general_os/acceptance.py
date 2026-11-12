@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from general_os.git import GitSnapshot
-from general_os.state import CoordinationState
+from general_os.state import BLOCKER_CATEGORIES, CoordinationState
+
+SUPPORTED_INDEPENDENT_BOUNDARIES = frozenset({"orca"})
 
 
 @dataclass(frozen=True)
@@ -27,12 +29,16 @@ class VerificationResult:
     message: str = ""
     snapshot_identity: str | None = None
     boundary_evidence: BoundaryEvidence | None = None
+    blocker_category: str | None = None
+    blocker_reason: str | None = None
 
 
 @dataclass(frozen=True)
 class AcceptanceDecision:
     status: str
     reason: str
+    blocker_category: str | None = None
+    blocker_reason: str | None = None
 
 
 def evaluate_acceptance(
@@ -41,20 +47,32 @@ def evaluate_acceptance(
     verification: VerificationResult,
 ) -> AcceptanceDecision:
     if snapshot.conflicts:
-        return AcceptanceDecision("BLOCKED", "Git conflict prevents acceptance")
+        return AcceptanceDecision(
+            "BLOCKED",
+            "Git conflict prevents acceptance",
+            "git",
+            "Git conflict prevents acceptance",
+        )
     if (
         verification.evidence_revision is not None
         and verification.evidence_revision != snapshot.revision
     ):
         return AcceptanceDecision("FAIL", "verification evidence is stale")
-    if snapshot.identity is not None and verification.snapshot_identity != snapshot.identity:
-        return AcceptanceDecision("FAIL", "verification worktree evidence is missing or stale")
     if verification.status == "blocked":
-        return AcceptanceDecision("BLOCKED", verification.message or "verification blocked")
+        return AcceptanceDecision(
+            "BLOCKED",
+            verification.message or verification.blocker_reason or "verification blocked",
+            verification.blocker_category,
+            verification.blocker_reason or verification.message,
+        )
     if verification.status == "fail":
         return AcceptanceDecision("FAIL", verification.message or "verification failed")
     if verification.status != "pass":
         return AcceptanceDecision("FAIL", "verification result is unknown")
+    if snapshot.identity is None:
+        return AcceptanceDecision("FAIL", "verification worktree identity is missing")
+    if verification.snapshot_identity != snapshot.identity:
+        return AcceptanceDecision("FAIL", "verification worktree evidence is missing or stale")
     missing = set(task.acceptance) - set(verification.passed)
     if missing:
         return AcceptanceDecision(
@@ -62,7 +80,11 @@ def evaluate_acceptance(
         )
     if task.requires_independent_boundary:
         boundary = verification.boundary_evidence
-        if boundary is None or boundary.snapshot_identity != snapshot.identity:
+        if (
+            boundary is None
+            or boundary.kind not in SUPPORTED_INDEPENDENT_BOUNDARIES
+            or boundary.snapshot_identity != snapshot.identity
+        ):
             return AcceptanceDecision("FAIL", "required independent boundary evidence is missing or stale")
     return AcceptanceDecision("PASS", "required proof is current")
 
@@ -82,18 +104,41 @@ def apply_task_transition(
             return replace(
                 state,
                 tasks=tuple(
-                    replace(task, state="pending") if task.id == task_id else task
+                    replace(
+                        task,
+                        state="pending",
+                        blocker_category=None,
+                        blocker_reason=None,
+                    )
+                    if task.id == task_id
+                    else task
                     for task in state.tasks
                 ),
             )
         return state
+    if decision.status == "BLOCKED":
+        if decision.blocker_category not in BLOCKER_CATEGORIES:
+            raise ValueError("BLOCKED requires a valid blocker category")
+        if not isinstance(decision.blocker_reason, str) or not decision.blocker_reason.strip():
+            raise ValueError("BLOCKED requires a non-empty blocker reason")
     new_state = "completed" if decision.status == "PASS" else "blocked"
     if decision.status == "PASS":
         incomplete = [dependency for dependency in target.depends_on if next(task for task in state.tasks if task.id == dependency).state != "completed"]
         if incomplete:
             raise ValueError(f"task dependencies are incomplete: {', '.join(incomplete)}")
-    if target.state == new_state:
+    if target.state == new_state and (
+        decision.status != "BLOCKED"
+        or (
+            target.blocker_category == decision.blocker_category
+            and target.blocker_reason == decision.blocker_reason
+        )
+    ):
         return state
-    updated = replace(target, state=new_state)
+    updated = replace(
+        target,
+        state=new_state,
+        blocker_category=decision.blocker_category if new_state == "blocked" else None,
+        blocker_reason=decision.blocker_reason if new_state == "blocked" else None,
+    )
     tasks = tuple(updated if task.id == task_id else task for task in state.tasks)
     return replace(state, tasks=tasks)
