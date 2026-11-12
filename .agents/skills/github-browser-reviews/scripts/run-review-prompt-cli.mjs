@@ -143,7 +143,6 @@ export function deriveProjectKey(repository) {
   if (!match) throw new Error("repository must use the owner/repository form");
   return `${match[1]}-${match[2]}`.toLowerCase();
 }
-
 function normalizeUrlCandidate(value) {
   return value.replace(/[),.;:!?]+$/g, "");
 }

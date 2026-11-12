@@ -41,7 +41,6 @@ function withFailureScope(error, failureScope) {
 function normalizeComposerText(value) {
   return value.replace(/\s+/g, " ").trim();
 }
-
 function normalizePromptText(value) {
   return normalizeComposerText(value).replace(/\s*`n\s*/g, "`n");
 }
