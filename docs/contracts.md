@@ -120,8 +120,10 @@ The central installation at `~/.agents/general-os/` is governed by
 `managed.json`, which stores only central managed-file digests and source
 provenance. Project adoption is represented by
 `repo_config/general-os.lock.json`; it stores schema, source, source revision,
-and seeded paths only. Existing project semantics remain outside deployment
-ownership.
+and seeded paths only. Deployment is central-only unless `--repo` explicitly
+opts into one-shot adoption. Adoption never seeds `state/coordination.json`,
+and an existing adoption record makes project semantics entirely inert.
+Existing project semantics remain outside deployment ownership.
 
 `--dry-run` is read-only. `--check` reports drift without writing and treats
 predecessor residue as a warning unless `--strict-migration` is supplied.

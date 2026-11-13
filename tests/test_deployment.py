@@ -29,7 +29,7 @@ def make_source(root: Path) -> None:
 
 
 def run_apply(source: Path, project: Path, home: Path, **kwargs):
-    return deploy(project, source_root=source, home=home, **kwargs)
+    return deploy(project, source_root=source, home=home, adopt=True, **kwargs)
 
 
 def test_first_install_copies_complete_skills_and_seeds_only_absent_project_files(tmp_path):
@@ -50,6 +50,7 @@ def test_first_install_copies_complete_skills_and_seeds_only_absent_project_file
     assert (central / "skills/demo/scripts/helper.txt").exists()
     assert str(central / "docs" / "rules" / "example.md").replace("\\", "/") in installed
     assert (project / "AGENTS.md").read_text(encoding="utf-8") == "project guidance\n"
+    assert not (project / "state/coordination.json").exists()
     adoption = json.loads((project / "repo_config/general-os.lock.json").read_text())
     assert set(adoption) == {"schema_version", "adopted_from", "adopted_revision", "seeded_paths"}
     assert "runtime_ids" not in json.dumps(adoption)
@@ -73,6 +74,86 @@ def test_dry_run_does_not_write(tmp_path):
     assert report["status"] == "dry-run"
     assert not (home / ".agents" / "general-os").exists()
     assert not (project / "repo_config").exists()
+
+
+def test_central_only_deploy_does_not_mutate_project(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    (project / "AGENTS.md").write_text("local project guidance\n", encoding="utf-8")
+
+    code, report = deploy(source_root=source, home=home)
+
+    assert code == 0
+    assert report["repo_root"] is None
+    assert (project / "AGENTS.md").read_text(encoding="utf-8") == "local project guidance\n"
+    assert not (project / "repo_config").exists()
+    assert (home / ".agents/general-os/managed.json").exists()
+
+
+def test_packaged_assets_support_central_deployment(tmp_path):
+    home = tmp_path / "home"
+
+    code, report = deploy(home=home)
+
+    assert code == 0
+    assert deployment.PACKAGE_ASSETS.is_dir()
+    assert (deployment.PACKAGE_ASSETS / "skills").is_dir()
+    assert (deployment.PACKAGE_ASSETS / "project-kit/AGENTS.md").is_file()
+    assert "Build the general-os coordination layer" not in (
+        deployment.PACKAGE_ASSETS / "project-kit/AGENTS.md"
+    ).read_text(encoding="utf-8")
+    assert report["source_revision"].startswith("package-")
+
+
+def test_project_adoption_is_inert_after_existing_lock(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    run_apply(source, project, home)
+
+    seeded = project / "AGENTS.md"
+    seeded.write_text("project choice\n", encoding="utf-8")
+    (project / "custom.md").write_text("project choice\n", encoding="utf-8")
+    (source / "AGENTS.md").write_text("changed package guidance\n", encoding="utf-8")
+
+    code, report = run_apply(source, project, home, check=True)
+
+    assert code == 0
+    assert report["status"] == "healthy"
+    assert seeded.read_text(encoding="utf-8") == "project choice\n"
+    assert (project / "custom.md").exists()
+
+    seeded.unlink()
+    code, report = run_apply(source, project, home, check=True)
+
+    assert code == 0
+    assert report["status"] == "healthy"
+    assert not seeded.exists()
+
+
+def test_adoption_revision_remains_stable_after_central_source_update(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    run_apply(source, project, home)
+    adoption_path = project / "repo_config/general-os.lock.json"
+    first = json.loads(adoption_path.read_text(encoding="utf-8"))
+
+    (source / ".agents/skills/demo/SKILL.md").write_text("updated\n", encoding="utf-8")
+    run_apply(source, project, home)
+    second = json.loads(adoption_path.read_text(encoding="utf-8"))
+
+    assert second["adopted_revision"] == first["adopted_revision"]
 
 
 def test_owned_files_update_and_unowned_conflicts_are_preserved(tmp_path):

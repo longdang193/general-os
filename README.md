@@ -46,8 +46,9 @@ governance contracts changed.
 ## Central deployment
 
 Install the reusable runtime surface with `general-os deploy --adapter codex`.
-Use `--dry-run` to plan without writes, `--check` to inspect drift, and
-`--prune` only when unchanged centrally owned files should be removed. Project
-adoption is seed-only; existing `AGENTS.md`, profiles, policy, and durable
-coordination state are preserved. See `docs/deployment.md` for the ownership,
-rollback, and migration contract.
+This is central-only by default. Use `--repo .` when explicitly opting into
+one-shot project adoption; it seeds only absent neutral project guidance,
+profiles, and policy, never `state/coordination.json`. Use `--dry-run` to plan
+without writes, `--check` to inspect central drift, and `--prune` only when
+unchanged centrally owned files should be removed. See `docs/deployment.md`
+for the ownership, rollback, and migration contract.

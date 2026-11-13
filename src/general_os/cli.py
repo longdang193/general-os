@@ -84,6 +84,7 @@ def run_deploy(args: argparse.Namespace) -> int:
         check=args.check,
         prune=args.prune,
         strict_migration=args.strict_migration,
+        adopt=args.repo is not None,
     )
     _print(report)
     return code
@@ -122,7 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.set_defaults(handler=run_profile_resolve)
 
     deploy_command = commands.add_parser("deploy")
-    deploy_command.add_argument("--repo", default=".")
+    deploy_command.add_argument("--repo")
     deploy_command.add_argument("--adapter", default="codex")
     deploy_command.add_argument("--dry-run", action="store_true")
     deploy_command.add_argument("--check", action="store_true")

@@ -15,6 +15,7 @@ from typing import Iterable
 SCHEMA_VERSION = 1
 SUPPORTED_ADAPTERS = frozenset({"codex"})
 CENTRAL_DIRNAME = "general-os"
+PACKAGE_ASSETS = Path(__file__).resolve().parent / "assets"
 SKILL_SOURCE = Path(".agents") / "skills"
 CENTRAL_DOCS = Path("docs")
 CENTRAL_LOCK = Path("managed.json")
@@ -26,7 +27,6 @@ PROJECT_SEEDS = (
     Path("agents") / "normal.toml",
     Path("agents") / "xhigh.toml",
     Path("repo_config") / "runtime-policy.toml",
-    Path("state") / "coordination.json",
 )
 
 
@@ -47,7 +47,7 @@ class Action:
 @dataclass(frozen=True)
 class DeploymentPlan:
     source_root: Path
-    repo_root: Path
+    repo_root: Path | None
     central_root: Path
     adapter: str
     actions: tuple[Action, ...]
@@ -64,14 +64,18 @@ class DeploymentPlan:
 
     @property
     def conflicts(self) -> bool:
-        return any(action.kind in {"preserve", "invalid"} for action in self.actions)
+        return any(
+            action.kind in {"preserve", "invalid"}
+            and action.path.startswith(("skills/", "docs/"))
+            for action in self.actions
+        )
 
     def as_dict(self, *, status: str) -> dict[str, object]:
         return {
             "status": status,
             "adapter": self.adapter,
             "source_root": str(self.source_root),
-            "repo_root": str(self.repo_root),
+            "repo_root": str(self.repo_root) if self.repo_root is not None else None,
             "central_root": str(self.central_root),
             "source_revision": self.source_revision,
             "manifest_digest": self.manifest_digest,
@@ -79,7 +83,7 @@ class DeploymentPlan:
             "warnings": list(self.warnings),
             "residue": list(self.residue),
             "managed_files": self.central_lock["managed_files"],
-            "seeded_paths": self.project_lock["seeded_paths"],
+            "seeded_paths": self.project_lock.get("seeded_paths", []),
         }
 
 
@@ -156,6 +160,10 @@ def _load_project_lock(path: Path) -> dict[str, object] | None:
 
 
 def _source_revision(source_root: Path) -> str:
+    if source_root.resolve() == PACKAGE_ASSETS.resolve():
+        from general_os import __version__
+
+        return f"package-{__version__}"
     try:
         return subprocess.run(
             ["git", "-C", str(source_root), "rev-parse", "HEAD"],
@@ -173,9 +181,23 @@ def _iter_files(root: Path) -> Iterable[Path]:
     return (path for path in sorted(root.rglob("*")) if path.is_file())
 
 
+def _skill_root(source_root: Path) -> Path:
+    packaged = source_root / "skills"
+    if packaged.is_dir():
+        return packaged
+    return source_root / SKILL_SOURCE
+
+
+def _project_root(source_root: Path) -> Path:
+    packaged = source_root / "project-kit"
+    if packaged.is_dir():
+        return packaged
+    return source_root
+
+
 def _central_sources(source_root: Path) -> dict[str, bytes]:
     sources: dict[str, bytes] = {}
-    skill_root = source_root / SKILL_SOURCE
+    skill_root = _skill_root(source_root)
     for path in _iter_files(skill_root):
         relative = path.relative_to(skill_root).as_posix()
         sources[f"skills/{relative}"] = path.read_bytes()
@@ -244,8 +266,9 @@ def _residue(repo_root: Path) -> tuple[str, ...]:
 
 def _project_sources(source_root: Path) -> dict[Path, bytes]:
     sources: dict[Path, bytes] = {}
+    project_root = _project_root(source_root)
     for relative in PROJECT_SEEDS:
-        source = source_root / relative
+        source = project_root / relative
         if source.is_file():
             sources[relative] = source.read_bytes()
     return sources
@@ -256,12 +279,13 @@ def _project_lock_value(
     source_revision: str,
     seeded_paths: Iterable[str],
 ) -> dict[str, object]:
-    paths = sorted(set(seeded_paths) | set(existing.get("seeded_paths", []) if existing else []))
+    if existing is not None:
+        return existing
     return {
         "schema_version": SCHEMA_VERSION,
         "adopted_from": "general-os",
         "adopted_revision": source_revision,
-        "seeded_paths": paths,
+        "seeded_paths": sorted(set(seeded_paths)),
     }
 
 
@@ -290,17 +314,22 @@ def _action_for_current(
 
 
 def build_plan(
-    repo_root: str | Path = ".",
+    repo_root: str | Path | None = None,
     *,
     adapter: str = "codex",
     home: str | Path | None = None,
     source_root: str | Path | None = None,
     prune: bool = False,
+    adopt: bool = False,
 ) -> DeploymentPlan:
     if adapter not in SUPPORTED_ADAPTERS:
         raise DeploymentError(f"unsupported adapter: {adapter}")
-    repo = Path(repo_root).resolve()
-    source = Path(source_root).resolve() if source_root else Path(__file__).resolve().parents[2]
+    if adopt and repo_root is None:
+        raise DeploymentError("project adoption requires --repo")
+    if repo_root is not None and not adopt:
+        raise DeploymentError("project adoption requires adopt=True")
+    repo = Path(repo_root).resolve() if repo_root is not None else None
+    source = Path(source_root).resolve() if source_root else PACKAGE_ASSETS.resolve()
     central = (Path(home).expanduser() if home is not None else Path.home()) / ".agents" / CENTRAL_DIRNAME
     central = central.resolve()
     central_sources = _staged_sources(source, central)
@@ -335,27 +364,33 @@ def build_plan(
         actions.append(Action("preserve", relative, "prune skipped modified or missing file"))
         next_managed[relative] = prior
 
-    existing_project_lock = _load_project_lock(repo / PROJECT_LOCK)
-    project_sources = _project_sources(source)
-    seeded_paths = set(existing_project_lock.get("seeded_paths", []) if existing_project_lock else [])
-    for relative, desired in sorted(project_sources.items()):
-        destination = repo / relative
-        if not destination.exists():
-            actions.append(Action("create", relative.as_posix(), "project semantic seed absent"))
-            seeded_paths.add(relative.as_posix())
-        elif destination.read_bytes() == desired:
-            actions.append(Action("unchanged", relative.as_posix(), "project semantic already present"))
+    project_lock: dict[str, object] = {"seeded_paths": []}
+    if adopt:
+        assert repo is not None
+        existing_project_lock = _load_project_lock(repo / PROJECT_LOCK)
+        project_sources = _project_sources(source)
+        seeded_paths: set[str] = set()
+        if existing_project_lock is None:
+            for relative, desired in sorted(project_sources.items()):
+                destination = repo / relative
+                if not destination.exists():
+                    actions.append(Action("create", relative.as_posix(), "project semantic seed absent"))
+                    seeded_paths.add(relative.as_posix())
+                elif destination.read_bytes() == desired:
+                    actions.append(Action("unchanged", relative.as_posix(), "project semantic already present"))
+                else:
+                    actions.append(Action("preserve", relative.as_posix(), "existing project semantic preserved"))
+            project_lock = _project_lock_value(existing_project_lock, source_revision, seeded_paths)
+            project_lock_path = repo / PROJECT_LOCK
+            project_lock_bytes = _json_bytes(project_lock)
+            if not project_lock_path.exists():
+                actions.append(Action("create", PROJECT_LOCK.as_posix(), "project adoption record absent"))
+            elif project_lock_path.read_bytes() != project_lock_bytes:
+                actions.append(Action("update", PROJECT_LOCK.as_posix(), "adoption record gains seed provenance"))
+            else:
+                actions.append(Action("unchanged", PROJECT_LOCK.as_posix(), "adoption record already matches"))
         else:
-            actions.append(Action("preserve", relative.as_posix(), "existing project semantic preserved"))
-    project_lock = _project_lock_value(existing_project_lock, source_revision, seeded_paths)
-    project_lock_path = repo / PROJECT_LOCK
-    project_lock_bytes = _json_bytes(project_lock)
-    if not project_lock_path.exists():
-        actions.append(Action("create", PROJECT_LOCK.as_posix(), "project adoption record absent"))
-    elif project_lock_path.read_bytes() != project_lock_bytes:
-        actions.append(Action("update", PROJECT_LOCK.as_posix(), "adoption record gains seed provenance"))
-    else:
-        actions.append(Action("unchanged", PROJECT_LOCK.as_posix(), "adoption record already matches"))
+            project_lock = existing_project_lock
 
     central_lock = {
         "schema_version": SCHEMA_VERSION,
@@ -374,8 +409,9 @@ def build_plan(
     else:
         actions.append(Action("unchanged", str(CENTRAL_LOCK), "central provenance already matches"))
 
+    residue = _residue(repo) if repo is not None else ()
     warnings = tuple(
-        [f"predecessor residue: {item}" for item in _residue(repo)]
+        [f"predecessor residue: {item}" for item in residue]
         + [
             f"preserved existing project file: {action.path}"
             for action in actions
@@ -389,7 +425,7 @@ def build_plan(
         adapter=adapter,
         actions=tuple(actions),
         warnings=warnings,
-        residue=_residue(repo),
+        residue=residue,
         source_revision=source_revision,
         manifest_digest=manifest_digest,
         central_lock=central_lock,
@@ -428,7 +464,7 @@ def _restore(path: Path, data: bytes | None) -> None:
 
 def apply_plan(plan: DeploymentPlan) -> None:
     central_sources = _staged_sources(plan.source_root, plan.central_root)
-    project_sources = _project_sources(plan.source_root)
+    project_sources = _project_sources(plan.source_root) if plan.repo_root is not None else {}
     central_paths = set(central_sources) | set(plan.central_lock["managed_files"])
     targets: dict[Path, bytes | None] = {}
     for action in plan.actions:
@@ -441,10 +477,12 @@ def apply_plan(plan: DeploymentPlan) -> None:
             target = plan.central_root / CENTRAL_LOCK
             data = _json_bytes(plan.central_lock)
         elif action.path == PROJECT_LOCK.as_posix():
+            assert plan.repo_root is not None
             target = plan.repo_root / PROJECT_LOCK
             data = _json_bytes(plan.project_lock)
         else:
             relative = _safe_relative(action.path, plan.repo_root)
+            assert plan.repo_root is not None
             target = plan.repo_root / relative
             data = project_sources.get(relative)
             if action.kind != "remove" and data is None:
@@ -469,7 +507,7 @@ def apply_plan(plan: DeploymentPlan) -> None:
 
 
 def deploy(
-    repo_root: str | Path = ".",
+    repo_root: str | Path | None = None,
     *,
     adapter: str = "codex",
     home: str | Path | None = None,
@@ -478,6 +516,7 @@ def deploy(
     check: bool = False,
     prune: bool = False,
     strict_migration: bool = False,
+    adopt: bool = False,
 ) -> tuple[int, dict[str, object]]:
     if dry_run and check:
         raise DeploymentError("--dry-run and --check are mutually exclusive")
@@ -487,6 +526,7 @@ def deploy(
         home=home,
         source_root=source_root,
         prune=prune,
+        adopt=adopt,
     )
     if dry_run:
         return (1 if strict_migration and plan.residue else 0, plan.as_dict(status="dry-run"))

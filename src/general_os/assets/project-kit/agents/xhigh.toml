@@ -1,0 +1,6 @@
+name = "xhigh"
+rank = 4
+harness = "codex"
+model = "combo-xhigh"
+effort = "xhigh"
+provider = "native"

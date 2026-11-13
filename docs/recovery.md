@@ -32,7 +32,10 @@ lost runtime sessions, persist runtime IDs, or copy runtime progress into
 
 Central deployment recovery is similarly Git- and lock-bound. Read
 `~/.agents/general-os/managed.json` and rerun `general-os deploy --check`; do
-not reconstruct a runtime session or infer ownership from timestamps. A failed
+not reconstruct a runtime session or infer ownership from timestamps. Use
+`general-os deploy --repo . --check` only when explicitly inspecting the
+one-shot adoption boundary; an existing adoption record does not make project
+semantics deployment-owned. A failed
 deployment restores the files changed by that attempt and writes provenance
 last. Locally modified or conflicting central files remain preserved for
 manual resolution.

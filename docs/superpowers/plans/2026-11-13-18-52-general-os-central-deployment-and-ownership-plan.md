@@ -174,19 +174,21 @@ second durable authority.
 
 ### Task D — Lite project adoption
 
-**Objective:** Add project seeding and adoption provenance without taking
-ownership of project semantics.
+**Objective:** Add explicit one-shot project seeding and adoption provenance
+without taking ownership of project semantics.
 
 **Scope:** Project seed templates, `repo_config/general-os.lock.json`, and
 deployment integration/tests.
 
 **Dependencies:** Task C.
 
-**Acceptance:** Absent `AGENTS.md`, profiles, runtime policy, and coordination
-state are seeded from current canonical sources; existing versions are never
-overwritten or continuously synchronized; adoption provenance records only
-seeded paths and source revision; existing AGENTS projects report shared-skill
-activation without requiring a file rewrite.
+**Acceptance:** `general-os deploy` is central-only by default. Explicit
+`--repo` adoption seeds only absent neutral `AGENTS.md`, profiles, and runtime
+policy; it never seeds `state/coordination.json`. Existing versions are never
+overwritten or continuously synchronized; after an adoption record exists,
+project semantics—including deleted or customized seeded files—remain inert;
+adoption provenance records only seeded paths and source revision; existing
+AGENTS projects report shared-skill activation without requiring a file rewrite.
 
 **Verification:** Temporary project tests cover empty adoption, partially
 adopted projects, existing modified semantics, repeated adoption, malformed
@@ -215,6 +217,9 @@ and CLI tests. Unsupported adapters fail closed.
  general-os deploy --repo . --adapter codex --prune
  general-os deploy --repo . --adapter codex --strict-migration
 ```
+
+The command without `--repo` is central-only. Passing `--repo` is the explicit
+project-adoption opt-in.
 
 Normal `--check` reports residue without failing solely because residue exists;
 `--strict-migration` fails for residue. Reports contain deployment facts only,

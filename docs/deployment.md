@@ -1,9 +1,10 @@
 # Deployment
 
-`general-os deploy` installs the reusable runtime surface once per user and
-performs seed-only project adoption. The command is stdlib-only and supports
-the Codex adapter. Git remains the source of repository state and recovery
-truth.
+`general-os deploy` installs the reusable runtime surface once per user. It is
+central-only by default; passing `--repo` explicitly opts into one-shot project
+adoption. Project adoption is seed-only and the command is stdlib-only; it
+supports the Codex adapter. Git remains the source of repository state and
+recovery truth.
 
 ## Central installation
 
@@ -25,12 +26,14 @@ attempt.
 
 ## Project adoption
 
-The project receives `repo_config/general-os.lock.json` as seed provenance.
-Only absent `AGENTS.md`, profiles, runtime policy, and coordination state are
-seeded. Existing project files are preserved and are never synchronized by the
-deployment command. The adoption record contains only its schema, source,
-source revision, and seeded paths; it contains no runtime IDs, progress, or
-project drift digests.
+Project adoption receives `repo_config/general-os.lock.json` as seed
+provenance. Only absent neutral `AGENTS.md`, profiles, and runtime policy files
+are seeded; `state/coordination.json` is never seeded. Existing project files
+are preserved and are never synchronized by the deployment command. Once an
+adoption record exists, later deployment runs leave project semantics entirely
+inert, including deleted or customized seeded files. The adoption record
+contains only its schema, source, source revision, and seeded paths; it
+contains no runtime IDs, progress, or project drift digests.
 
 Existing `AGENTS.md` projects activate through shared skill discovery and do
 not need an in-place rewrite. The Codex adapter does not generate a `~/.codex`
@@ -47,6 +50,8 @@ general-os deploy --repo . --adapter codex --prune
 general-os deploy --repo . --adapter codex --strict-migration
 ```
 
+The first command installs or checks only the central runtime surface. The
+`--repo` forms explicitly opt into one-shot adoption for that project.
 `--dry-run` plans without writing. `--check` reports drift and returns
 nonzero when deployment is not healthy. `--prune` removes only unchanged files
 still owned by the central lock. Predecessor residue is report-only during a

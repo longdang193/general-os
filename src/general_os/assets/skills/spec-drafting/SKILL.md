@@ -1,0 +1,330 @@
+---
+name: spec-drafting
+description: Use when a problem, approved direction, or diagnosed defect needs a precise behavioral and design specification before implementation planning.
+---
+# Spec Drafting
+
+## Role
+
+Turn an understood problem, approved direction, or diagnosed root cause into an implementation-independent specification that explains why change is needed, what behavior is required, and how design-level boundaries satisfy it.
+
+This skill owns specification reasoning and artifact creation. It does not explore unresolved options indefinitely, write implementation tasks, execute code, or claim implementation complete.
+
+## When To Use
+
+Use when:
+
+- behavior, interface, data contract, state transition, migration, or invariant must be defined before implementation
+- brainstorming has produced an approved direction needing precise contract
+- debugging has identified root cause and required corrected behavior must be specified
+- cross-cutting or expensive-to-reverse work needs agreement before planning
+
+Skip when change is local, reversible, design-clear, and safely executable without specification.
+
+## Inputs
+
+Possible inputs include:
+
+- user request, problem statement, or feature idea
+- approved brainstorming recommendation
+- debugging reproduction, root cause, and regression boundary
+- existing code, tests, configuration, schemas, interfaces, and maintained docs
+- repository governance or publication constraints when in scope
+- external system state from relevant native tools or MCP exposed by active executor; under external worker runtime, use validated Codex handoff facts
+
+Treat brainstorming as exploratory evidence until accepted decisions are restated in specification. Treat debugging symptom separately from verified root cause.
+
+## Artifact Boundaries
+
+Specification owns:
+
+- problem and desired outcome
+- required observable behavior
+- scope and non-goals
+- interfaces, data contracts, state transitions, defaults, errors, and compatibility
+- design decisions and ownership boundaries
+- invariants, edge cases, acceptance criteria, and validation intent
+
+`defining-work` chooses the smallest durable coordination representation after
+the specification is approved: direct execution, a goal-only intent, a small
+task graph, or a detailed plan. An implementation handoff may retain concrete
+files, symbols, commands, and execution steps only when they are non-derivable
+durable boundaries or an explicitly requested handoff contract.
+Ordinary implementation planning remains native-runtime work. It does not
+replace `state/coordination.json`, grant runtime authority, or replace native
+runtime planning.
+
+## Specification Lifecycle
+
+- Keep draft or approved specification content in the current task or an
+  existing repository-owned document path. Do not invent a specification
+  directory, template ID, validator, or promotion mechanism without an active
+  repository consumer.
+- Keep assumptions, open questions, prototype references, and findings with
+  the specification while design remains unsettled.
+- After explicit approval, preserve material evidence and hand the accepted
+  contract to `defining-work`; do not create a second coordination authority.
+- Use `proposed`, `active`, `completed`, or `superseded` status only when the
+  chosen artifact format has an active consumer.
+- For material backend behavior, define verification claims using
+  `backend-verification`; frontend proof never replaces backend proof.
+
+### Evidence Preservation
+
+When an existing draft becomes approved, preserve material evidence in the
+approved specification:
+
+| Evidence | Preserve as |
+|---|---|
+| verified facts | current-state evidence |
+| accepted behavior | required outcomes and behavioral contract |
+| rejected behavior | constraints and alternatives |
+| resolved questions | design decisions |
+| confirmed assumptions | current-state evidence or design analysis |
+| approved deferrals | design analysis or design decisions, with approval, rationale, and trigger |
+| prototype findings and UX approval | prototype and validation evidence |
+
+Unresolved questions that change required behavior or design block approval.
+Non-blocking deferrals require approval evidence, rationale, and a trigger.
+
+## Evidence Gathering
+
+### Tool Selection
+
+- State minimum capability and required evidence before selecting a tool.
+- Prefer native tools for direct file inspection, local search, configuration, tests, and repository state.
+- Resolve unmet code, external-service, database, model, report, or platform capabilities through currently configured native tooling; do not invent a fallback authority.
+- Under external worker runtime, Codex supplies validated handoff facts within the existing permission boundary.
+- Do not query every tool by default. Source and tests remain authoritative; unavailable optional tools never replace mandatory evidence.
+
+### Evidence Discipline
+
+For material claims, capture:
+
+| Question | Evidence | Source | Confidence | Specification implication |
+|---|---|---|---|---|
+| <what must be known> | <observed fact> | <file, test, tool, or system> | high / medium / low | <decision or open question> |
+
+Separate:
+
+- verified fact
+- assumption
+- unresolved question
+- design implication
+
+Do not paste raw tool output into specification. Convert evidence into concise current-state facts, decisions, constraints, and proof targets.
+
+## Specification Process
+
+### 1. Establish Problem And Goal
+
+Define:
+
+- current problem or opportunity
+- affected users, systems, or maintainers
+- evidence problem exists
+- consequence of no change
+- desired outcome
+- observable success
+
+If problem framing or alternatives remain unclear, return to `brainstorming`. If defect root cause remains unclear, use `systematic-debugging`.
+
+### 2. Inspect Current State And Baseline
+
+Inspect smallest evidence set needed to understand:
+
+- current behavior and ownership
+- requested behavior compared with current behavior
+- existing interfaces and contracts
+- working and failing paths
+- consumers and dependencies
+- canonical and generated surfaces
+- affected maintained contracts, specifications, and ownership boundaries
+- applicable native or existing repository capabilities
+- constraints imposed by compatibility, security, accessibility, performance, publication, or external systems
+- for material front-end scope, guidance from the selected applicable design skill under `docs/rules/frontend-ui.md`, plus explicit responsive, theme, accessibility, and affected-state acceptance criteria
+
+Do not design from guessed repository behavior.
+
+When modifying existing behavior, inspect current source, tests, configuration,
+schemas, and maintained documentation before defining the post-change contract.
+Reconcile affected scope and ownership in this specification, and capture only
+concise baseline/change context rather than duplicating evidence or normative
+requirements.
+
+### 3. Define Scope And Non-Goals
+
+State:
+
+- included behavior
+- affected actors and boundaries
+- intentionally unchanged behavior
+- explicit non-goals
+- admissible cases
+- compatibility expectations
+
+Keep one specification coherent. Split unrelated behavior into separate specifications rather than creating one umbrella document.
+
+### 4. Define Required Outcomes
+
+Each required outcome must be observable:
+
+```markdown
+### Outcome: <name>
+
+- affected actor or system:
+- required result:
+- success condition:
+```
+
+Avoid vague outcomes such as “improve architecture” or “support future extensibility.”
+
+### 5. Define Requirements And Behavioral Contract
+
+For each material requirement define:
+
+```markdown
+### Requirement: <name>
+
+- trigger or actor:
+- preconditions:
+- required behavior:
+- output or state change:
+- failure behavior:
+- observable acceptance:
+```
+
+When relevant also define:
+
+- inputs and outputs
+- identity and data grain
+- schemas and interfaces
+- state transitions
+- defaults and validation
+- errors, retries, idempotency, ordering, cancellation, and fallback
+- boundary conversions
+
+Two implementers should not derive conflicting external behavior from same specification.
+
+### 6. Resolve Design Decisions
+
+For every material design choice record:
+
+```markdown
+### Decision: <name>
+
+- context:
+- selected approach:
+- rationale:
+- alternatives considered:
+- accepted trade-offs:
+- affected owners and boundaries:
+```
+
+Prefer existing repository mechanisms and native capabilities when they satisfy requirement. Preserve special cases only when semantic difference is explicit and necessary.
+
+Design-level how belongs here. File-by-file implementation sequencing does not.
+
+### 7. Define Invariants And Edge Cases
+
+State what must always remain true.
+
+Cover applicable cases:
+
+- empty and minimal input
+- normal and large input
+- duplicate, missing, malformed, or unsupported data
+- retry, cancellation, timeout, partial failure, and concurrency
+- migration and mixed-version state
+- generated-source consistency
+- security and accessibility boundaries
+
+Equivalent cases should use equivalent rules and one authoritative owner.
+
+### 8. Define Compatibility, Migration, And Risk
+
+When existing behavior changes, specify:
+
+- old and new behavior
+- compatibility boundary
+- migration or backfill requirement
+- rollout and rollback behavior
+- deprecation or consumer impact
+- material risks and mitigations
+
+Do not defer required migration decisions to implementation plan.
+
+### 9. Define Acceptance And Validation
+
+For every required outcome and behavior provide observable acceptance:
+
+```markdown
+### Acceptance Criterion: <claim>
+
+- setup or precondition:
+- action:
+- expected result:
+- failure condition:
+- proof method:
+- expected evidence:
+```
+
+Specification owns proof intent. `defining-work` owns durable task boundaries;
+the native runtime owns temporary implementation decomposition. A durable plan
+may retain exact files, symbols, commands, or execution order only when they
+are non-derivable ownership boundaries or an explicit handoff contract. It
+remains an artifact rather than a runtime ledger.
+
+### 10. Resolve Open Questions
+
+Before approval:
+
+- answer questions that change required behavior or design
+- mark approved deferrals explicitly
+- remove assumptions already disproved by evidence
+- ensure no unresolved choice is hidden as implementation detail
+
+### 11. Write Canonical Artifact
+
+Only after reasoning is complete:
+
+1. choose an existing repository-owned artifact path only when one is required
+2. select a truthful layer and target for the specification
+3. keep required sections non-empty
+4. preserve evidence when an existing draft is approved
+5. run applicable repository checks when they exist
+
+Format records specification; it does not replace specification reasoning.
+
+## Review And Handoff
+
+1. Present draft findings or detailed specification and unresolved approved deferrals.
+2. Request explicit approval and preserve any applicable validation evidence in the accepted specification.
+3. For cross-cutting, data-sensitive, operational, starter/public-sync, or expensive-to-reverse specifications, use `plan-document-reviewer` before approval or planning handoff.
+4. Hand off the accepted contract to `defining-work`, which selects direct execution, L1, L2, or L3.
+5. `executing-work` starts when the selected durable assignment or approved direct scope is ready.
+6. `verification-before-completion` later proves acceptance and completion criteria.
+7. `finishing-development-work` owns authorized Git disposition after verified implementation.
+
+## Red Flags
+
+- starting with template headings before understanding problem
+- treating feature idea as approved requirement
+- treating symptom as root cause
+- copying tool output instead of deriving specification facts
+- defining implementation tasks in specification
+- vague requirements without observable acceptance
+- interfaces missing errors, defaults, or compatibility
+- acceptance criteria disconnected from requirements
+- speculative abstraction or custom behavior without need
+- empty required sections or unresolved decisions hidden as “later”
+
+## Related Skills
+
+- `brainstorming`: clarify problem, options, and recommendation.
+- `systematic-debugging`: establish reproducible symptom and root cause.
+- `plan-document-reviewer`: review specification correctness and readiness.
+- `defining-work`: select the smallest durable coordination tier for the approved specification.
+- `executing-work`: execute the selected durable assignment or approved direct scope.
+- `verification-before-completion`: prove required behavior and completion.
+- `finishing-development-work`: perform authorized Git closure.

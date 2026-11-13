@@ -184,13 +184,19 @@ def test_orca_smoke_returns_nonzero_for_failed_probe(monkeypatch, capsys):
 
 
 def test_deploy_cli_emits_json_and_passes_boundary_options(monkeypatch, capsys):
+    calls = []
+
+    def fake_deploy(repo, **kwargs):
+        calls.append((repo, kwargs))
+        return (
+            0,
+            {"status": "dry-run", "repo_root": repo, "adapter": kwargs["adapter"]},
+        )
+
     monkeypatch.setattr(
         cli,
         "deploy",
-        lambda repo, **kwargs: (
-            0,
-            {"status": "dry-run", "repo_root": repo, "adapter": kwargs["adapter"]},
-        ),
+        fake_deploy,
     )
 
     assert main(["deploy", "--repo", "project", "--adapter", "codex", "--dry-run"]) == 0
@@ -200,6 +206,22 @@ def test_deploy_cli_emits_json_and_passes_boundary_options(monkeypatch, capsys):
         "repo_root": "project",
         "status": "dry-run",
     }
+    assert calls[0][0] == "project"
+    assert calls[0][1]["adopt"] is True
+
+
+def test_deploy_cli_defaults_to_central_only(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "deploy",
+        lambda repo, **kwargs: (calls.append((repo, kwargs)) or (0, {"repo_root": repo})),
+    )
+
+    assert main(["deploy", "--dry-run"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"repo_root": None}
+    assert calls[0][0] is None
+    assert calls[0][1]["adopt"] is False
 
 
 def test_deploy_rejects_unsupported_adapter(capsys):

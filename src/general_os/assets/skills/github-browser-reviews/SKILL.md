@@ -1,0 +1,523 @@
+---
+name: github-browser-reviews
+description: Use when a GitHub pull request needs browser-based inspection, review, or evidence through the supported GitHub browser flow.
+---
+
+# GitHub Browser Reviews
+
+## Role
+
+Use this skill only after the user explicitly invokes it by name or explicitly
+requests the GitHub Browser Reviews workflow. It defines the preparation, request, and evidence
+rules for a read-only review; it does not modify files, merge changes, or
+replace repository ownership and branch controls.
+
+## When to Use
+
+Use only when the user explicitly requests this skill or workflow, for example:
+
+- `$github-browser-reviews`;
+- "Use the GitHub Browser Reviews skill";
+- an equivalent explicit request naming this skill and asking for a GitHub browser-tab review.
+
+Do not activate this skill merely because:
+
+- a plan, code change, or pull request needs review;
+- the task mentions GitHub or asks to open, review, or merge a pull request;
+- the review can read a committed revision from GitHub.
+
+Use the applicable review or pull-request skill instead when this skill was not
+explicitly requested.
+
+Do not use a local Windows path as the only review source. If the requested revision is
+not available on GitHub, report `incomplete` or `blocked` instead of claiming
+that the review inspected local state.
+
+## Non-Negotiable Invariants
+
+1. **Explicit-invocation invariant:** Do not use this skill unless the user
+   explicitly requested it by name or explicitly requested its workflow.
+2. **Publication invariant:** Review an exact revision already reachable from
+   GitHub without mutation. If publication is needed, commit or push only
+   after the owning Git disposition workflow establishes separate explicit
+   authority; this review skill never grants publication authority.
+3. **Revision invariant:** Give the reviewer an exact branch or commit and an
+   exact file URL. The review request must include the file path or GitHub file URL.
+   Pin URLs to a commit when reproducibility matters.
+4. **Browser invariant:** Prefer the standalone automatic dedicated TCP-CDP
+   runner as the primary execution path. It launches only the repository-bound
+   Chrome profile, attaches over TCP CDP, and invokes `@GitHub` through the
+   visible UI. Owned Playwright profile mode is the secondary fallback. A
+   pipe-backed Playwright MCP browser has no TCP CDP endpoint; do not attempt
+   to attach the standalone CLI to it. Use ChromeDev only for session
+   attachment or low-level diagnostics when the primary runner cannot operate.
+5. **Model invariant:** Let the user select either `GPT-5.6-Sol` or `GPT-6`.
+6. **Reasoning invariant:** Let the user select `Instant`, `Medium`, or `High`
+   and preserve that choice in the review request.
+7. **Scope invariant:** Keep the request read-only and identify the stable
+   context, repository, revision, file path, and review question.
+8. **Evidence invariant:** Require the reviewer to cite a known heading, hash,
+   or other file marker from the requested revision.
+9. **Privacy invariant:** Do not include credentials, environment values,
+   private instructions, or unrelated repository contents in the request.
+10. **Rerun-authorization invariant:** Do not rerun, retry, resubmit, or open a
+    replacement for a requested GitHub review unless the user explicitly orders
+    that review to be rerun. An incomplete, stale, interrupted, or inconclusive
+    review is not permission to start another one.
+
+### ChatGPT Web selector semantics
+
+ChatGPT Web exposes a `Select ChatGPT model` button. Open it to reveal model
+radio items and a `Power` thinking-effort control. The effort is displayed as
+`Instant`, `Medium`, or `High`; use the control's left/right keys rather than
+dragging the overlapping visual thumb. Record the selected model and effort
+exactly as displayed.
+
+Use the visible selected state as the authority. Treat model selection and
+thinking effort as separate controls and verify them separately. A generic
+`Locked`, `Usage limit reached`, or similar banner is unscoped evidence unless
+the visible UI attaches it to a specific model item or the specific effort
+control. Never attribute that banner to a model merely because it appears
+near the model list, and never treat it as account-wide model unavailability.
+
+For the requested model, verify the visible radio item's checked/selected
+state and inspect only the same item's visible disabled, locked, or error
+state. A click timeout, pointer interception, unchanged page, or failure to
+click an overlapping control does not prove that the model is locked. If the
+requested model remains visibly selectable but an unscoped banner is present,
+record the banner as an unscoped selector warning and continue only when the
+requested model and effort are both visibly verified. If either value is not
+verified, report it as unverified or incomplete rather than guessing the
+cause.
+
+## Review Procedure
+
+### 1. Prepare the revision
+
+Inspect the selected changes locally. If the exact revision is already
+reachable from GitHub, record it and do not mutate Git. If publication is
+needed, stop until the owning Git disposition workflow grants separate commit
+and push authority; then record the repository, branch, commit, and file paths
+used for review. The review request must identify the repository and exact
+branch or commit, and the reviewed revision must be reachable from GitHub.
+
+### 2. Select the model and reasoning level
+
+Before opening the review, let the user choose one model and one reasoning
+level. The supported choices are:
+
+- `GPT-5.6-Sol` or `GPT-6`;
+- `Instant`, `Medium`, or `High` response mode.
+
+Use the bounded page helper to select the requested visible model and effort,
+then verify both visible values before submission. A failed click, pointer
+interception, unchanged page, or unscoped usage banner is not proof that a
+model is locked. Do not use force-click loops, hidden DOM state, repeated
+resubmissions, or automatic retries; stop as `incomplete` or `blocked` when
+visible verification cannot be completed.
+
+For repeatable browser automation, use the page-bound helper at
+`scripts/select-review-model.mjs`:
+
+```js
+import { selectReviewModel } from "./scripts/select-review-model.mjs";
+
+await selectReviewModel(page, {
+  model: "GPT-6",
+  effort: "High"
+});
+```
+
+The helper accepts an existing authenticated Playwright `page`; it does not
+launch a browser, authenticate, submit a review, inspect hidden state, or retry
+indefinitely. If it cannot visibly confirm the requested model and effort, stop
+the review as `incomplete` or `blocked`.
+
+The helper owns the bounded navigation between the model and effort controls,
+uses real Playwright hit-testing, and verifies the visible selected state. Keep
+model labels separate from nearby status or usage-banner text.
+
+For an explicitly authorized end-to-end prompt submission, use
+`scripts/run-review-prompt.mjs`. It navigates an existing authenticated page
+to ChatGPT, selects and verifies the model and effort, fills the prompt, and
+submits it once. `openReviewTab(context)` and
+`runReviewPromptInNewTab(context, options)` can create a tab from an existing
+authenticated Playwright context; they do not launch a browser or
+authenticate. The submission helper never retries or reruns a review request;
+the completion helper only observes visible completion signals and returns the
+  final visible assistant turn for the caller to record.
+
+### Helper execution boundary
+
+These `.mjs` helpers run in the Node/Playwright runner, not in the ChatGPT page
+context. Do not import them from `page.evaluate` or another inline browser
+snippet; page evaluation cannot resolve workspace modules. Load them through
+the runner's file-backed entry point instead:
+
+```js
+import { runReviewPromptInNewTab } from "./.agents/skills/github-browser-reviews/scripts/run-review-prompt.mjs";
+
+const { page } = await runReviewPromptInNewTab(context, {
+  model: "GPT-6",
+  effort: "High",
+  prompt: reviewPrompt
+});
+```
+
+The runner must either launch the dedicated project profile over TCP CDP or
+receive an already authenticated Playwright `context`. The CLI's
+`--launch-cdp` mode launches Chrome with the repository-bound profile and
+attaches to its endpoint. Use one dedicated project profile such as
+`~/.codex/profiles/github-review/<project>` and never the normal Chrome `User
+Data` directory. The CLI's `--user-data-dir` mode remains the owned Playwright
+fallback. The library helpers and `--cdp-endpoint` mode require the caller to
+provide an existing context or endpoint.
+Use a browser tool's `filename` or `sourcePath` option only when it supports
+file-backed Node execution. If the helper cannot be loaded or the authenticated
+context cannot be created or attached, report `incomplete` or `blocked`; do not
+replace the helper with hidden DOM or network-state inspection. Prompt submission remains gated by the explicit user authorization required by this
+skill.
+
+For a standalone, repeatable Node invocation, use the ESM CLI entrypoint rather
+than evaluating the `.mjs` module as a browser VM script. The primary mode
+launches visible Chrome with TCP CDP and a dedicated authenticated profile:
+
+```bash
+node .agents/skills/github-browser-reviews/scripts/run-review-prompt-cli.mjs \
+  --launch-cdp \
+  --user-data-dir ~/.codex/profiles/github-review/<project> \
+  --project-key <owner-repository> \
+  --model GPT-6 \
+  --effort High \
+  --prompt-file <review-prompt.txt> \
+  --repository <owner/repository> \
+  --commit-sha <full-40-character-sha> \
+  --review-url https://github.com/<owner>/<repo>/blob/<full-sha>/<path> \
+  --output-dir <review-output-directory>
+```
+
+One normal invocation is one bounded review transaction. Single-review mode
+requires `--repository`, `--commit-sha`, and at least one repeatable
+`--review-url`. Every declared URL must be an HTTPS GitHub `/blob/` URL pinned
+to the same full SHA and repository, and every GitHub blob URL in the prompt
+must match that declared set. The CLI rejects unknown flags, missing
+provenance, and invalid/default profile paths before browser setup.
+
+The owned profile must end in the canonical, case-normalized project key
+derived from the repository (`owner-repository`), and `--project-key` must
+match that derived value. Use one dedicated profile per project, for example
+`~/.codex/profiles/github-review/owner-repository`; never use the
+normal Chrome `User Data` directory. This same repository/profile binding is
+checked by direct library callers, not only by CLI parsing. Profile validation,
+lease naming, and persistent-browser launch use the same physical filesystem
+identity; existing symlink/junction aliases and aliases through the nearest
+existing parent do not create a second lease identity.
+The runner records the canonical repository and project key in
+`.codex-review-profile.json` inside a newly created or empty dedicated profile.
+An existing profile without that marker is treated as ambiguous and blocks with
+operator-directed migration instructions; the runner never copies credentials,
+renames profiles, or silently binds a legacy directory. A marker for another
+repository also blocks, which prevents collisions such as `foo-bar/baz` and
+`foo/bar-baz` from sharing one profile.
+
+When the derived profile path does not exist, create the directory and verify
+that it is empty before launching the runner. The runner may then create
+`.codex-review-profile.json` with the repository and project-key binding. If
+the path exists and is non-empty without a matching marker, stop as `blocked`;
+do not delete contents, clear cookies, copy credentials, or adopt the profile
+implicitly.
+
+The runner performs one non-submitting visible authentication preflight for the
+owned context. An explicit login wall blocks the batch before fresh review tabs
+are opened. It selects and visibly verifies the requested model and effort,
+submits at most once, waits for a new stable visible assistant turn, writes
+`response.md` and a small `result.json`, and only then closes the owned browser
+context. While the response is visibly generating, completion observation polls
+cheap visible state and defers full assistant-text extraction until generation
+stops and stability can be checked.
+
+Completion evidence stays bound to the same review page and requires a new
+stable assistant turn. Conversation identity is a continuity signal rather
+than an immutable SPA invariant: when a known baseline conversation changes
+once after an acknowledged submission, the runner accepts that same-page
+transition while it establishes the new conversation's response evidence. A
+second transition, missing new turn, interruption, or unstable response
+returns `incomplete`. If the baseline conversation is unknown, the first
+post-dispatch conversation identity is bound. An ambiguous send
+acknowledgement uses a short bounded observation window, preserves
+`possibly_dispatched`, and never resubmits; confirmed or visibly active
+generations retain the normal completion window.
+
+Terminal runner results are `completed`, `incomplete`, or `blocked`; a failed
+owned-context cleanup preserves the review artifacts but makes the invocation
+nonzero and records the cleanup failure. Internal dispatch states distinguish
+`not_dispatched`, `possibly_dispatched`, and `acknowledged`: once the send
+action begins, an uncertain click or Enter failure is never retried and is
+treated as possibly dispatched until visible acknowledgement proves otherwise.
+Only a definitely pre-dispatch failure skips the long completion observer. A
+visible terminal interruption returns immediately with partial evidence. If the
+final result artifact cannot be persisted, the runner reports `incomplete` and
+returns nonzero even when the response itself completed. The controller, not
+the runner, validates revision-specific review evidence and may classify the
+overall workflow as `verified`. The runner never retries or silently recovers a
+failed submission.
+
+For a multi-model review driven by a Node controller, validate the complete
+review list against one repository-derived project key before opening the
+browser. Then keep the same transaction boundary: call the CLI module's
+`openReviewContext(options)` once, and call
+`runReviewBatch({ attached, reviews, outputDir, projectKey, repository })` from
+the Node controller. The Node controller must supply validated `projectKey` and
+`repository`; the attached browser context cannot establish repository identity
+safely. The standalone CLI validates each review's repository, full commit SHA,
+and pinned URLs. The standalone CLI derives the project key from each validated
+review's repository provenance. In standalone CLI CDP mode, do not pass `--project-key`;
+the CLI reserves that flag for owned-profile mode. The standalone CLI also
+accepts a manifest:
+
+```json
+{
+  "reviews": [
+    {
+      "model": "GPT-5.6-Sol",
+      "effort": "High",
+      "prompt_file": "review-sol.txt",
+      "repository": "<owner>/<repo>",
+      "commit_sha": "<full-40-character-sha>",
+      "review_urls": ["https://github.com/<owner>/<repo>/blob/<full-sha>/<path>"]
+    },
+    {
+      "model": "GPT-6",
+      "effort": "High",
+      "prompt_file": "review-gpt6.txt",
+      "repository": "<owner>/<repo>",
+      "commit_sha": "<full-40-character-sha>",
+      "review_urls": ["https://github.com/<owner>/<repo>/blob/<full-sha>/<path>"]
+    }
+  ]
+}
+```
+
+Pass it as `--batch-file <reviews.json>` instead of the single-review flags.
+The runner validates every entry before opening the browser, reuses one
+  authenticated context for sequential fresh-tab transactions, allocates a
+ separate `run-*` directory per review, persists response and result artifacts
+ before page cleanup, closes the shared context once through the batch owner,
+ prints a JSON summary, and returns nonzero if any review is not `completed` or
+ the shared context cannot be closed. Repeated reviews with the same model use
+ the same authenticated context; persistent-profile mode holds an exclusive
+ profile lease for the lifetime of the owned context, so overlapping launches
+ fail before opening a second browser. Malformed, live, stale, or ambiguous
+ ownership stays blocked for operator-confirmed recovery; the runner never
+ deletes a stale lock based only on a PID, timestamp, or profile path, and
+  release removes only the current lease token. Normal SIGINT/SIGTERM cleanup
+ makes a best-effort release when ownership remains provable. Selection failures
+ carry an explicit scope: the batch continues only for a review-scoped failure
+ that is known not to have dispatched a prompt, and stops for shared-context,
+ unknown, or possibly-dispatched failures. The failed review is never
+ resubmitted or silently switched to another model. Do not add a keep-open flag
+ or a second browser lifecycle owner. A newly created tab that does not reach the
+composer readiness state is page-local and review-scoped; failure to create a
+ page or loss of the shared browser context remains shared-context scoped. If a
+ send acknowledgement is ambiguous, preserve the owned page and any visible
+ conversation/completion evidence before cleanup. If that evidence confirms a
+ new stable response, promote the transaction to the normal acknowledged,
+ completed state; otherwise mark `submission` as `ambiguous`. Never send the
+ prompt again. Batch summaries include requested,
+transaction-started, submission-attempted, acknowledged, completed, failed, and
+skipped entries. `attempted_count` means a review transaction allocated its run
+and started; it does not count a partially allocated review that never reached
+dispatch. Each result retains sanitized prompt hash, repository, full commit
+SHA, and pinned review URL provenance.
+  A failure writing the aggregate `batch-result.json` is recorded as an
+  artifact-stage incomplete result without rewriting already-settled per-review
+  artifacts.
+  Batch validation completes before browser setup, so a malformed entry cannot
+  consume a profile lease or open a partial batch. If run-directory allocation
+  fails partway through a batch, every created run is finalized as blocked with
+  `dispatch_state: not_dispatched` and the batch stops before browser setup. If
+  an explicit CDP endpoint
+  exposes multiple browser contexts, `--context-index` is required; the runner
+  never silently chooses context `0`.
+
+Model-menu interaction uses a five-second UI action/transition timeout. Initial
+model-menu opening remains ten seconds, completion observation remains bounded
+by its separate long timeout, and polling backoff values are not changed to
+compensate for slow clicks.
+
+An ambiguous dispatch starts with the short acknowledgement/evidence window.
+Once generation, a new assistant turn, or equivalent response controls are
+visible, completion observation promotes to the normal long deadline without
+resubmitting. A review is not durably marked `completed` until its owned page
+cleanup and final result persistence succeed; if final persistence fails, the
+last durable checkpoint remains non-terminal and the returned result is
+`incomplete`.
+
+When a TCP CDP endpoint is explicitly available, `--cdp-endpoint` remains an
+exceptional attach mode and `--context-index` selects its browser context. The
+normal personal submission path uses the dedicated project profile instead.
+Before attaching, verify the endpoint and its targets explicitly:
+
+```powershell
+$cdpPort = 9222  # Example only; replace with an available explicit TCP port.
+Invoke-RestMethod "http://localhost:$cdpPort/json/version"
+Invoke-RestMethod "http://localhost:$cdpPort/json/list"
+```
+
+`/json/list` confirms the endpoint's tabs/targets; it is not a browser-context
+index. Do not assume `--context-index 0`: use `0` only after verifying that the
+endpoint exposes exactly one browser context, otherwise identify the intended
+context and pass its actual index. The runner requires an explicit index when
+multiple contexts are exposed. Do not launch a second Chrome process against
+the same profile. Close the owned-profile process before the manual CDP launch,
+or reuse the already-running process only when it was launched with the
+verified endpoint.
+CLI imports `run-review-prompt.mjs` through Node's ESM loader and submits
+exactly once. It never authenticates
+a profile for the user. A pipe-backed Playwright MCP browser cannot be used
+with `--cdp-endpoint`; use the owned-profile mode or MCP directly.
+`browser_run_code_unsafe` is not an ESM module runner; do not pass this CLI or
+either `.mjs` helper to that VM as a raw file.
+
+### Cloudflare or human-verification handoff
+
+If the automatic dedicated TCP-CDP attempt encounters a Cloudflare or
+human-verification loop, an HTML challenge page, or a pre-submission
+`Invalid content type: text/html` diagnostic, stop the attempt. Do not retry,
+resubmit, clear cookies or site data, switch profiles, use Incognito, or
+solve/bypass a CAPTCHA. Complete verification and login in the already launched
+dedicated profile, and explicitly confirm `logged in`.
+
+After that confirmation, verify the exact profile path, repository/profile
+binding, authenticated composer, requested model, and reasoning effort. A
+`logged in` message or visible composer alone is insufficient: the requested
+model and effort must be visibly confirmed, separately, before submission.
+Verify an explicit TCP CDP endpoint as described above. Attach once using
+`--cdp-endpoint` and the verified `--context-index` when required; do not pass
+`--user-data-dir` to the attached run. This is a single pre-submission
+owned-profile-to-CDP transition, not a review retry. If the user cannot confirm
+the composer, model, effort, or CDP endpoint, return `blocked` or `incomplete`
+without submitting.
+
+#### Manual CDP recovery
+
+If automatic launch fails, an operator may start the same derived dedicated
+Chrome profile directly and attach through TCP CDP. Never reuse the normal
+Chrome `User Data` directory or a different repository's profile. Use this
+only after the automatic path fails and never attach to an unknown endpoint:
+
+```powershell
+$ownerRepo = "<owner>/<repo>"
+$projectKey = $ownerRepo.ToLowerInvariant().Replace("/", "-")
+$profile = "$env:USERPROFILE\.codex\profiles\github-review\$projectKey"
+
+& "$env:ProgramFiles\Google\Chrome\Application\chrome.exe" `
+  --user-data-dir="$profile" `
+  --remote-debugging-port=9222 `
+  --remote-debugging-address=127.0.0.1 `
+  https://chatgpt.com/
+```
+
+Verify the same endpoint that will be passed to the CLI before attaching:
+
+```powershell
+Invoke-RestMethod http://localhost:9222/json/version
+Invoke-RestMethod http://localhost:9222/json/list
+```
+
+Then use `--cdp-endpoint http://localhost:9222` with the normal repository,
+full-SHA, and pinned-URL provenance arguments. This is an operator-owned
+fallback, not a second normal browser lifecycle owner; do not use it for a
+pipe-backed Playwright MCP browser.
+
+### 3. Open the review
+
+Run the automatic dedicated TCP-CDP path first to launch or control an
+authenticated ChatGPT Web tab and invoke `@GitHub` through the visible UI. Use
+owned Playwright profile mode only as the secondary fallback. If neither path
+can create or use the required session, report `incomplete` or `blocked`; use
+ChromeDev only for low-level diagnostics. Keep the browser request compact and
+provide only the exact revision, read-only scope, stable context identifier,
+and one review question.
+Use visible page state as the authority for model, response mode, completion,
+and interruption status; do not infer these from hidden DOM or transport
+metadata.
+
+Use this shape, with every GitHub URL pinned to the expected full commit SHA:
+
+```text
+@GitHub Review this exact file revision:
+https://github.com/<owner>/<repo>/blob/<full-sha>/<path>
+
+Scope: read-only review of the selected revision.
+Context: <stable review or work-item identifier>
+Model: <GPT-5.6-Sol|GPT-6>
+Reasoning: <instant|medium|high>
+Plan/source: <exact plan file and/or commit-pinned GitHub URL>
+Question: <one precise review question>
+
+Return findings ordered by severity and do not modify files.
+```
+
+### 4. Keep the request bounded
+
+Keep the browser-tab request compact and provide only the exact revision,
+read-only scope, stable context identifier, and one review question.
+
+Do not refer to an "above plan" without naming the exact plan file and its
+commit-pinned GitHub URL. Do not paste the current chat transcript, system or developer instructions,
+tool schemas, environment blocks, attachments, or transport wrappers. Do not
+include credentials. Do not include unrelated repository contents. Those are
+outer execution context, not review input. If the request is too large, rebuild it
+with the exact GitHub URL and the smallest sufficient scope; do not blindly
+retry a bloated request.
+
+### 5. Verify review evidence
+
+The reviewer should confirm that it read the requested revision by citing a
+known heading, hash, file marker, or equivalent evidence before the review is
+accepted. The runner records the completed response and conversation identity;
+the caller remains responsible for judging file-specific review evidence.
+
+### 6. Handle unavailable revisions
+
+Report `incomplete` or `blocked` when:
+
+- the selected changes cannot be committed and pushed;
+- the repository or revision is inaccessible to the reviewer;
+- the review requires uncommitted local state;
+- the reviewer cannot confirm the requested revision.
+
+State the exact missing condition and do not substitute a local-only claim.
+
+### 7. Rerun only on explicit order
+
+If the review is incomplete, interrupted, stale, inconclusive, or otherwise
+missing required evidence, stop and report the exact condition. Do not
+automatically rerun it, retry the same request, submit a replacement request,
+or open another browser review. Continue only after the user explicitly orders
+the requested GitHub review to be rerun; a general request to continue, fix,
+review, or implement is not sufficient unless it explicitly authorizes the
+rerun.
+
+## Evidence Checklist
+
+Before reporting success, record:
+
+- repository, intended branch, and exact commit;
+- successful push evidence and the reviewed file URL;
+- read-only scope, stable context identifier, and review question;
+- the heading, hash, or file marker cited by the reviewer;
+- findings ordered by severity;
+- any skipped checks or unavailable review evidence.
+
+## Completion Result
+
+Return one of:
+
+- **verified:** the intended GitHub revision was pushed, read, and evidenced;
+- **incomplete:** the review or evidence remains unfinished within scope;
+- **blocked:** access, publication, or revision evidence requires an external
+  action or user decision.
+
+State the exact failed claim and evidence for `incomplete` or `blocked`.
