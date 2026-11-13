@@ -42,8 +42,9 @@ not override current source, tests, repository guidance, or user constraints.
 Prefer read-only inspection before mutation and use native repository tools when
 available. Before recursive delete or move, resolve and verify the absolute
 target remains inside the intended workspace or explicitly named directory.
-Keep path discovery and file mutation in one shell; never pass an unverified
-computed path to destructive commands. Do not expose credentials in commands,
+When using a shell for destructive mutation, resolve and validate the target in
+the same command or transaction immediately before mutation; never pass an
+unverified computed path to destructive commands. Do not expose credentials in commands,
 logs, patches, or generated artifacts.
 
 ## Execution And Recovery

@@ -10,7 +10,7 @@ description: Use when completed or interrupted work leaves task-owned disposable
 Audit task-owned disposable artifacts and route non-file resources to their
 lifecycle owners. This skill owns candidate validation, retention checks,
 exact-scope cleanup for directly owned artifacts, and post-cleanup inspection.
-It does not retire independent worker launcher runtime state, Git branches or worktrees, browser
+It does not retire Orca runtime state, Git branches or worktrees, browser
 profiles, databases, publication output, or persistent project knowledge.
 
 ## Lifecycle
@@ -29,7 +29,7 @@ Use an exact normalized resource identity:
 
 - filesystem artifact: absolute path or task-owned directory
 - Git worktree: path, branch or detached state, creation mechanism, and required commit state
-- independent worker launcher resource: session, pane, agent, and relevant process identity
+- Orca runtime resource: supported runtime identity and relevant process identity
 - browser or application state: isolated profile or storage scope and producer
 - database: exact database path or instance scope and producing workflow
 
@@ -47,25 +47,24 @@ A candidate is eligible only when all applicable checks establish:
 
 Filename similarity, age, location, generated appearance, Git ignore status,
 resource reuse, or “superseded” status does not prove ownership. Reusing an
-existing independent worker launcher pane or worktree does not grant cleanup authority. Shared
-sessions such as `default` remain preserved unless their owner explicitly
-authorizes retirement.
+existing runtime resource or worktree does not grant cleanup authority. Shared
+sessions remain preserved unless their owner explicitly authorizes retirement.
 
 ## Candidate Handling
 
 | Candidate | Handling | Required condition |
 | --- | --- | --- |
 | Task-created temporary files, traces, and reports | Direct cleanup | Exact ownership, no retention dependency, explicit authorization, and safe exact-path checks |
-| independent worker launcher agents, panes, and sessions | Delegated routing | Exact runtime identity, work no longer needs it, owning runtime procedure identified, and no inferred ownership from reuse |
+| Orca agents and runtime resources | Delegated routing | Exact runtime identity, work no longer needs it, owning Orca procedure identified, and no inferred ownership from reuse |
 | Individual Git worktrees | Delegated routing | Authorized Git disposition, verified retirement, preserved work and recovery evidence, then owner procedure for the creation mechanism |
 | Temporary migration or generated residue | Direct or producer-owned cleanup | Proven task-created residue; “superseded” alone is insufficient |
 | Isolated browser or application state | Producer-owned cleanup | Exact isolated scope, producer release, no remaining dependency, and producer deletion authority |
 | Isolated test databases | Producer-owned cleanup | Exact task-created database scope, producer release, no remaining dependency, and producer deletion authority |
 | Legacy source, routes, normal profiles, persistent user state, uploads, and application databases | Preserve or normal implementation | Never disposable merely because old, untracked, ignored, generated, or unused-looking |
 
-For independent worker launcher, launcher termination logic is not a general cleanup CLI. Use only
-the supported launcher reconciliation procedure for the failure path that
-provides it; otherwise preserve and route to the runtime owner.
+For Orca runtime resources, termination logic is not a general cleanup CLI. Use
+only the supported Orca reconciliation procedure for the failure path that
+provides it; otherwise preserve and route to Orca.
 
 For worktrees, use native cleanup for native-managed workspaces and
 `git worktree remove <path>` for manually managed worktrees. Never recursively
@@ -183,4 +182,4 @@ owning workflow and are not disposable by default.
 - `executing-work` may invoke this skill in Audit Mode only.
 - `verification-before-completion` identifies retention dependencies and reruns affected proof; it does not perform deletion.
 - `finishing-development-work` owns Git disposition and Git-managed branch, worktree, and stash cleanup after `verified`.
-- The producing workflow or lifecycle owner remains authoritative for independent worker launcher runtime, browser or application state, and databases.
+- The producing workflow or lifecycle owner remains authoritative for Orca runtime, browser or application state, and databases.

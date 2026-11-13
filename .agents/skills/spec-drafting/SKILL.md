@@ -46,37 +46,46 @@ Specification owns:
 - invariants, edge cases, acceptance criteria, and validation intent
 
 `defining-work` chooses the smallest durable coordination representation after
-the specification is approved. An implementation plan may record exact files,
-task order, commands, dependencies, rollout steps, and execution waves when
-those details are needed for review or handoff. It does not replace
-`state/coordination.json`, grant runtime authority, or replace native runtime
-planning.
+the specification is approved: direct execution, a goal-only assignment, a
+small task graph, or a detailed plan. An implementation handoff may record
+exact files, task order, commands, dependencies, rollout steps, and execution
+waves only when those details are explicitly required for review or handoff.
+Ordinary implementation planning remains native-runtime work. It does not
+replace `state/coordination.json`, grant runtime authority, or replace native
+runtime planning.
 
-## Draft To Final Lifecycle
+## Specification Lifecycle
 
-- Use a Markdown file under `docs/superpowers/specs/` when behavior, UI intent, or state transitions still need prototype validation.
-- Save draft under final `docs/superpowers/specs/*.md` path with `template_id: draft-specification` and `status: proposed`.
-- Keep assumptions, open questions, prototype reference, and findings in same file while design remains unsettled.
-- After explicit approval, complete every explicitly applicable post-approval input before promotion. Keep the draft `status: proposed` while required validation inputs remain incomplete. Then promote the same Markdown file in place, set `template_id: detailed-specification` and `status: active`, and preserve accepted prototype evidence and approved deferrals.
-- Do not keep parallel permanent draft/final files. Git history preserves draft state.
-- For material backend behavior, define verification claims using `backend-verification`; frontend proof never replaces backend proof.
-- Spec status is `proposed` while behavior or design remains unsettled, `active` for the approved contract under implementation, `completed` after implementation is verified against that contract, and `superseded` when a newer specification replaces it. Revise only `proposed` or `active` specifications; use completed or superseded specifications as historical baseline evidence for new work.
+- Keep draft or approved specification content in the current task or an
+  existing repository-owned document path. Do not invent a specification
+  directory, template ID, validator, or promotion mechanism without an active
+  repository consumer.
+- Keep assumptions, open questions, prototype references, and findings with
+  the specification while design remains unsettled.
+- After explicit approval, preserve material evidence and hand the accepted
+  contract to `defining-work`; do not create a second coordination authority.
+- Use `proposed`, `active`, `completed`, or `superseded` status only when the
+  chosen artifact format has an active consumer.
+- For material backend behavior, define verification claims using
+  `backend-verification`; frontend proof never replaces backend proof.
 
-### Promotion Mapping
+### Evidence Preservation
 
-Promotion is a semantic rewrite, not a heading-only rename. Preserve material draft evidence in the detailed specification:
+When an existing draft becomes approved, preserve material evidence in the
+approved specification:
 
-| Draft evidence | Detailed destination |
+| Evidence | Preserve as |
 |---|---|
-| verified facts | `Current State and Evidence` |
-| accepted behavior | `Required Outcomes` or `Requirements and Behavioral Contract` |
-| rejected behavior | `Constraints and Alternatives` |
-| resolved questions | `Design Decisions` |
-| confirmed assumptions | `Current State and Evidence` or `Design Analysis` |
-| approved deferrals | `Design Analysis` or `Design Decisions`, with approval, owner, rationale, and trigger |
-| prototype findings, UX approval, and Design Export evidence | `Prototype and Validation Evidence` |
+| verified facts | current-state evidence |
+| accepted behavior | required outcomes and behavioral contract |
+| rejected behavior | constraints and alternatives |
+| resolved questions | design decisions |
+| confirmed assumptions | current-state evidence or design analysis |
+| approved deferrals | design analysis or design decisions, with approval, rationale, and trigger |
+| prototype findings and UX approval | prototype and validation evidence |
 
-Unresolved questions that change required behavior or design block `status: active`. Non-blocking deferrals require durable approval evidence and an owner or trigger.
+Unresolved questions that change required behavior or design block approval.
+Non-blocking deferrals require approval evidence, rationale, and a trigger.
 
 ## Evidence Gathering
 
@@ -278,14 +287,11 @@ Before approval:
 
 Only after reasoning is complete:
 
-1. choose draft template only when prototype validation remains; otherwise use detailed template after behavior approval and all applicable post-approval inputs are complete
-2. save once to `docs/superpowers/specs/YYYY-MM-DD-HH-MM-<topic>-spec.md`
-3. use the frontmatter contract defined by `defining-work` and the
-   current specification template
-4. select truthful layer and targets
-5. keep required sections non-empty
-6. promote draft in place after approval rather than creating second file
-7. run template and planning validators
+1. choose an existing repository-owned artifact path only when one is required
+2. select a truthful layer and target for the specification
+3. keep required sections non-empty
+4. preserve evidence when an existing draft is approved
+5. run applicable repository checks when they exist
 
 Format records specification; it does not replace specification reasoning.
 
@@ -303,10 +309,10 @@ Use only applicable optional metadata. Do not add metadata without active consum
 ## Review And Handoff
 
 1. Present draft findings or detailed specification and unresolved approved deferrals.
-2. Request explicit approval; when draft exists, resolve applicable post-approval inputs, then promote the same file to detailed active specification.
+2. Request explicit approval and preserve any applicable validation evidence in the accepted specification.
 3. For cross-cutting, data-sensitive, operational, starter/public-sync, or expensive-to-reverse specifications, use `plan-document-reviewer` before approval or planning handoff.
-4. After detailed specification is active, hand off to `defining-work`.
-5. `executing-work` starts only after an executable plan or explicit approved task sequence exists.
+4. Hand off the accepted contract to `defining-work`, which selects direct execution, L1, L2, or L3.
+5. `executing-work` starts when the selected durable assignment or approved direct scope is ready.
 6. `verification-before-completion` later proves acceptance and completion criteria.
 7. `finishing-development-work` owns authorized Git disposition after verified implementation.
 
@@ -328,7 +334,7 @@ Use only applicable optional metadata. Do not add metadata without active consum
 - `brainstorming`: clarify problem, options, and recommendation.
 - `systematic-debugging`: establish reproducible symptom and root cause.
 - `plan-document-reviewer`: review specification correctness and readiness.
-- `defining-work`: convert approved specification into executable tasks.
-- `executing-work`: implement approved plan.
+- `defining-work`: select the smallest durable coordination tier for the approved specification.
+- `executing-work`: execute the selected durable assignment or approved direct scope.
 - `verification-before-completion`: prove required behavior and completion.
 - `finishing-development-work`: perform authorized Git closure.

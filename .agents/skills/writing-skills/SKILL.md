@@ -6,11 +6,14 @@ description: Use when creating, editing, testing, or maintaining reusable agent 
 
 ## Overview
 
-**Writing skills IS Test-Driven Development applied to process documentation.**
+**Discipline skills use Test-Driven Development applied to process documentation.**
 
 **Canonical repo-local skills in this project live under `.agents/skills/`. User-level skill directories remain platform-specific.**
 
-You write test cases (pressure scenarios with subagents), watch them fail (baseline behavior), write the skill (documentation), watch tests pass (agents comply), and refactor (close loopholes).
+For discipline skills, write pressure scenarios with subagents, observe the
+baseline, write the skill, verify compliance, and refactor to close loopholes.
+For metadata, reference, or mechanical edits, use focused contract and
+retrieval validation instead of inventing pressure scenarios.
 
 **Core principle:** If you didn't watch an agent fail without the skill, you don't know if the skill teaches the right thing.
 
@@ -74,7 +77,7 @@ API docs, syntax guides, tool documentation (office docs)
 
 
 ```
-skills/
+  .agents/skills/
   skill-name/
     SKILL.md              # Main reference (required)
     supporting-file.*     # Only if needed
@@ -101,7 +104,7 @@ skills/
 - `description`: Third-person, describes ONLY when to use (NOT what it does)
   - Start with "Use when..." to focus on triggering conditions
   - Include specific symptoms, situations, and contexts
-  - **NEVER summarize the skill's process or workflow** (see CSO section for why)
+  - **NEVER summarize the skill's process or workflow** (see Skill Discovery Optimization for why)
   - Keep under 500 characters if possible
 
 ```markdown
@@ -263,7 +266,7 @@ You: Searching...
 
 **Verification:**
 ```bash
-wc -w skills/path/SKILL.md
+wc -w .agents/skills/path/SKILL.md
 # getting-started guides: aim for <150 each
 # Other frequently-loaded: aim for <200 total
 ```
@@ -285,8 +288,8 @@ wc -w skills/path/SKILL.md
 Use skill name only, with explicit requirement markers:
 - ✅ Good: `**REQUIRED SUB-SKILL:** Use test-driven-development`
 - ✅ Good: `**REQUIRED BACKGROUND:** You MUST understand systematic-debugging`
-- ❌ Bad: `See skills/testing/test-driven-development` (unclear if required)
-- ❌ Bad: `@skills/testing/test-driven-development/SKILL.md` (force-loads, burns context)
+- ❌ Bad: `See .agents/skills/testing/test-driven-development` (unclear if required)
+- ❌ Bad: `@.agents/skills/testing/test-driven-development/SKILL.md` (force-loads, burns context)
 
 **Why no @ links:** `@` syntax force-loads files immediately, consuming 200k+ context before you need them.
 
@@ -520,7 +523,7 @@ Make it easy for agents to self-check when rationalizing:
 **All of these mean: Delete code. Start over with TDD.**
 ```
 
-### Update CSO for Violation Symptoms
+### Update Skill Discovery Guidance for Violation Symptoms
 
 Add to description: symptoms of when you're ABOUT to violate the rule:
 
@@ -528,9 +531,9 @@ Add to description: symptoms of when you're ABOUT to violate the rule:
 description: use when implementing any feature or bugfix, before writing implementation code
 ```
 
-## RED-GREEN-REFACTOR for Skills
+## RED-GREEN-REFACTOR for Discipline Skills
 
-Follow the TDD cycle:
+For skills that change agent behavior, follow the TDD cycle:
 
 ### RED: Write Failing Test (Baseline)
 
@@ -578,22 +581,27 @@ step2 [label="read file"];
 helper1, helper2, step3, pattern4
 **Why bad:** Labels should have semantic meaning
 
-## STOP: Before Moving to Next Skill
+## Validation Before Moving To The Next Skill
 
-**After writing ANY skill, you MUST STOP and complete the deployment process.**
+Choose the validation path that matches the change. Do not batch behavior
+changes without validating each affected skill.
 
 **Do NOT:**
-- Create multiple skills in batch without testing each
-- Move to next skill before current one is verified
-- Skip testing because "batching is more efficient"
+- Publish behavior changes without validating each affected skill
+- Skip focused checks for metadata or reference changes
 
-**The deployment checklist below is MANDATORY for EACH skill.**
+### Discipline or behavior-changing skill
 
-Deploying untested skills = deploying untested code. It's a violation of quality standards.
+Run the RED/GREEN/REFACTOR pressure workflow below for each affected skill.
 
-## Skill Creation Checklist (TDD Adapted)
+### Metadata, reference, or mechanical edit
 
-**IMPORTANT: Use platform-native task tracking for EACH checklist item below.**
+Run focused frontmatter, retrieval, link/path, and documentation-contract
+checks. Pressure testing is optional unless the edit changes agent behavior.
+
+## Discipline Skill Checklist (TDD Adapted)
+
+Use platform-native task tracking when the selected validation path needs it.
 
 **RED Phase - Write Failing Test:**
 - [ ] Create pressure scenarios (3+ combined pressures for discipline skills)
@@ -631,6 +639,13 @@ Deploying untested skills = deploying untested code. It's a violation of quality
 - [ ] Leave commit, push, and publication to `finishing-development-work`
       under explicit authorization
 
+## Metadata, Reference, Or Mechanical Checklist
+
+- [ ] Frontmatter is valid and the description starts with `Use when...`
+- [ ] Referenced paths, commands, and links resolve or are clearly marked optional
+- [ ] Focused retrieval and documentation-contract checks pass
+- [ ] No behavior-changing pressure scenario is needed for a wording-only edit
+
 ## Discovery Workflow
 
 How future agents find your skill:
@@ -645,11 +660,13 @@ How future agents find your skill:
 
 ## The Bottom Line
 
-**Creating skills IS TDD for process documentation.**
+**Discipline skills use TDD for process documentation.**
 
 Discipline skills use the failing-test-first rule; other skills use applicable
 focused validation.
-Same cycle: RED (baseline) → GREEN (write skill) → REFACTOR (close loopholes).
-Same benefits: Better quality, fewer surprises, bulletproof results.
+That cycle applies to discipline skills; other skills use focused validation
+appropriate to their change. Both paths aim for fewer surprises and durable
+guidance.
 
-If you follow TDD for code, follow it for skills. It's the same discipline applied to documentation.
+If you follow TDD for code, apply the same discipline to behavior-changing
+skills and use focused checks for non-behavioral skill edits.

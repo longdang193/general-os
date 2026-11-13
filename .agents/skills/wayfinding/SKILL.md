@@ -65,7 +65,8 @@ link exactly one successor.
 If the user asks for code while the decision frontier is unresolved, refuse the
 code request and record it as out of scope. Do not skip the map, writer control,
 decision questions, closure checks, or downstream handoff. Continue only with
-decision discovery; implementation begins later through the approved plan.
+decision discovery; implementation begins later through the approved durable
+scope or specification and the planning tier selected by `defining-work`.
 
 ## Closure And Handoff
 
@@ -94,6 +95,6 @@ promotion, handoff, and supersession are recorded.
 
 Do not add or invoke separate `grilling`, `domain-modeling`, `research`, or
 `prototyping` methods from this skill. Use existing source-first research,
-brainstorming, and draft-specification mechanisms. Do not add detailed-spec
-template changes, custom orchestration, runtime/session systems, tracker
+brainstorming, and specification mechanisms. Do not add speculative template
+changes, custom orchestration, runtime/session systems, tracker
 adapters, CLIs, ticket generation, estimation, scheduling, or code execution.

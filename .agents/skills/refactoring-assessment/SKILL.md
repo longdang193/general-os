@@ -33,7 +33,7 @@ Read only references needed for current assessment:
 - `spec-drafting` when behavior, interfaces, schemas, defaults, compatibility, or invariants require a decision contract
 - `defining-work` when design is settled but execution needs ordered tasks
 - `test-driven-development` before a bounded behavior-preserving patch
-- `executing-work` only after a plan is approved
+- `executing-work` after `defining-work` selects direct execution, L1, L2, or L3; native runtime planning remains local to that assignment
 - `executing-work` for bounded native work with disjoint ownership
 - `verification-before-completion` after implementation
 - `finishing-development-work` only after fresh verification and explicit Git authorization
@@ -97,7 +97,7 @@ Route rather than perform next stage:
 | Small, bounded, behavior-preserving patch | `test-driven-development`, then direct implementation |
 | Unresolved behavior, interface, schema, default, compatibility, or invariant | `spec-drafting` |
 | Settled design with multi-step execution | `defining-work` |
-| Approved implementation plan | `executing-work` |
+| Ready direct scope, goal, task graph, or detailed plan | `executing-work` |
 | Independent actions with disjoint write ownership | `executing-work` |
 | Completed implementation | `verification-before-completion` |
 | Verified work needing authorized Git disposition | `finishing-development-work` |

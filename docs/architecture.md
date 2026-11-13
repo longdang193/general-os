@@ -48,7 +48,8 @@ scheduler. Its Orca surface is limited to optional native orchestration guidance
 and read-only health observation; worker lifecycle remains native Orca.
 
 Durable state is schema version `1`. Legacy unversioned state is read as version
-`1` and rewritten with the version; unsupported future versions fail closed.
+`1` and normalized with the version on its next save; unsupported future
+versions fail closed.
 Loaded state carries an in-memory source digest, and saves compare that digest
 under an interprocess lock before atomic replacement.
 

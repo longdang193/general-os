@@ -25,7 +25,6 @@ This skill produces design artifacts only.
 
 - Brainstorming owns problem exploration, options, trade-offs, recommendations, assumptions, and unresolved questions.
 - When approved direction still needs prototype validation, hand off to `spec-drafting`; do not create a second permanent brainstorming or UI-intent artifact.
-- Approved behavior, interfaces, decisions, and invariants belong in specifications.
 - Approved behavior, interfaces, decisions, and invariants belong in
   specifications. Use `defining-work` for durable task boundaries and
   coordination; native runtimes own temporary execution planning. An
@@ -80,11 +79,11 @@ source-first design, but never replaces mandatory evidence.
 
 ## Output Paths
 
-- specs -> `docs/superpowers/specs/`
+- specifications -> keep in the current task or an existing repository-owned path when requested
 - detailed brainstorming reports -> `docs/superpowers/plans/brainstorming/<report_id>/report.md`
 
 ## Guardrails
 
 - Keep this skill focused on design decisions.
-- Avoid duplicating lifecycle policy text already defined in templates/validators.
+- Avoid duplicating lifecycle policy text already defined in repository guidance.
 - Do not auto-generate detailed report unless user explicitly asks for it after brainstorming output.

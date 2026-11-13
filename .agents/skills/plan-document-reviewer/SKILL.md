@@ -105,7 +105,10 @@ For a specification:
 For an implementation plan:
 
 - plan implements approved specification without duplicating design analysis
-- every task names concrete owners, dependencies, edits, and task-local proof
+- every task names its bounded objective, dependencies, acceptance, and
+  task-local proof
+- concrete owners, edits, and shared-write ownership are required only when
+  they are themselves durable boundaries or an explicitly requested handoff
 - generated outputs derive from named canonical inputs
 - execution approach, dependency order, and shared-write ownership are explicit when they affect safe execution
 - final verification can prove every completion criterion

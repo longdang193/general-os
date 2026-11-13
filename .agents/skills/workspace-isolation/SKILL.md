@@ -19,8 +19,8 @@ Use isolation when:
 - multiple independent lanes need disjoint write ownership
 - branch comparison or safe integration benefits from separate workspaces
 
-For a write-capable independent worker launcher implementation lane, isolation is mandatory even
-when ordinary local work could safely reuse the current checkout.
+For a write-capable independently managed Orca workstream, isolation is
+mandatory even when ordinary local work could safely reuse the current checkout.
 
 Skip isolation for small, local, reversible work when current checkout is safe and user has not requested a worktree.
 
@@ -161,8 +161,9 @@ Provide execution skill:
 - expected workspace state for a continuation or recovery
 - restrictions on commit, push, merge, and cleanup
 
-For a write-capable independent worker launcher lane, also record launched process cwd and confirm it
-matches the exact worktree before writes begin.
+For a write-capable independently managed Orca workstream, also record the
+launched process cwd and confirm it matches the exact worktree before writes
+begin.
 
 ## Cleanup Boundary
 

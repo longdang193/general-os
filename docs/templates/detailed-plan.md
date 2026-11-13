@@ -62,6 +62,7 @@ Repeat the fields above for the next bounded semantic assignment when needed.
 - List the fresh end-to-end evidence needed to prove the complete goal against
   current Git and relevant external state.
 
-This template describes durable coordination. Execution-oriented
-implementation plans may retain concrete files, symbols, commands, and steps
-when those details are required for review or handoff.
+This template describes durable coordination. Concrete files, symbols, commands,
+and implementation steps belong to native runtime planning; include them here
+only when they are themselves non-derivable durable boundaries or an explicitly
+requested handoff contract.

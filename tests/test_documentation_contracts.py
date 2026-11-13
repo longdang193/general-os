@@ -25,6 +25,7 @@ def test_root_guidance_and_templates_define_durable_ownership():
     guidance = (root / "AGENTS.md").read_text(encoding="utf-8")
     template_path = root / "docs" / "templates" / "coordination-state.json"
     template = json.loads(template_path.read_text(encoding="utf-8"))
+    state = json.loads((root / "state" / "coordination.json").read_text(encoding="utf-8"))
     detailed_plan = (root / "docs" / "templates" / "detailed-plan.md").read_text(
         encoding="utf-8"
     )
@@ -32,6 +33,7 @@ def test_root_guidance_and_templates_define_durable_ownership():
     for term in ("Git", "Codex", "Orca", "acceptance"):
         assert term.lower() in guidance.lower()
     assert template["version"] == 1
+    assert state["version"] == 1
     for heading in (
         "# Goal",
         "# Outcomes",
@@ -50,7 +52,7 @@ def test_root_guidance_and_templates_define_durable_ownership():
         "Verification",
         "Stop / escalation conditions",
         "durable coordination",
-        "implementation plans",
+        "native runtime planning",
     ):
         assert term in detailed_plan
     assert "## Agent Memory" in guidance

@@ -152,8 +152,8 @@ After explicit selection and explicit user authorization:
 4. push lane branch
 5. create or update a pull request when explicit authorization allows it and support exists
 6. record branch, remote, commit SHA, and pull-request result
-7. keep the lane process and worktree available for review fixes and integration
-8. after whole-plan verification, review acceptance, and expected-head confirmation, retire the top-level lane process, confirm no live process owns the worktree, then remove it only when cleanup is granted and safe
+7. keep the selected runtime and worktree available for review fixes and integration
+8. after whole-plan verification, review acceptance, and expected-head confirmation, release the selected runtime, confirm no live process owns the worktree, then remove it only when cleanup is granted and safe
 
 Do not merge local base first when pull request path is selected.
 
