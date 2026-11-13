@@ -74,8 +74,8 @@ episode is not reconstructed.
 
 ## Shallow routing
 
-The native CoS skill reads durable state and current Git, selects the first
-dependency-ready assignment, resolves the semantic profile, and chooses the
+The native CoS skill reads durable state and current Git, determines
+dependency-ready semantic work, resolves the semantic profile, and chooses the
 smallest safe execution boundary:
 
 1. Codex handles ordinary work directly.

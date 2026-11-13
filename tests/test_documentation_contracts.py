@@ -91,7 +91,7 @@ def test_planning_and_review_guidance_do_not_create_a_second_authority():
     contents = "\n".join(path.read_text(encoding="utf-8") for path in paths)
 
     assert "state/coordination.json" in contents
-    assert "lifecycle authority" in contents
+    assert "native runtime" in contents
     assert "implementation plan does not grant Git or publication authority" in contents
     for forbidden in (
         "active-plan lane authority",
@@ -189,7 +189,11 @@ def test_orca_skill_and_runtime_docs_keep_native_ownership_explicit():
     derived_skill = (
         root / "src" / "general_os" / "assets" / "skills" / "orca-orchestration" / "SKILL.md"
     ).read_text(encoding="utf-8")
+    derived_runtime = (
+        root / "src" / "general_os" / "assets" / "docs" / "runtime-adapters.md"
+    ).read_text(encoding="utf-8")
     normalized_skill = " ".join(skill.split())
+    normalized_runtime = " ".join(runtime.split())
 
     assert "orca_enabled" in runtime
     assert "native" in runtime.lower()
@@ -209,6 +213,10 @@ def test_orca_skill_and_runtime_docs_keep_native_ownership_explicit():
     assert "partial progress" in normalized_skill
     assert "current Git" in normalized_skill
     assert skill == derived_skill
+    assert runtime == derived_runtime
+    assert "native Orca coordinator" in normalized_runtime
+    assert "partial progress" in normalized_runtime
+    assert "build_orca_launch(project_profile(profile)) performs" not in normalized_runtime
 
 
 def test_architecture_contract_keeps_project_and_runtime_ownership_separate():
@@ -243,6 +251,78 @@ def test_native_cos_keeps_orca_optional_but_allows_material_independence():
     assert "primary execution path" in runtime
     assert "required independent" in runtime
     assert "blocks when Orca is disabled or unavailable" in runtime
+
+
+def test_coordination_guidance_does_not_force_native_topology():
+    root = Path(__file__).parents[1]
+    guidance = (root / "AGENTS.md").read_text(encoding="utf-8")
+    architecture = (root / "docs" / "architecture.md").read_text(encoding="utf-8")
+    recovery = (root / "docs" / "recovery.md").read_text(encoding="utf-8")
+    migration = (root / "docs" / "migration" / "project-os-starter.md").read_text(
+        encoding="utf-8"
+    )
+    chief = (root / ".agents" / "skills" / "chief-of-staff" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    isolation = (root / ".agents" / "skills" / "workspace-isolation" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    writing = (root / ".agents" / "skills" / "writing-skills" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    derived_chief = (
+        root / "src" / "general_os" / "assets" / "skills" / "chief-of-staff" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    derived_isolation = (
+        root / "src" / "general_os" / "assets" / "skills" / "workspace-isolation" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    derived_writing = (
+        root / "src" / "general_os" / "assets" / "skills" / "writing-skills" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    for text in (guidance, migration, chief):
+        assert "internal runtime orchestration" in text
+        assert "execution topology" in text
+        assert "worker lifecycle" not in text
+    for text in (architecture, recovery, chief):
+        assert "first dependency-ready" not in text
+        assert "dependency-ready semantic work" in text
+    assert "isolation is mandatory" not in isolation
+    assert "require isolation" in isolation
+    assert "Always use subagents" not in writing
+    assert "50-100x context savings" not in writing
+    assert "let the active runtime choose" in writing
+    assert isolation == derived_isolation
+    assert writing == derived_writing
+    assert chief == derived_chief
+
+
+def test_publication_boundary_separates_local_git_from_external_disposition():
+    root = Path(__file__).parents[1]
+    publication = (root / "docs" / "rules" / "publication-boundary.md").read_text(
+        encoding="utf-8"
+    )
+    finishing = (
+        root / ".agents" / "skills" / "finishing-development-work" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    derived_finishing = (
+        root
+        / "src"
+        / "general_os"
+        / "assets"
+        / "skills"
+        / "finishing-development-work"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    normalized_finishing = " ".join(finishing.split())
+
+    assert "verified commits" in publication
+    assert "read-only fetch" in publication
+    assert "Push, merge, release, force operations" in publication
+    assert "may proceed within the approved scope" in finishing
+    assert "Require explicit action-specific authority for push" in normalized_finishing
+    assert "Do not commit, fetch, pull" not in finishing
+    assert finishing == derived_finishing
 
 
 def test_readme_has_stable_verification_commands():

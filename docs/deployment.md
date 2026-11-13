@@ -45,13 +45,16 @@ tree or a second runtime registry.
 general-os deploy --adapter codex --dry-run
 general-os deploy --repo . --adapter codex --dry-run
 general-os deploy --repo . --adapter codex
+general-os deploy --adapter codex --check
+general-os deploy --adapter codex --prune
 general-os deploy --repo . --adapter codex --check
-general-os deploy --repo . --adapter codex --prune
 general-os deploy --repo . --adapter codex --strict-migration
 ```
 
 The first command installs or checks only the central runtime surface. The
-`--repo` forms explicitly opt into one-shot adoption for that project.
+The central `--check` and `--prune` forms inspect or maintain only the central
+installation. The `--repo` forms explicitly opt into one-shot project adoption
+or project-adoption inspection for that project.
 `--dry-run` plans without writing. `--check` reports drift and returns
 nonzero when deployment is not healthy. `--prune` removes only unchanged files
 still owned by the central lock. Predecessor residue is report-only during a

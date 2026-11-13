@@ -54,7 +54,20 @@ Verification makes closure actions eligible. Closure actions still require
 explicit user authorization or an applicable repository policy; an
 implementation plan does not grant Git or publication authority.
 
-Do not commit, fetch, pull, create branch, rebase, merge, push, create or update pull request, apply or drop stash, delete branch, prune metadata, or remove worktree without explicit authorization for that action. Implementation plans may describe an intended workstream or PR workflow, but they do not grant lifecycle authority. `finishing-development-work` owns worktree cleanup after retirement, clean-state proof, released retention dependencies, and exact authorization. Direct or exceptional base mutation, force push, PR retargeting, branch-protection bypass, semantic conflict resolution, unrelated workstream/worktree mutation, destructive recovery, unknown-file discard, and merging another workstream remain user-authorized.
+Routine reversible local Git work—inspection, local branch creation, verified
+commits, and read-only fetch—may proceed within the approved scope and
+repository workflow; it is not publication authority. Require explicit
+action-specific authority for push, merge, release, force operations,
+conflict resolution, destructive discard or cleanup, stash destruction,
+worktree removal, and unrelated workstream mutation. Implementation plans may
+describe an intended workstream or PR workflow, but they do not grant
+publication or destructive authority. `finishing-development-work` owns
+worktree cleanup after retirement, clean-state proof, released retention
+dependencies, and exact authorization. Direct or exceptional base mutation,
+force push, PR retargeting, branch-protection bypass, semantic conflict
+resolution, destructive recovery, unknown-file discard, and merging another
+workstream remain user-authorized. An implementation plan does not grant Git or
+publication authority.
 
 Never infer a file is “superseded.” Before reconciliation can remove or overwrite
 content, show every overlapping file with hashes and diff summary, then require an
@@ -113,8 +126,8 @@ If work is at detached HEAD:
 
 1. identify verified commits and working-tree changes
 2. propose branch name and base
-3. require explicit branch-creation authorization
-4. create branch before commit, push, pull request, or merge
+3. follow the approved local branch workflow
+4. create a branch before commit, push, pull request, or merge
 
 Do not leave verified commits reachable only by detached HEAD.
 
@@ -124,7 +137,7 @@ If verified in-scope changes are uncommitted:
 
 1. show exact staged, unstaged, and untracked scope
 2. preserve unrelated changes
-3. request explicit commit authorization and message
+3. use the approved commit message or choose a concise message from the verified scope
 4. stage only approved files
 5. commit
 6. inspect hook output and repository state

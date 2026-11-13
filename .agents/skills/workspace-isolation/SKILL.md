@@ -19,8 +19,10 @@ Use isolation when:
 - multiple independent lanes need disjoint write ownership
 - branch comparison or safe integration benefits from separate workspaces
 
-For a write-capable independently managed Orca workstream, isolation is
-mandatory even when ordinary local work could safely reuse the current checkout.
+For a write-capable independently managed Orca workstream, require isolation
+when ownership, concurrency, recovery, or reversibility risk makes the current
+checkout unsafe. Do not make a Git worktree a universal Orca contract; the
+selected native runtime may choose or provide its own execution workspace.
 
 Skip isolation for small, local, reversible work when current checkout is safe and user has not requested a worktree.
 

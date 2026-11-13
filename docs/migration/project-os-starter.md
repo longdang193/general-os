@@ -8,10 +8,11 @@ dirty working-tree changes in that checkout are never migration input.
 
 `general-os` owns the maintained semantic skills and active shared rules.
 Git owns repository truth; Codex owns ordinary execution and subordinate native
-children; Orca owns only independently managed worker lifecycle; `agents/*.toml`
-is the only profile registry; `state/coordination.json` is the only durable
-coordination state. Generated adapter trees, runtime ledgers, Herdr, Project
-Secretary, and DeepAgents control-plane machinery are not migrated.
+children; Orca owns internal runtime orchestration and execution topology inside
+a CoS-selected boundary; `agents/*.toml` is the only profile registry;
+`state/coordination.json` is the only durable coordination state. Generated
+adapter trees, runtime ledgers, Herdr, Project Secretary, and DeepAgents
+control-plane machinery are not migrated.
 
 ## Skill disposition
 

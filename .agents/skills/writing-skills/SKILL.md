@@ -168,7 +168,7 @@ runtime may take. The skill body becomes documentation the runtime skips.
 
 ```yaml
 # ❌ BAD: Summarizes workflow - a native runtime may follow this instead of reading skill
-description: Use when executing plans - dispatches subagent per task with code review between tasks
+description: Use when executing plans - forces a fixed delegation and review workflow
 
 # ❌ BAD: Too much process detail
 description: Use for TDD - write test first, watch it fail, write minimal code, refactor
@@ -242,11 +242,11 @@ search-conversations supports multiple modes and filters. Run --help for details
 **Use cross-references:**
 ```markdown
 # ❌ BAD: Repeat workflow details
-When searching, dispatch subagent with template...
+When searching, repeat another skill's workflow...
 [20 lines of repeated instructions]
 
 # ✅ GOOD: Reference other skill
-Always use subagents (50-100x context savings). REQUIRED: Use [other-skill-name] for workflow.
+Use [other-skill-name] for workflow details; let the active runtime choose whether delegation helps.
 ```
 
 **Compress examples:**
@@ -254,12 +254,12 @@ Always use subagents (50-100x context savings). REQUIRED: Use [other-skill-name]
 # ❌ BAD: Verbose example (42 words)
 your human partner: "How did we handle authentication errors in React Router before?"
 You: I'll search past conversations for React Router authentication patterns.
-[Dispatch subagent with search query: "React Router authentication error handling 401"]
+[Start a fixed helper workflow for: "React Router authentication error handling 401"]
 
 # ✅ GOOD: Minimal example (20 words)
 Partner: "How did we handle auth errors in React Router?"
 You: Searching...
-[Dispatch subagent → synthesis]
+[Continue with the selected runtime and applicable skill]
 ```
 
 **Eliminate redundancy:**
