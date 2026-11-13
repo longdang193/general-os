@@ -25,7 +25,10 @@ Skip for tiny, local, reversible tasks with settled behavior and obvious proof.
 
 - `spec-drafting` creates approved behavior, interfaces, decisions, invariants, acceptance criteria, and validation intent.
 - `defining-work` chooses the smallest durable representation: direct execution, a goal, a semantic task graph, or a durable coordination plan.
-- An implementation plan may add exact files, symbols, commands, dependencies, and execution order when review or handoff requires them; those details do not become runtime state or authority grants.
+- A durable plan may add exact files, symbols, commands, dependencies, and
+  execution order only when they are non-derivable ownership boundaries or an
+  explicit handoff contract; those details do not become runtime state or
+  authority grants.
 - this skill identifies readiness defects in those artifacts without silently rewriting them
 - `workspace-isolation` optionally establishes isolated workspace identity
 - `executing-work` discovers implementation reality and performs task-local proof

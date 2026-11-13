@@ -56,3 +56,10 @@ persisted.
 
 Neither adapter writes runtime IDs, heartbeats, progress, or lifecycle mirrors
 into `state/coordination.json`.
+
+## Deployment adapter
+
+The `codex` deployment adapter is intentionally near-no-op: it activates the
+central shared skill discovery path and does not generate a `~/.codex` tree,
+credential projection, runtime registry, or execution loop. Other adapter
+projections require a separate approved contract.

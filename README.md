@@ -42,3 +42,12 @@ Before acceptance, run `pytest -q`,
 `python -m general_os state validate state/coordination.json`, and
 `pytest -q tests/test_documentation_contracts.py` when documentation or
 governance contracts changed.
+
+## Central deployment
+
+Install the reusable runtime surface with `general-os deploy --adapter codex`.
+Use `--dry-run` to plan without writes, `--check` to inspect drift, and
+`--prune` only when unchanged centrally owned files should be removed. Project
+adoption is seed-only; existing `AGENTS.md`, profiles, policy, and durable
+coordination state are preserved. See `docs/deployment.md` for the ownership,
+rollback, and migration contract.

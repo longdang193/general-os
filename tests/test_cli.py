@@ -183,6 +183,31 @@ def test_orca_smoke_returns_nonzero_for_failed_probe(monkeypatch, capsys):
     assert output["message"] == "bad"
 
 
+def test_deploy_cli_emits_json_and_passes_boundary_options(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli,
+        "deploy",
+        lambda repo, **kwargs: (
+            0,
+            {"status": "dry-run", "repo_root": repo, "adapter": kwargs["adapter"]},
+        ),
+    )
+
+    assert main(["deploy", "--repo", "project", "--adapter", "codex", "--dry-run"]) == 0
+
+    assert json.loads(capsys.readouterr().out) == {
+        "adapter": "codex",
+        "repo_root": "project",
+        "status": "dry-run",
+    }
+
+
+def test_deploy_rejects_unsupported_adapter(capsys):
+    with pytest.raises(SystemExit):
+        main(["deploy", "--adapter", "claude", "--dry-run"])
+    assert "unsupported adapter" in capsys.readouterr().err
+
+
 def test_accept_cli_does_not_accept_free_form_boundary_evidence():
     with pytest.raises(SystemExit):
         main(["accept", "--boundary-evidence", '{"kind":"orca"}'])

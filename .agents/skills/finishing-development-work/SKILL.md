@@ -8,16 +8,17 @@ description: Use when verified development work needs an authorized commit, push
 
 Finish verified development work through one explicitly selected Git disposition: commit, push branch and create or update pull request, local fast-forward merge, keep workspace unchanged, or discard with destructive confirmation.
 
-This skill owns Git reconciliation and Git-managed branch/worktree cleanup after verification. It does not implement remaining work, decide product behavior, publish curated output, clean task-owned disposable artifacts, or weaken failed checks.
+This skill owns Git reconciliation and Git-managed branch/worktree cleanup after verification. It does not implement remaining work, decide product behavior, publish curated output, clean assignment-owned disposable artifacts, or weaken failed checks.
 
 The canonical publication authority is `docs/rules/publication-boundary.md`.
 This skill references that rule and does not redefine its ownership.
 
 ## Preconditions
 
-Require a fresh accepted task-proof handoff for branch or PR publication, and a
-fresh `verified` result from `verification-before-completion` before final
-merge or cleanup. The evidence must contain:
+Require a fresh accepted task-proof handoff for task-bound work, or a fresh
+Git-bound direct-scope result for direct execution and Level 1 goal-only intent,
+plus a fresh `verified` result from `verification-before-completion` before
+branch or PR publication, final merge, or cleanup. The evidence must contain:
 
 - workspace path and creation mechanism
 - branch or detached state
@@ -26,6 +27,9 @@ merge or cleanup. The evidence must contain:
 - base branch and base commit when known
 - verification commands and results
 - approved deferrals and residual risks
+
+Direct and Level 1 evidence is not durable task acceptance and must not be
+written into `state/coordination.json`.
 
 If verification is missing, stale, incomplete, or blocked, stop.
 

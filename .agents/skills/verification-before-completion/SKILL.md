@@ -12,6 +12,8 @@ CoS changes durable task state. Runtime completion is only an observation.
 
 ## Procedure
 
+For task-bound work:
+
 1. Read the task objective and acceptance criteria from durable state.
 2. Inspect current branch, revision, conflicts, changed files, and worktree
    state directly through Git.
@@ -19,6 +21,12 @@ CoS changes durable task state. Runtime completion is only an observation.
 4. Compare evidence revision with the current Git revision.
 5. Report one result with the exact checks, results, revision, and remaining
    work.
+
+For direct execution or Level 1 goal-only intent, use the same Git and check
+sequence against the approved direct scope or durable goal constraints. Return
+an ephemeral Git-bound verification result for the current scope; do not invent
+durable goal acceptance or write a completion record to
+`state/coordination.json`.
 
 Profile names and runtime observations are context, not acceptance evidence.
 Use fresh Git and verification output; do not require optional runtime
@@ -28,9 +36,11 @@ bookkeeping when current source and tests establish the result.
 
 ### `PASS`
 
-Use only when required checks pass, evidence is current, acceptance criteria
-are satisfied, and no material Git conflict remains. CoS may then persist the
-task as `completed`.
+Use only when required checks pass, evidence is current, the applicable task or
+direct-scope criteria are satisfied, and no material Git conflict remains. CoS
+may persist a task as `completed` only for task-bound work. Direct and Level 1
+results remain ephemeral and may be handed to the Git owner for an explicitly
+authorized disposition.
 
 ### `FAIL`
 
@@ -48,6 +58,8 @@ unavailable. Record the concrete reason.
 ## Boundaries
 
 - Do not accept work because Codex Goal Mode or an Orca worker reports done.
+- Do not require a durable task proof when the approved work is direct or
+  Level 1 goal-only intent; use current Git-bound evidence instead.
 - Do not write runtime IDs, progress, heartbeats, or verifier state into
   `general-os` durable state.
 - Do not own branch merge, publication, worktree cleanup, Orca cleanup, or

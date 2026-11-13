@@ -82,3 +82,12 @@ the unprefixed target name; excluded control-plane material is retired.
   rules are folded into their owning source.
 - Migration reads use `git show` or an equivalent commit-pinned materialization,
   never the dirty predecessor checkout.
+
+## Deployment cutover
+
+The maintained tree is the canonical source for central deployment. The
+deployment command copies complete runtime-clean skill directories and shared
+docs into `~/.agents/general-os/`, while `repo_config/general-os.lock.json`
+records only seed provenance for an adopting project. Existing project
+semantics and predecessor residue are preserved; normal checks report residue,
+and `--strict-migration` is the explicit failure mode.

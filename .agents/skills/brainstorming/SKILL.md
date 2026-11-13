@@ -16,7 +16,7 @@ This skill produces design artifacts only.
 
 ## Conditional References
 
-- For unresolved material visual direction, interaction design, responsive behavior, or accessibility behavior, follow `docs/rules/frontend-ui.md`. If `impeccable` is explicitly selected, use it without also invoking overlapping design skills; otherwise preserve existing `ui-ux-pro-max` eligibility. Skip design-skill invocation for text-only design questions.
+- For unresolved material visual direction, interaction design, responsive behavior, or accessibility behavior, follow `docs/rules/frontend-ui.md`. `impeccable` and `ui-ux-pro-max` are optional external capabilities, not required dependencies; use one only when explicitly selected and available. Skip design-skill invocation for text-only design questions.
 - Use `defining-work` to choose the smallest truthful planning tier.
 - Use `AGENTS.md` when ownership or publication boundaries are in scope.
 - If guidance conflicts with current source or tests, current executable truth wins.

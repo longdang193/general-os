@@ -270,9 +270,10 @@ For every required outcome and behavior provide observable acceptance:
 ```
 
 Specification owns proof intent. `defining-work` owns durable task boundaries;
-the native runtime owns temporary implementation decomposition. An
-implementation plan may record exact commands and execution order when that
-detail is required, but it remains an artifact rather than a runtime ledger.
+the native runtime owns temporary implementation decomposition. A durable plan
+may retain exact files, symbols, commands, or execution order only when they
+are non-derivable ownership boundaries or an explicit handoff contract. It
+remains an artifact rather than a runtime ledger.
 
 ### 10. Resolve Open Questions
 

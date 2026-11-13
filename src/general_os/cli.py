@@ -11,6 +11,7 @@ from general_os.acceptance import (
     apply_task_transition,
     evaluate_acceptance,
 )
+from general_os.deployment import DeploymentError, deploy
 from general_os.git import inspect_git
 from general_os.orca import OrcaCliStatusObserver
 from general_os.profiles import load_profiles, project_profile, resolve_profile
@@ -75,6 +76,19 @@ def run_profile_resolve(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_deploy(args: argparse.Namespace) -> int:
+    code, report = deploy(
+        args.repo,
+        adapter=args.adapter,
+        dry_run=args.dry_run,
+        check=args.check,
+        prune=args.prune,
+        strict_migration=args.strict_migration,
+    )
+    _print(report)
+    return code
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="general-os")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -107,6 +121,15 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--directory", default="agents")
     resolve.set_defaults(handler=run_profile_resolve)
 
+    deploy_command = commands.add_parser("deploy")
+    deploy_command.add_argument("--repo", default=".")
+    deploy_command.add_argument("--adapter", default="codex")
+    deploy_command.add_argument("--dry-run", action="store_true")
+    deploy_command.add_argument("--check", action="store_true")
+    deploy_command.add_argument("--prune", action="store_true")
+    deploy_command.add_argument("--strict-migration", action="store_true")
+    deploy_command.set_defaults(handler=run_deploy)
+
     return parser
 
 
@@ -115,6 +138,6 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.handler(args)
-    except (StateError, ValueError, OSError) as exc:
+    except (DeploymentError, StateError, ValueError, OSError) as exc:
         parser.error(str(exc))
     return 2

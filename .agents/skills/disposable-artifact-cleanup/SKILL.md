@@ -1,13 +1,13 @@
 ---
 name: disposable-artifact-cleanup
-description: Use when completed or interrupted work leaves task-owned disposable files, directories, or lifecycle resources that need safe cleanup.
+description: Use when completed or interrupted work leaves assignment-owned disposable files, directories, or lifecycle resources that need safe cleanup.
 ---
 
 # Disposable Artifact Cleanup
 
 ## Role
 
-Audit task-owned disposable artifacts and route non-file resources to their
+Audit assignment-owned disposable artifacts and route non-file resources to their
 lifecycle owners. This skill owns candidate validation, retention checks,
 exact-scope cleanup for directly owned artifacts, and post-cleanup inspection.
 It does not retire Orca runtime state, Git branches or worktrees, browser
@@ -20,14 +20,14 @@ profiles, databases, publication output, or persistent project knowledge.
 - Delegated routing may occur when work no longer needs a lifecycle resource; the owner then retires it, retirement is verified, and dependent storage cleanup becomes eligible.
 - Verification decides whether an artifact is still needed for proof, debug, recovery, or handoff.
 - Direct cleanup runs before the final `verified` snapshot, then affected proof runs again.
-- Git worktree cleanup remains owned by `finishing-development-work` after verified Git disposition, lane retirement, clean-state proof, and exact authorization.
+- Git worktree cleanup remains owned by `finishing-development-work` after verified Git disposition, assignment retirement, clean-state proof, and exact authorization.
 - Verification, not this skill, emits the final `verified` result.
 
 ## Resource Identity And Ownership Proof
 
 Use an exact normalized resource identity:
 
-- filesystem artifact: absolute path or task-owned directory
+- filesystem artifact: absolute path or assignment-owned directory
 - Git worktree: path, branch or detached state, creation mechanism, and required commit state
 - Orca runtime resource: supported runtime identity and relevant process identity
 - browser or application state: isolated profile or storage scope and producer
@@ -42,7 +42,7 @@ A candidate is eligible only when all applicable checks establish:
 5. no active verification, debugging, recovery, or handoff depends on it
 6. no user-created, persistent, credential, backup, database, upload, normal profile, or unrelated state
 7. repository filesystem path is not tracked or staged
-8. direct cleanup scope is exactly the recorded file or task-owned directory
+8. direct cleanup scope is exactly the recorded file or assignment-owned directory
 9. delegated cleanup owner and actual supported procedure are identified
 
 Filename similarity, age, location, generated appearance, Git ignore status,
@@ -143,7 +143,7 @@ not recovery evidence.
 
 ## Cleanup Mode
 
-Cleanup requires explicit authorization for the named task-owned direct
+Cleanup requires explicit authorization for the named assignment-owned direct
 candidates or an approved task that names those candidates. Recursive delete
 or move still follows the command-safety rules in `AGENTS.md`.
 
@@ -157,7 +157,7 @@ Before direct removal:
 3. confirm scope did not broaden
 4. block symlinks, junctions, and reparse points unless explicitly handled
 
-Remove only approved exact files or task-owned directories. Do not call
+Remove only approved exact files or assignment-owned directories. Do not call
 `git clean`, delete a repository root, or delete a shared temporary, runtime,
 profile, or database root.
 

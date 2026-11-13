@@ -29,3 +29,10 @@ does not create a new recovery ledger or automatically stop safe work.
 There is no separate recovery runtime or recovery ledger. Do not reconstruct
 lost runtime sessions, persist runtime IDs, or copy runtime progress into
 `state/coordination.json`.
+
+Central deployment recovery is similarly Git- and lock-bound. Read
+`~/.agents/general-os/managed.json` and rerun `general-os deploy --check`; do
+not reconstruct a runtime session or infer ownership from timestamps. A failed
+deployment restores the files changed by that attempt and writes provenance
+last. Locally modified or conflicting central files remain preserved for
+manual resolution.

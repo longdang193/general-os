@@ -89,7 +89,8 @@ Rules:
 - Create the project folder only inside the selected output location when
   missing.
 - Start each file with the required frontmatter from the templates reference.
-- Include validator-friendly metadata in frontmatter: `question_type`,
+- Include the source metadata required by the learning-material format:
+  `question_type`,
   `learning_mode`, `bloom_level`, and `source_scope`.
 - Do not include `validation` metadata in frontmatter.
 - Add a descriptive `##` title after frontmatter. The title summarizes the main

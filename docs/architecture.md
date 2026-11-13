@@ -58,3 +58,17 @@ also needs typed ephemeral boundary evidence tied to that identity; a runtime
 completion report alone is not acceptance. Profiles fail closed when the
 registry or requested default is missing, and local `deny` is a hard ceiling
 for durable policy exceptions.
+
+## Central deployment ownership
+
+`general-os deploy` installs complete runtime-clean skill directories and
+shared docs under `~/.agents/general-os/`. Its `managed.json` lock owns only
+central installation provenance and managed-file digests. Canonical repository
+skills remain the source of truth; staged copies rewrite shared-doc references
+to the installed central docs tree.
+
+Project adoption is seed-only. `repo_config/general-os.lock.json` records the
+source revision and paths that were seeded, but it does not own project-file
+drift, existing `AGENTS.md`, profiles, runtime policy, or coordination state.
+Codex activation is shared skill discovery, not a generated `~/.codex` tree or
+runtime registry. Existing project guidance is preserved.

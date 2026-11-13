@@ -113,3 +113,16 @@ The configured local `remote_side_effects = "deny"` policy cannot be widened by
 durable state. Missing profile directories, missing requested profiles, unknown
 profile fields, invalid ranks, and invalid runtime text fail closed. Orca
 status observation defaults to a finite 30-second timeout.
+
+## Deployment
+
+The central installation at `~/.agents/general-os/` is governed by
+`managed.json`, which stores only central managed-file digests and source
+provenance. Project adoption is represented by
+`repo_config/general-os.lock.json`; it stores schema, source, source revision,
+and seeded paths only. Existing project semantics remain outside deployment
+ownership.
+
+`--dry-run` is read-only. `--check` reports drift without writing and treats
+predecessor residue as a warning unless `--strict-migration` is supplied.
+`--prune` removes only unchanged files still owned by the central lock.

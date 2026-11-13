@@ -11,13 +11,19 @@ def test_documentation_explains_fact_ownership_and_boundaries():
     migration = (root / "docs" / "migration" / "project-os-starter.md").read_text(
         encoding="utf-8"
     )
+    deployment = (root / "docs" / "deployment.md").read_text(encoding="utf-8")
 
     for text in (architecture, migration):
         assert "state/coordination.json" in text
         assert "Codex" in text
         assert "Orca" in text
         assert "Git" in text
+    for term in ("Codex", "Git", "managed.json", "seed-only", "--strict-migration"):
+        assert term in deployment
     assert "read-only" in migration
+    assert "managed.json" in deployment
+    assert "seed-only" in deployment
+    assert "--strict-migration" in deployment
 
 
 def test_root_guidance_and_templates_define_durable_ownership():
@@ -381,3 +387,18 @@ def test_migrated_skills_use_current_owners_and_available_resources():
 
     assert (root / "docs" / "runtime-adapters.md").exists()
     assert not (root / "docs" / "rules" / "backend-verification.md").exists()
+
+
+def test_deployment_sources_include_complete_runtime_skill_directories():
+    root = Path(__file__).parents[1]
+    skill_root = root / ".agents" / "skills"
+    assert all((path / "SKILL.md").is_file() for path in skill_root.iterdir())
+    development = root / "docs" / "skill-development" / "systematic-debugging"
+    assert sorted(path.name for path in development.iterdir()) == [
+        "CREATION-LOG.md",
+        "test-academic.md",
+        "test-pressure-1.md",
+        "test-pressure-2.md",
+        "test-pressure-3.md",
+    ]
+    assert not any(path.name.startswith("test-") for path in (skill_root / "systematic-debugging").iterdir())
