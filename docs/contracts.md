@@ -23,10 +23,15 @@ runtime. It has no durable completion or acceptance record, so recovery may
 redispatch the goal; use a task graph when acceptance must be persisted. When a
 task has an objective, that objective is the assignment; the global goal is not
 copied into the task or used as a second task assignment. Codex may use native
-subagents inside that assignment. CoS selects Orca only when independent
+subagents inside that assignment. Project-level CoS selects Orca only when independent
 ownership is materially useful or required; a required
 independent boundary cannot silently fall back to Codex when Orca is
 unavailable.
+
+`general-os` owns the durable semantic assignment. Project-level CoS owns the
+coordination judgment that selects the boundary and later decides acceptance.
+The selected native runtime owns execution decomposition and execution topology inside
+that boundary.
 
 Profiles are selected by name from `agents/*.toml`. Explicit profile facts may
 be projected one way to the selected runtime, while absent facts inherit native
@@ -42,13 +47,24 @@ supplied capability profiles explicitly configure the Codex model identifiers
 corresponding effort levels; these values are owned by `agents/*.toml`, not
 reconstructed from rank or profile name.
 
-The optional Orca handoff consumes that projection once and maps it to native
-`orca agent launch` arguments: `harness` becomes `--agent`, explicit `model`
-and `effort` become their matching flags, and the ephemeral task assignment
-plus any explicit `instructions` become the launch prompt. Missing fields are
-omitted; no Orca profile registry or runtime state is created. Orca rejects an
-incomplete launch when the harness is absent or effort is supplied without an
-explicit model.
+The optional Orca handoff consumes that projection once as a semantic
+workstream contract containing the objective, task identity, relevant context
+and constraints, acceptance/evidence requirements, explicit profile facts, and
+the relevant repository or work boundary. The native Orca coordinator or
+coordinating agent provided by the installed version decides whether and how
+to create internal runtime tasks, workers, dependencies, retries, supervision,
+nested helpers, and synthesis. Worker count, worker roles, runtime IDs,
+internal DAGs, polling, heartbeats, retry counters, and temporary plans are
+not general-os contract fields.
+
+`build_orca_launch(project_profile(profile), assignment)` remains a low-level
+one-way leaf/compatibility projection for the native CLI: `harness` becomes
+`--agent`, explicit `model` and `effort` become their matching flags, and the
+ephemeral assignment plus explicit `instructions` become the launch prompt.
+Missing fields are omitted; no Orca profile registry or runtime state is
+created. Orca rejects an incomplete launch when the harness is absent or effort
+is supplied without an explicit model. This helper does not define the
+conceptual multi-agent boundary.
 
 ## Acceptance
 
@@ -63,7 +79,9 @@ Acceptance uses the current task, current Git snapshot, and fresh verification:
 `git`, or `external`, plus a non-empty reason. Retryable `FAIL` clears that
 context when it returns a blocked task to `pending`.
 
-Runtime completion never changes durable acceptance by itself. Repeated
+An Orca outcome/evidence bundle may report success, partial progress, failure,
+or a material blocker. Runtime completion never changes durable acceptance by
+itself. Repeated
 successful transitions are idempotent.
 
 Only the public in-process `create_verification_result` handoff may produce a
@@ -88,6 +106,11 @@ with `requires_independent_boundary` must also carry ephemeral typed boundary
 evidence containing the task ID, supported `orca` boundary kind, matching
 snapshot identity, and non-empty evidence. These values are not persisted as
 worker lifecycle state, and the CLI cannot forge them from free-form input.
+
+The result boundary is explicit: general-os may inspect the returned evidence
+and current Git, but it does not silently merge runtime worktrees, publish,
+push, or convert a runtime completion report into acceptance. Git and the
+project-level CoS acceptance path remain authoritative.
 
 Completed tasks retain their accepted snapshot identity and task-contract
 fingerprint as durable acceptance evidence. Recovery revalidates both against
@@ -124,6 +147,9 @@ and seeded paths only. Deployment is central-only unless `--repo` explicitly
 opts into one-shot adoption. Adoption never seeds `state/coordination.json`,
 and an existing adoption record makes project semantics entirely inert.
 Existing project semantics remain outside deployment ownership.
+
+Deployment distributes reusable assets and performs explicit one-shot adoption;
+it does not participate in project coordination or native runtime ownership.
 
 `--dry-run` is read-only. `--check` reports drift without writing and treats
 predecessor residue as a warning unless `--strict-migration` is supplied.

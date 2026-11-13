@@ -26,34 +26,42 @@ commands in `general-os` code or this skill.
 
 ## Handoff
 
-Project only the semantic assignment and resolved profile context:
+Project-level CoS chooses this boundary for one independently owned semantic
+workstream. General-os owns the durable semantic assignment and passes the
+native Orca coordinator/coordinating agent provided by the installed version:
 
-- task objective and relevant context
-- acceptance criteria when useful
-- resolved general-os profile name as context
+- task objective and semantic identity;
+- relevant context and material constraints;
+- acceptance and evidence requirements when useful;
+- resolved general-os profile name and explicit profile facts; and
+- the relevant repository or work boundary.
 
 Resolve profile names from the sole `agents/*.toml` registry. Do not create an
-Orca-specific profile registry.
+Orca-specific profile registry. Do not prescribe worker count or roles, runtime
+IDs, internal DAGs, polling, heartbeats, retry counters, nested helper
+identities, or temporary runtime plans.
 
 Do not translate missing profile facts or profile names into guessed native
 model or effort settings. Explicit profile facts may be projected one way;
-otherwise the selected worker inherits native defaults. Orca is harness-neutral:
-the resolved worker may use Codex, Claude, or another explicitly supported
-harness.
+otherwise the native runtime inherits its native defaults. Orca is harness-neutral and
+the installed version decides its internal orchestration and execution
+topology, including decomposition, workers, supervision, retries, questions,
+nested helpers, synthesis, release, and cleanup.
 
-For the native CLI handoff, call
-`build_orca_launch(project_profile(profile), assignment)` with the ephemeral
-objective/context/acceptance assignment. This maps only explicit `harness`,
-`model`, `effort`, and `instructions` values plus that assignment to Orca launch
-flags; it does not create a second profile registry or persist runtime
+`build_orca_launch(project_profile(profile), assignment)` remains a low-level
+leaf/compatibility projection for simple native CLI launch paths. It maps only
+explicit `harness`, `model`, `effort`, and `instructions` values plus the
+ephemeral assignment to Orca launch flags; it does not define the conceptual
+multi-agent boundary, create a second profile registry, or persist runtime
 configuration.
 
-Never persist or mirror Run IDs, Task IDs, Dispatch IDs, worker IDs,
-heartbeats, progress, or other Orca runtime state in `general-os` durable
-state. Return native runtime outcome and evidence to CoS instead.
-
-Orca completion is not general-os acceptance. CoS must verify Git, required
-evidence, and acceptance criteria before changing durable task state.
+The native coordinator returns one semantic outcome/evidence bundle for the
+delegated assignment. That bundle may report success, partial progress,
+failure, or a material blocker. Never persist or mirror Run IDs, Task IDs,
+Dispatch IDs, worker IDs, heartbeats, progress, or other Orca runtime state in
+`general-os` durable state. Project-level CoS must inspect current Git, evaluate
+fresh evidence, and decide durable task acceptance; Orca completion cannot
+complete a general-os task by itself.
 
 ## Degradation
 

@@ -186,6 +186,10 @@ def test_orca_skill_and_runtime_docs_keep_native_ownership_explicit():
     skill = (root / ".agents" / "skills" / "orca-orchestration" / "SKILL.md").read_text(
         encoding="utf-8"
     )
+    derived_skill = (
+        root / "src" / "general_os" / "assets" / "skills" / "orca-orchestration" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    normalized_skill = " ".join(skill.split())
 
     assert "orca_enabled" in runtime
     assert "native" in runtime.lower()
@@ -200,6 +204,31 @@ def test_orca_skill_and_runtime_docs_keep_native_ownership_explicit():
     assert "harness-neutral" in skill
     assert "model" in skill
     assert "native defaults" in skill
+    assert "semantic workstream" in normalized_skill
+    assert "execution topology" in normalized_skill
+    assert "partial progress" in normalized_skill
+    assert "current Git" in normalized_skill
+    assert skill == derived_skill
+
+
+def test_architecture_contract_keeps_project_and_runtime_ownership_separate():
+    root = Path(__file__).parents[1]
+    architecture = (root / "docs" / "architecture.md").read_text(encoding="utf-8")
+    contracts = (root / "docs" / "contracts.md").read_text(encoding="utf-8")
+    deployment = (root / "docs" / "deployment.md").read_text(encoding="utf-8")
+
+    for text in (architecture, contracts):
+        assert "`general-os` owns" in text
+        assert "Project-level CoS owns" in text
+        assert "execution topology" in text
+        assert "semantic workstream" in text or "workstream contract" in text
+        assert "partial progress" in text
+        assert "does not silently merge" in text or "does not silently merge runtime" in text
+
+    assert "~/.agents/general-os/" in deployment
+    assert "seed-only" in deployment
+    assert "state/coordination.json` is never seeded" in deployment
+    assert "runtime registry" in deployment
 
 
 def test_native_cos_keeps_orca_optional_but_allows_material_independence():
