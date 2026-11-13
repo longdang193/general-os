@@ -46,10 +46,10 @@ Specification owns:
 - invariants, edge cases, acceptance criteria, and validation intent
 
 `defining-work` chooses the smallest durable coordination representation after
-the specification is approved: direct execution, a goal-only assignment, a
-small task graph, or a detailed plan. An implementation handoff may record
-exact files, task order, commands, dependencies, rollout steps, and execution
-waves only when those details are explicitly required for review or handoff.
+the specification is approved: direct execution, a goal-only intent, a small
+task graph, or a detailed plan. An implementation handoff may retain concrete
+files, symbols, commands, and execution steps only when they are non-derivable
+durable boundaries or an explicitly requested handoff contract.
 Ordinary implementation planning remains native-runtime work. It does not
 replace `state/coordination.json`, grant runtime authority, or replace native
 runtime planning.
@@ -294,17 +294,6 @@ Only after reasoning is complete:
 5. run applicable repository checks when they exist
 
 Format records specification; it does not replace specification reasoning.
-
-## Frontmatter
-
-```yaml
----
-name: spec-drafting
-description: Use when a specification needs a precise behavioral and design contract before implementation planning.
----
-```
-
-Use only applicable optional metadata. Do not add metadata without active consumer.
 
 ## Review And Handoff
 

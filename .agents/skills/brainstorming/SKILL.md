@@ -28,8 +28,9 @@ This skill produces design artifacts only.
 - Approved behavior, interfaces, decisions, and invariants belong in
   specifications. Use `defining-work` for durable task boundaries and
   coordination; native runtimes own temporary execution planning. An
-  implementation plan may retain concrete files and steps when review or
-  handoff requires them.
+  implementation plan may retain concrete files, symbols, commands, and
+  execution steps only when they are non-derivable durable boundaries or an
+  explicitly requested handoff contract.
 
 ## Evidence Capability
 

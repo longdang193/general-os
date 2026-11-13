@@ -45,7 +45,7 @@ A searchable table whose filters, sort, page, and tab must survive refresh and s
 - verify pending, retry, duplicate submission, failure restoration, and server reconciliation for mutations
 - add the smallest focused regression check using existing test tooling
 - follow `docs/rules/frontend-ui.md` for browser and accessibility evidence
-- use external documentation capability only when active executor exposes it for version-specific framework or accessibility-library questions not answered by pinned project sources; resolve it through `docs/runtime-adapters.md`
+- use external documentation capability only when active executor exposes it for version-specific framework or accessibility-library questions not answered by pinned project sources; read `docs/runtime-adapters.md` only for runtime-boundary questions
 
 ## Common Mistakes
 

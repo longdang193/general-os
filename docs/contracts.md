@@ -18,11 +18,13 @@ are observations, not another durable ledger.
 
 ## Execution boundary
 
-An empty task list is a valid goal-only assignment for the current Codex
-runtime. When a task has an objective, that objective is the assignment; the
-global goal is not copied into the task or used as a second task assignment.
-Codex may use native subagents inside that assignment. CoS selects Orca only
-when independent ownership is materially useful or required; a required
+An empty task list is a valid goal-only intent assignment for the current Codex
+runtime. It has no durable completion or acceptance record, so recovery may
+redispatch the goal; use a task graph when acceptance must be persisted. When a
+task has an objective, that objective is the assignment; the global goal is not
+copied into the task or used as a second task assignment. Codex may use native
+subagents inside that assignment. CoS selects Orca only when independent
+ownership is materially useful or required; a required
 independent boundary cannot silently fall back to Codex when Orca is
 unavailable.
 

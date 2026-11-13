@@ -8,7 +8,9 @@ description: Use when diagnosing a bug, failure, or unexpected behavior before p
 
 Random fixes waste time and create new bugs. Quick patches mask underlying issues.
 
-**Core principle:** ALWAYS find root cause before attempting fixes. Symptom fixes are failure.
+**Core principle:** Establish root cause before a permanent corrective fix.
+Reversible containment may precede full diagnosis when needed to limit impact,
+but it is not a root-cause resolution.
 
 **Violating the letter of this process is violating the spirit of debugging.**
 
@@ -16,10 +18,11 @@ Random fixes waste time and create new bugs. Quick patches mask underlying issue
 ## The Iron Law
 
 ```
-NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST
+NO PERMANENT CORRECTIVE FIX WITHOUT ROOT-CAUSE EVIDENCE
 ```
 
-If you haven't completed Phase 1, you cannot propose fixes.
+If you haven't completed Phase 1, do not propose a permanent corrective fix.
+Containment is allowed when necessary to limit active impact.
 </EXTREMELY-IMPORTANT>
 
 ## When to Use
@@ -45,7 +48,7 @@ Use for ANY technical issue:
 
 - Issue seems simple (simple bugs have root causes too)
 - You're in a hurry (rushing guarantees rework)
-- Manager wants it fixed NOW (systematic is faster than thrashing)
+- Manager wants it fixed NOW (containment may be needed before diagnosis)
 
 ## Related Skills
 
@@ -59,12 +62,14 @@ Use for ANY technical issue:
 
 State minimum tracing capability and required evidence before selecting a tool.
 Prefer native source, tests, and reproduction evidence; resolve unmet
-capabilities through `docs/runtime-adapters.md`.
+capabilities through the active runtime's configured/native tooling. Read
+`docs/runtime-adapters.md` only for runtime-boundary questions.
 Source, tests, and reproduction evidence remain authoritative.
 
 ## The Four Phases
 
-You MUST complete each phase before proceeding to the next.
+Complete the phases in order for permanent corrective fixes. Containment may
+interrupt the sequence when needed to limit active impact.
 
 ### Phase 1: Root Cause Investigation
 
@@ -82,7 +87,7 @@ You MUST complete each phase before proceeding to the next.
    - Does it happen every time?
    - If not reproducible → gather more data, don't guess
    - For browser-visible failures, use available browser-interaction capability when available to reproduce repeatable flows and capture semantic state
-   - If no suitable browser-diagnostic capability is currently available, use existing browser evidence and native logs before adding a new diagnostic path; otherwise resolve the needed capability through `docs/runtime-adapters.md`
+   - If no suitable browser-diagnostic capability is currently available, use existing browser evidence and native logs before adding a new diagnostic path; otherwise select the needed capability through the active runtime's configured/native tooling
    - Browser replay is diagnostic evidence, not committed regression coverage; preserve the failure in the existing browser test suite before fixing when practical
 
 3. **Check Failure Memory When The Issue Looks Familiar**
@@ -206,11 +211,11 @@ You MUST complete each phase before proceeding to the next.
 
 **Fix the root cause, not the symptom:**
 
-1. **Create Failing Test Case**
+1. **Create Reproducible Proof**
    - Simplest possible reproduction
-   - Automated test if possible
-   - One-off test script if no framework
-   - MUST have before fixing
+   - Automated failing test when practical
+   - One-off test script, log, trace, or other reproducible evidence when an automated test cannot represent the failure
+   - Preserve the proof before fixing when practical
    - Use `test-driven-development` for writing proper failing tests
 
 2. **Implement Single Fix**
@@ -285,7 +290,7 @@ hypothesis:** Question the architecture before attempting another fix.
 | Excuse | Reality |
 |--------|---------|
 | "Issue is simple, don't need process" | Simple issues have root causes too. Process is fast for simple bugs. |
-| "Emergency, no time for process" | Systematic debugging is FASTER than guess-and-check thrashing. |
+| "Emergency, no time for process" | Contain active impact first when needed, then return to root-cause investigation. |
 | "Just try this first, then investigate" | First fix sets the pattern. Do it right from the start. |
 | "I'll write test after confirming fix works" | Untested fixes don't stick. Test first proves it. |
 | "Multiple fixes at once saves time" | Can't isolate what worked. Causes new bugs. |
@@ -311,8 +316,6 @@ If systematic investigation reveals issue is truly environmental, timing-depende
 3. Implement appropriate handling (retry, timeout, error message)
 4. Add monitoring/logging for future investigation
 
-**But:** 95% of "no root cause" cases are incomplete investigation.
-
 ## Supporting Techniques
 
 These techniques are part of systematic debugging and available in this directory:
@@ -329,12 +332,3 @@ These techniques are part of systematic debugging and available in this director
 - **performance-optimization** - Define representative workloads, metrics, targets, and comparable performance proof
 - **full-stack-integration** - Reconcile frontend intent, transport contracts, API impact, and browser evidence
 - **verification-before-completion** - Verify fix worked before claiming success
-
-## Real-World Impact
-
-From debugging sessions:
-
-- Systematic approach: 15-30 minutes to fix
-- Random fixes approach: 2-3 hours of thrashing
-- First-time fix rate: 95% vs 40%
-- New bugs introduced: Near zero vs common

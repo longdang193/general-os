@@ -50,7 +50,7 @@ Verification makes closure actions eligible. Closure actions still require
 explicit user authorization or an applicable repository policy; an
 implementation plan does not grant Git or publication authority.
 
-Do not commit, fetch, pull, create branch, rebase, merge, push, create or update pull request, apply or drop stash, delete branch, prune metadata, or remove worktree without explicit authorization for that action. Implementation plans may describe an intended lane or PR workflow, but they do not grant lifecycle authority. `finishing-development-work` owns worktree cleanup after retirement, clean-state proof, released retention dependencies, and exact authorization. Direct or exceptional base mutation, force push, PR retargeting, branch-protection bypass, semantic conflict resolution, unrelated branch/worktree mutation, destructive recovery, unknown-file discard, and merging another lane remain user-authorized.
+Do not commit, fetch, pull, create branch, rebase, merge, push, create or update pull request, apply or drop stash, delete branch, prune metadata, or remove worktree without explicit authorization for that action. Implementation plans may describe an intended workstream or PR workflow, but they do not grant lifecycle authority. `finishing-development-work` owns worktree cleanup after retirement, clean-state proof, released retention dependencies, and exact authorization. Direct or exceptional base mutation, force push, PR retargeting, branch-protection bypass, semantic conflict resolution, unrelated workstream/worktree mutation, destructive recovery, unknown-file discard, and merging another workstream remain user-authorized.
 
 Never infer a file is “superseded.” Before reconciliation can remove or overwrite
 content, show every overlapping file with hashes and diff summary, then require an
@@ -85,7 +85,7 @@ Invalidate affected verification when any of these changed content or integratio
 - conflict resolution
 - merge
 - base branch update affecting integration
-- stash apply or pop affecting lane files
+- stash apply or pop affecting workstream files
 
 Rerun required checks before proceeding after invalidation.
 
@@ -95,13 +95,13 @@ Identify:
 
 - primary checkout or linked worktree
 - native-managed or manually created worktree
-- named lane branch or detached HEAD
+- named workstream branch or detached HEAD
 - base branch and worktree where base is checked out
 - clean, staged, unstaged, and untracked state
-- lane-related versus unrelated stashes
+- workstream-related versus unrelated stashes
 - remote and upstream configuration
 
-Do not assume `main`, `origin`, named lane branch, clean tree, or same-worktree base checkout.
+Do not assume `main`, `origin`, named workstream branch, clean tree, or same-worktree base checkout.
 
 ## 3. Resolve Detached HEAD
 
@@ -149,11 +149,11 @@ After explicit selection and explicit user authorization:
 1. confirm named branch and committed verified state
 2. confirm remote target
 3. request network authorization when required
-4. push lane branch
+4. push workstream branch
 5. create or update a pull request when explicit authorization allows it and support exists
 6. record branch, remote, commit SHA, and pull-request result
-7. keep the selected runtime and worktree available for review fixes and integration
-8. after whole-plan verification, review acceptance, and expected-head confirmation, release the selected runtime, confirm no live process owns the worktree, then remove it only when cleanup is granted and safe
+7. keep the workstream runtime and worktree available for review fixes and integration
+8. after final applicable verification, review acceptance, and expected-head confirmation, consume evidence from the owning runtime that its resources are retired or released, confirm no live process owns the worktree, then remove it only when cleanup is granted and safe
 
 Do not merge local base first when pull request path is selected.
 
@@ -185,13 +185,13 @@ git -C <base-worktree> merge --ff-only <lane-branch>
 9. push base only with separate explicit authorization; an approved PR merge
    still requires the repository's normal review and merge controls
 
-Never run `git checkout main` blindly inside lane worktree.
+Never run `git checkout main` blindly inside workstream worktree.
 
 ## 8. Reconciliation Required
 
 When fast-forward is impossible or conflicts exist, report:
 
-- lane branch and commit
+- workstream branch and commit
 - base branch and commit
 - divergence cause
 - exact conflicting or overlapping files when known
@@ -202,7 +202,7 @@ restore, worktree cleanup, or deletion, collect and show evidence for every
 overlapping file, including tracked, untracked, ignored, conflict, and stash-only
 files:
 
-- path and source state: base, lane, current worktree, index, untracked, or stash ID
+- path and source state: base, workstream, current worktree, index, untracked, or stash ID
 - blob or content hashes for each available source
 - concise diff summary and diff stat for each differing source pair
 
@@ -233,7 +233,7 @@ timestamps, partial overlap, or later commits never prove a file is superseded.
 
 Allowed proposals:
 
-- rebase lane onto base
+- rebase workstream onto base
 - bounded non-fast-forward merge with justification
 - revise implementation before integration
 
@@ -245,20 +245,20 @@ After approved resolution, rerun affected verification before merge or push.
 
 Do not create stash by default. Never use stash-and-forget.
 
-When explicitly authorized lane-related stash is used or pre-existing lane stash must be reconciled, record:
+When explicitly authorized workstream-related stash is used or pre-existing workstream stash must be reconciled, record:
 
 - stash entry ID
 - reason and owned files
 - apply or pop result
 - resolved files
 - verification rerun result
-- whether lane-related stash remains
+- whether workstream-related stash remains
 
 Never run `git stash drop`, `git stash clear`, or `git stash pop` before every
 affected file has approved disposition. Prefer `git stash apply` until disposition
 approval and verification complete. Never run `git clean` before disposition approval.
 
-Unrelated historical stashes remain untouched. Closure is blocked only by unresolved lane-related stash.
+Unrelated historical stashes remain untouched. Closure is blocked only by unresolved workstream-related stash.
 
 ## 10. Keep Path
 
@@ -284,8 +284,8 @@ Never recursively delete worktree directory directly. Never discard unrelated ch
 
 ## 12. Worktree Cleanup
 
-Cleanup occurs only after selected Git disposition is complete, the lane main
-agent and relevant descendants/resources are retired, no live process owns the
+Cleanup occurs only after selected Git disposition is complete, the owning
+assignment/controller and relevant descendants/resources are retired, no live process owns the
 worktree, all verification/debugging/recovery/handoff retention dependencies are
 released, and exact cleanup authorization exists through explicit user
 authorization. Timeout, silence, missing observation, or transport
@@ -325,7 +325,7 @@ Stop when:
 - conflict resolution needs semantic choice
 - detached HEAD lacks approved branch destination
 - network, credentials, or repository policy blocks selected action
-- lane-related stash remains unresolved
+- workstream-related stash remains unresolved
 - overlapping file lacks approved disposition
 - destructive confirmation is missing
 
@@ -334,7 +334,7 @@ Stop when:
 - automatically merging or pushing after verification
 - assuming base branch is `main`
 - assuming remote is `origin`
-- checking out base inside lane worktree without topology inspection
+- checking out base inside workstream worktree without topology inspection
 - pushing base when pull-request path was selected
 - using stash to hide dirty state
 - inferring a file is superseded

@@ -31,8 +31,9 @@ For prompt-cache claims, apply `docs/rules/prompt-cache.md`. Equal local hashes 
 ## Evidence Map
 
 When performance work depends on an unfamiliar external GitHub repository, use
-available external-repository orientation capability only when needed and
-resolve it through `docs/runtime-adapters.md`.
+the active runtime's configured external-repository orientation capability only
+when needed. Read `docs/runtime-adapters.md` only for runtime-boundary
+questions.
 Measurements remain authoritative.
 
 | Surface | Useful evidence |

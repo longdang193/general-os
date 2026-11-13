@@ -40,10 +40,10 @@ When repository convention conflicts with generic advice, preserve repository co
 
 ### 1. Read Existing Contracts
 
-When compatibility depends on an unfamiliar external GitHub repository, resolve
-an external-repository evidence capability through
-`docs/runtime-adapters.md`. Pinned source
-remains authoritative.
+When compatibility depends on an unfamiliar external GitHub repository, use the
+active runtime's configured external-repository evidence capability. Pinned
+source remains authoritative; read `docs/runtime-adapters.md` only when the
+question concerns a Codex/Orca execution boundary.
 
 Before editing:
 

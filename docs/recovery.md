@@ -6,8 +6,9 @@ Git, not from Codex or Orca session history:
 1. Read `state/coordination.json`.
 2. Inspect the current branch, revision, worktree, conflicts, and changed
    files directly from Git.
-3. Determine the unfinished dependency-ready task, or use the global goal when
-   the task graph is empty.
+3. Determine the unfinished dependency-ready task, or redispatch the global
+   goal when the task graph is empty. Goal-only state is intent-only and has no
+   durable completion record; use a task graph when completion must be retained.
 4. Revalidate every completed task against its accepted `GitSnapshot.identity`
    and the current work snapshot identity. The identity includes implementation
    changes and untracked content but excludes `state/coordination.json`, which

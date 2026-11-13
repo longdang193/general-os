@@ -26,10 +26,12 @@ durable coordination state. The native runtime owns planning and execution.
 Do not create a durable plan merely because the runtime internally uses a
 plan.
 
-### Level 1: Goal only
+### Level 1: Goal-only intent
 
-Use when the outcome must survive runtime loss, but a capable fresh executor
-can safely derive the implementation approach.
+Use when the intent must survive runtime loss, a capable fresh executor can
+safely derive the implementation approach, and repeating the assignment is
+safe. Goal-only state has no durable completion or acceptance record; use Level
+2 when completion must be accepted and retained.
 
 ```json
 {
@@ -38,10 +40,10 @@ can safely derive the implementation approach.
 }
 ```
 
-The empty task list is valid. Persist only the durable outcome and material
-constraints or acceptance facts. The native runtime owns implementation
-decomposition, exploratory work, temporary steps, tools, retries, and
-delegation.
+The empty task list is valid for this intent-only form. Persist the goal and
+material constraints only. Recovery may redispatch the goal because no durable
+goal completion exists. The native runtime owns implementation decomposition,
+exploratory work, temporary steps, tools, retries, and delegation.
 
 ### Level 2: Small task graph
 

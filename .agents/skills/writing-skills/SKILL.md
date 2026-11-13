@@ -15,11 +15,13 @@ baseline, write the skill, verify compliance, and refactor to close loopholes.
 For metadata, reference, or mechanical edits, use focused contract and
 retrieval validation instead of inventing pressure scenarios.
 
-**Core principle:** If you didn't watch an agent fail without the skill, you don't know if the skill teaches the right thing.
+**Core principle:** For discipline skills, observe an agent fail without the
+skill before deciding whether the skill teaches the right behavior. Metadata,
+reference, and mechanical edits use focused contract and retrieval checks.
 
-**REQUIRED BACKGROUND:** You MUST understand `test-driven-development`
-before using this skill. That skill defines the RED-GREEN-REFACTOR cycle. This
-skill adapts TDD to documentation.
+**REQUIRED BACKGROUND for discipline skills:** Understand
+`test-driven-development` before applying the RED-GREEN-REFACTOR workflow to
+behavior-changing process documentation.
 
 **Official guidance:** Follow the Codex Skills model first: one focused workflow per skill, `SKILL.md` as the entrypoint, and optional `scripts/`, `references/`, `assets/`, or `agents/openai.yaml` only when they materially help.
 
@@ -31,7 +33,7 @@ A **skill** is a reference guide for proven techniques, patterns, or tools. Skil
 
 **Skills are NOT:** Narratives about how you solved a problem once
 
-## TDD Mapping for Skills
+## TDD Mapping for Discipline Skills
 
 | TDD Concept | Skill Creation |
 |-------------|----------------|
@@ -46,7 +48,8 @@ A **skill** is a reference guide for proven techniques, patterns, or tools. Skil
 | **Watch it pass** | Verify agent now complies |
 | **Refactor cycle** | Find new rationalizations → plug → re-verify |
 
-The entire skill creation process follows RED-GREEN-REFACTOR.
+Discipline-skill creation follows RED-GREEN-REFACTOR; other skill changes use
+proportional validation.
 
 ## When to Create a Skill
 
@@ -554,7 +557,8 @@ Run same scenarios WITH skill. Agent should now comply.
 
 Agent found new rationalization? Add explicit counter. Re-test until bulletproof.
 
-**Testing methodology:** See @testing-skills-with-subagents.md for the complete testing methodology:
+**Testing methodology:** See `testing-skills-with-subagents.md` for the complete
+discipline-skill testing methodology:
 - How to write pressure scenarios
 - Pressure types (time, sunk cost, authority, exhaustion)
 - Plugging holes systematically

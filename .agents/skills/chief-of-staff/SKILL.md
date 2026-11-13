@@ -29,7 +29,8 @@ second runtime scheduler.
 
 1. Read `state/coordination.json` and inspect current Git directly.
 2. Select the first unfinished dependency-ready task. An empty task graph is a
-   valid goal-only assignment.
+   valid goal-only intent assignment with no durable completion record; use a
+   task graph when acceptance must be persisted.
 3. Resolve effective runtime policy, including `orca_enabled`, before choosing
    an independent boundary. A disabled Orca capability keeps ordinary work on
    Codex and blocks only work whose durable contract requires independence.

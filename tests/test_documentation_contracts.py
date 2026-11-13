@@ -151,6 +151,29 @@ def test_core_governance_skills_define_native_ownership():
     assert "orca skills get orchestration --full" in contents["orca-orchestration"]
 
 
+def test_goal_only_and_reusable_skill_boundaries_are_explicit():
+    root = Path(__file__).parents[1]
+    defining_work = (root / ".agents" / "skills" / "defining-work" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    contracts = (root / "docs" / "contracts.md").read_text(encoding="utf-8")
+    recovery = (root / "docs" / "recovery.md").read_text(encoding="utf-8")
+    learning = (
+        root / ".agents" / "skills" / "creating-learning-materials" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    historical_plans = (root / "docs" / "superpowers" / "plans" / "README.md").read_text(
+        encoding="utf-8"
+    )
+
+    for text in (defining_work, contracts, recovery):
+        normalized = " ".join(text.split())
+        assert "no durable completion" in normalized
+        assert "task graph" in normalized
+    assert "user-supplied output location" in learning
+    assert "OneDrive" not in learning
+    assert "never override" in historical_plans
+
+
 def test_orca_skill_and_runtime_docs_keep_native_ownership_explicit():
     root = Path(__file__).parents[1]
     runtime = (root / "docs" / "runtime-adapters.md").read_text(encoding="utf-8")

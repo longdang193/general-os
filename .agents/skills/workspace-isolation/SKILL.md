@@ -48,11 +48,12 @@ Classify current state:
 
 If already in suitable isolated workspace, reuse it. Do not create nested worktree.
 
-A healthy live lane may continue only after fresh checks confirm the same task,
-repository, worktree, branch, `HEAD`, base, and ownership. A replacement runtime
-for the same task and lane may reuse the workspace only after the prior runtime
-is retired and plan, Git, and ownership state reconcile. Never reuse a workspace
-for an unrelated task or concurrent writer.
+A healthy live workstream may continue only after fresh checks confirm the same
+task, repository, worktree, branch, `HEAD`, base, and ownership. A replacement
+runtime for the same assignment may reuse the workspace only after the prior
+runtime is retired and approved scope or durable coordination state, current
+Git, and workspace ownership reconcile. Never reuse a workspace for an
+unrelated task or concurrent writer.
 
 ## 2. Obtain Isolation Consent
 
@@ -101,7 +102,7 @@ Commit remains separate explicitly authorized action.
 Only when native support is unavailable and creation is authorized:
 
 ```powershell
-git worktree add <path> -b <lane-branch>
+git worktree add <path> -b <workstream-branch>
 ```
 
 Before creation confirm:
@@ -168,9 +169,9 @@ begin.
 ## Cleanup Boundary
 
 This skill does not remove worktree. Cleanup requires positive confirmation that
-the associated lane, relevant descendants, and task-owned resources no longer
-use the path. Timeout, silence, missing observation, or transport failure is
-not proof of retirement.
+the associated workstream, relevant descendants, and task-owned resources no
+longer use the path. Timeout, silence, missing observation, or transport
+failure is not proof of retirement.
 
 `finishing-development-work` owns cleanup after verified Git disposition and explicit authorization. It must use native cleanup for native-created workspace and `git worktree remove` only for manually created worktree.
 

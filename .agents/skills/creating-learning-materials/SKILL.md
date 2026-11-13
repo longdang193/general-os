@@ -64,16 +64,15 @@ the output as general rather than repo-grounded.
 ## Persisted Outputs
 
 When the user asks to save or create learning artifacts, write one Markdown file
-per question under:
-
-```text
-C:\Users\HOANG PHI LONG DANG\OneDrive\OBSIDIAN 24 09 01\24 09 01 obsidian-go-obsidian_v.0.3.1\<project_slug>\
-```
+per question under the user-supplied output location, subject to command-safety
+rules. If no location is supplied, use a repository-defined artifact location
+when one exists; otherwise return the material without creating external
+persistent storage.
 
 Choose `<project_slug>`:
 
 - If user supplies `[project]` (or explicit project name), use that.
-- Else use current repo folder name from working directory.
+- Else use the repository-defined artifact location's project convention.
 - Sanitize: lowercase ASCII, spaces to `-`, remove `* " \ / < > : | ?`, trim.
 
 
@@ -87,7 +86,8 @@ Rules:
 
 - Use the current local date and hour.
 - Use one question per file.
-- Create `<project_slug>` folder if missing.
+- Create the project folder only inside the selected output location when
+  missing.
 - Start each file with the required frontmatter from the templates reference.
 - Include validator-friendly metadata in frontmatter: `question_type`,
   `learning_mode`, `bloom_level`, and `source_scope`.

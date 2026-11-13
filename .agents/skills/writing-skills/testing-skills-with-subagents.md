@@ -4,16 +4,16 @@
 
 ## Overview
 
-**Testing skills is just TDD applied to process documentation.**
+**Testing discipline skills applies TDD to process documentation.**
 
 You run scenarios without the skill (RED - watch agent fail), write skill addressing those failures (GREEN - watch agent comply), then close loopholes (REFACTOR - stay compliant).
 
-**Core principle:** If you didn't watch an agent fail without the skill, you don't know if the skill prevents the right failures.
+**Core principle:** For discipline skills, observe an agent fail without the
+skill before deciding whether the skill prevents the right failures.
 
-**REQUIRED BACKGROUND:** You MUST understand `test-driven-development`
-before using this skill. That skill defines the RED-GREEN-REFACTOR cycle. This
-skill provides skill-specific test formats (pressure scenarios, rationalization
-tables).
+**REQUIRED BACKGROUND:** When testing a discipline skill, understand
+`test-driven-development` first. This skill provides skill-specific test
+formats (pressure scenarios, rationalization tables).
 
 **Complete worked example:** See examples/CLAUDE_MD_TESTING.md for a full test campaign testing CLAUDE.md documentation variants.
 
@@ -43,11 +43,13 @@ Don't test:
 
 Same cycle as code TDD, different test format.
 
-## RED Phase: Baseline Testing (Watch It Fail)
+## RED Phase: Baseline Testing For Discipline Skills (Watch It Fail)
 
-**Goal:** Run test WITHOUT the skill - watch agent fail, document exact failures.
+**Goal:** For a discipline skill, run the scenario WITHOUT the skill - watch
+the agent fail and document exact failures.
 
-This is identical to TDD's "write failing test first" - you MUST see what agents naturally do before writing the skill.
+This mirrors TDD's "write failing test first" for behavior-changing skills;
+observe what agents naturally do before writing the skill.
 
 **Process:**
 
@@ -371,17 +373,11 @@ Tests pass once ≠ bulletproof.
 
 ## The Bottom Line
 
-**Skill creation IS TDD. Same principles, same cycle, same benefits.**
+**Discipline-skill creation uses TDD.** Other skill types use proportional
+validation appropriate to their behavior and references.
 
-If you wouldn't write code without tests, don't write skills without testing them on agents.
+If the skill changes agent behavior, do not publish it without testing the
+behavior under pressure when that evidence is practical.
 
-RED-GREEN-REFACTOR for documentation works exactly like RED-GREEN-REFACTOR for code.
-
-## Real-World Impact
-
-From applying TDD to TDD skill itself (2025-10-03):
-- 6 RED-GREEN-REFACTOR iterations to bulletproof
-- Baseline testing revealed 10+ unique rationalizations
-- Each REFACTOR closed specific loopholes
-- Final VERIFY GREEN: 100% compliance under maximum pressure
-- Same process works for any discipline-enforcing skill
+RED-GREEN-REFACTOR for discipline documentation follows the same intent as
+code TDD, with pressure scenarios replacing executable unit tests.

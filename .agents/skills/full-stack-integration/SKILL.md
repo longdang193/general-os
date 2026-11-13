@@ -41,7 +41,7 @@ Reference request and response schemas; do not copy them.
 
 1. Read the approved final specification when one exists or behavior needs durable definition, the prototype reference when material, the matching sidecar when one exists, the existing client or query, mocks, backend route, canonical contract owner, and focused tests.
 2. Use source, canonical contracts, security policy, routes, and tests to establish current behavior. If a sidecar exists and requests conflicting behavior, report the exact mismatch and affected owners, present viable options, and ask the user to decide before implementation. Security and data-safety constraints remain non-negotiable; after approval, update all affected owners together.
-3. State minimum code, route-impact, or contract capability and required evidence, then resolve it through `docs/runtime-adapters.md`.
+3. State minimum code, route-impact, or contract capability and required evidence, then select it through the active runtime's configured/native tooling. Read `docs/runtime-adapters.md` only for runtime-boundary questions.
 4. Before changing an API route handler, inspect route consumers and impact with an available fresh capability when material; fall back to source search when unavailable, without weakening required proof.
 5. Implement smallest complete slice: canonical contract when applicable, backend validation and authorization, narrow route or service change, existing client generation command, frontend query or mutation, and mapped UI states. Reuse existing mocks; do not add mock infrastructure by default.
 6. Use `backend-verification` for direct boundary, business/failure, state, dependency, contract, representative-operation, and automated backend evidence before accepting consumer proof.

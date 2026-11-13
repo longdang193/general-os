@@ -26,7 +26,7 @@ If scope is missing, infer smallest useful scope from request and repository evi
 
 Read only references needed for current assessment:
 
-- `docs/runtime-adapters.md` when a code, flow, impact, or external-repository capability is needed beyond native source inspection
+- the active runtime's configured code, flow, impact, or external-repository capability when needed beyond native source inspection; read `docs/runtime-adapters.md` only for runtime-boundary questions
 - `verification-before-completion` when user requests an audit or evidence suggests a qualifying incident
 - no repository audit template; keep formal audit output in the approved task or plan format
 - `brainstorming` when desired behavior or design direction remains unclear
@@ -122,8 +122,8 @@ Prefer existing tests and validators. Recommend new executable contract only whe
 
 Use smallest available capability that answers question: native search, file
 inspection, diffs, and tests for bounded evidence; symbol, discovery, flow, or
-impact capabilities only when the question requires them. Resolve selection
-through `docs/runtime-adapters.md`.
+impact capabilities only when the question requires them. Select those
+capabilities through the active runtime's configured/native tooling.
 
 Treat stale or advisory analysis as non-authoritative. Source code,
 configuration, tests, schemas, validators, and current runtime evidence remain
