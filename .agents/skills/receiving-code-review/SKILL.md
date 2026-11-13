@@ -1,6 +1,6 @@
 ---
 name: receiving-code-review
-description: migrated specialist procedure for receiving-code-review
+description: Use when code review feedback must be evaluated before accepting, rejecting, clarifying, or implementing it.
 ---
 
 # Code Review Reception

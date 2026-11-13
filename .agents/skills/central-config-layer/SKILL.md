@@ -1,6 +1,6 @@
 ---
 name: central-config-layer
-description: migrated specialist procedure for central-config-layer
+description: Use when shared configuration spans modules, services, agents, or pipelines and needs one authoritative owner.
 ---
 # Central Config Layer
 

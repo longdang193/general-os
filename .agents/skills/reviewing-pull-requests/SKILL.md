@@ -1,6 +1,6 @@
 ---
 name: reviewing-pull-requests
-description: migrated specialist procedure for reviewing-pull-requests
+description: Use when an independent agent must inspect a pull request and return head-bound technical review evidence.
 ---
 
 # Reviewing Pull Requests
@@ -62,7 +62,7 @@ required, and repository rules allow the approval to count. Otherwise submit
 Use `requesting-code-review` for dispatch and
 `receiving-code-review` for feedback evaluation. Do not mutate the PR
 branch, push commits, merge, delete branches, or remove worktrees. A review
-does not complete a task or update the active plan ledger.
+does not complete a task or update durable coordination state.
 
 ## Output
 

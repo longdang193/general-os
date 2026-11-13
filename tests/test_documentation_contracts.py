@@ -53,6 +53,44 @@ def test_root_guidance_and_templates_define_durable_ownership():
         "implementation plans",
     ):
         assert term in detailed_plan
+    assert "## Agent Memory" in guidance
+    assert "## Command Safety" in guidance
+
+
+def test_maintained_skill_descriptions_are_actionable():
+    root = Path(__file__).parents[1]
+    skill_root = root / ".agents" / "skills"
+
+    for path in sorted(skill_root.glob("*/SKILL.md")):
+        frontmatter = path.read_text(encoding="utf-8").split("---\n", 2)[1]
+        description = next(
+            line.split(":", 1)[1].strip()
+            for line in frontmatter.splitlines()
+            if line.startswith("description:")
+        )
+        assert description.startswith("Use when"), path
+        assert "migrated specialist procedure" not in description, path
+
+
+def test_planning_and_review_guidance_do_not_create_a_second_authority():
+    root = Path(__file__).parents[1]
+    paths = (
+        root / ".agents" / "skills" / "plan-document-reviewer" / "SKILL.md",
+        root / ".agents" / "skills" / "workspace-isolation" / "SKILL.md",
+        root / ".agents" / "skills" / "finishing-development-work" / "SKILL.md",
+        root / ".agents" / "skills" / "reviewing-pull-requests" / "SKILL.md",
+    )
+    contents = "\n".join(path.read_text(encoding="utf-8") for path in paths)
+
+    assert "state/coordination.json" in contents
+    assert "lifecycle authority" in contents
+    assert "implementation plan does not grant Git or publication authority" in contents
+    for forbidden in (
+        "active-plan lane authority",
+        "approved-plan lane authority",
+        "active plan ledger",
+    ):
+        assert forbidden not in contents
 
 
 def test_migrated_guidance_uses_current_owners_and_review_statuses():
@@ -122,6 +160,8 @@ def test_orca_skill_and_runtime_docs_keep_native_ownership_explicit():
     assert "native" in runtime.lower()
     assert "worker lifecycle" in runtime
     assert "runtime IDs" in runtime
+    assert "requires an explicit" in runtime
+    assert "native defaults" in runtime
     assert "orca skills get orchestration --full" in skill
     assert "orca_enabled" in skill
     assert "native" in skill.lower()
@@ -143,6 +183,15 @@ def test_native_cos_keeps_orca_optional_but_allows_material_independence():
     assert "primary execution path" in runtime
     assert "required independent" in runtime
     assert "blocks when Orca is disabled or unavailable" in runtime
+
+
+def test_readme_has_stable_verification_commands():
+    root = Path(__file__).parents[1]
+    readme = (root / "README.md").read_text(encoding="utf-8")
+
+    assert "pytest -q" in readme
+    assert "python -m general_os state validate state/coordination.json" in readme
+    assert "active implementation plan" not in readme
 
 
 def test_profile_projection_is_canonical_and_one_way():

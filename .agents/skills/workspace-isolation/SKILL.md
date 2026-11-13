@@ -1,6 +1,6 @@
 ---
 name: workspace-isolation
-description: migrated specialist procedure for workspace-isolation
+description: Use when feature, parallel, or high-impact work needs an isolated Git worktree or workspace boundary.
 ---
 # Using Git Worktrees
 
@@ -56,9 +56,9 @@ for an unrelated task or concurrent writer.
 
 ## 2. Obtain Isolation Consent
 
-Use explicit approved-plan lane authority, user instruction, or repository
-instruction when available. Otherwise ask before creating worktree. A plan
-grant applies only to the exact named repository, branch, worktree, and lane.
+Use explicit user instruction or repository instruction when available.
+Otherwise ask before creating a worktree. A worktree decision does not grant
+commit, push, merge, publication, or runtime authority.
 
 Worktree creation may create branch and filesystem state. Do not create it merely because skill exists.
 
@@ -111,9 +111,8 @@ Before creation confirm:
 - target path does not contain user files
 - base commit or branch is correct
 
-For plan-bound work, use the exact base commit recorded by the active plan. Do
-not create each lane from the current `origin/main` unless the plan explicitly
-requires that remote state and records the resolved SHA.
+When an implementation plan records a base commit, verify and use that exact
+commit. Otherwise derive the base from current Git and the approved scope.
 
 Do not force, delete, prune, reset, or overwrite to make creation succeed.
 

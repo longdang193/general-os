@@ -1,6 +1,6 @@
 ---
 name: disposable-artifact-cleanup
-description: migrated specialist procedure for disposable-artifact-cleanup
+description: Use when completed or interrupted work leaves task-owned disposable files, directories, or lifecycle resources that need safe cleanup.
 ---
 
 # Disposable Artifact Cleanup

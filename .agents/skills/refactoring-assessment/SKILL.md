@@ -1,6 +1,6 @@
 ---
 name: refactoring-assessment
-description: migrated specialist procedure for refactoring-assessment
+description: Use when code, configuration, tests, schemas, docs, dependencies, or module boundaries need a safe refactoring assessment.
 ---
 # Refactoring Assessment
 

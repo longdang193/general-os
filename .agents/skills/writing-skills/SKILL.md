@@ -1,6 +1,6 @@
 ---
 name: writing-skills
-description: migrated specialist procedure for writing-skills
+description: Use when creating, editing, testing, or maintaining reusable agent skills and their discovery metadata.
 ---
 # Writing Skills
 
@@ -107,7 +107,7 @@ skills/
 ```markdown
 ---
 name: writing-skills
-description: migrated specialist procedure for writing-skills
+description: Use when creating, editing, testing, or maintaining reusable agent skills and their discovery metadata.
 ---
 
 # Skill Name
@@ -139,13 +139,13 @@ Concrete results
 ```
 
 
-## Claude Search Optimization (CSO)
+## Skill Discovery Optimization
 
-**Critical for discovery:** Future agents need to FIND your skill
+**Critical for discovery:** Future native runtimes need to find your skill
 
 ### 1. Rich Description Field
 
-**Purpose:** Claude reads description to decide which skills to load for a given task. Make it answer: "Should I read this skill right now?"
+**Purpose:** Native runtimes read the description to decide which skills to load for a given task. Make it answer: "Should I read this skill right now?"
 
 **Format:** Start with "Use when..." to focus on triggering conditions
 
@@ -153,14 +153,15 @@ Concrete results
 
 The description should ONLY describe triggering conditions. Do NOT summarize the skill's process or workflow in the description.
 
-**Why this matters:** Testing revealed that when a description summarizes the skill's workflow, Claude may follow the description instead of reading the full skill content. A description saying "code review between tasks" caused Claude to do ONE review, even though the skill's flowchart clearly showed TWO reviews (spec compliance then code quality).
+**Why this matters:** When a description summarizes workflow instead of triggers, a runtime may follow the summary and skip the skill body. Keep descriptions focused on when the skill applies so the full procedure remains authoritative.
 
-When the description was changed to just "Use when executing implementation plans with independent tasks" (no workflow summary), Claude correctly read the flowchart and followed the two-stage review process.
+Descriptions that focus on triggers leave the full procedure authoritative.
 
-**The trap:** Descriptions that summarize workflow create a shortcut Claude will take. The skill body becomes documentation Claude skips.
+**The trap:** Descriptions that summarize workflow create a shortcut a native
+runtime may take. The skill body becomes documentation the runtime skips.
 
 ```yaml
-# ❌ BAD: Summarizes workflow - Claude may follow this instead of reading skill
+# ❌ BAD: Summarizes workflow - a native runtime may follow this instead of reading skill
 description: Use when executing plans - dispatches subagent per task with code review between tasks
 
 # ❌ BAD: Too much process detail
@@ -200,7 +201,7 @@ description: Use when using React Router and handling authentication redirects
 
 ### 2. Keyword Coverage
 
-Use words Claude would search for:
+Use words a native runtime would search for:
 - Error messages: "Hook timed out", "ENOTEMPTY", "race condition"
 - Symptoms: "flaky", "hanging", "zombie", "pollution"
 - Synonyms: "timeout/hang/freeze", "cleanup/teardown/afterEach"
@@ -625,9 +626,10 @@ Deploying untested skills = deploying untested code. It's a violation of quality
 - [ ] No narrative storytelling
 - [ ] Supporting files only for tools or heavy reference
 
-**Deployment:**
-- [ ] Commit skill to git and push to your fork (if configured)
-- [ ] Consider contributing back via PR (if broadly useful)
+**Publication boundary:**
+- [ ] Verify the skill locally and run its applicable checks
+- [ ] Leave commit, push, and publication to `finishing-development-work`
+      under explicit authorization
 
 ## Discovery Workflow
 

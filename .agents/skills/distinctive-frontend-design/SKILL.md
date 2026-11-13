@@ -1,6 +1,6 @@
 ---
 name: distinctive-frontend-design
-description: migrated specialist procedure for distinctive-frontend-design
+description: Use when new or substantially restyled frontend work needs a distinctive visual direction and risks generic styling.
 ---
 # Distinctive Frontend Design
 

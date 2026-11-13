@@ -1,6 +1,6 @@
 ---
 name: test-driven-development
-description: migrated specialist procedure for test-driven-development
+description: Use when implementing non-trivial behavior or bug fixes with regression proof.
 ---
 # Test-Driven Development (TDD)
 

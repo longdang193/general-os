@@ -1,6 +1,6 @@
 ---
 name: spec-drafting
-description: migrated specialist procedure for spec-drafting
+description: Use when a problem, approved direction, or diagnosed defect needs a precise behavioral and design specification before implementation planning.
 ---
 # Spec Drafting
 
@@ -45,7 +45,12 @@ Specification owns:
 - design decisions and ownership boundaries
 - invariants, edge cases, acceptance criteria, and validation intent
 
-Implementation plan owns exact files, task order, commands, dependencies, rollout steps, and execution waves.
+`defining-work` chooses the smallest durable coordination representation after
+the specification is approved. An implementation plan may record exact files,
+task order, commands, dependencies, rollout steps, and execution waves when
+those details are needed for review or handoff. It does not replace
+`state/coordination.json`, grant runtime authority, or replace native runtime
+planning.
 
 ## Draft To Final Lifecycle
 
@@ -255,7 +260,10 @@ For every required outcome and behavior provide observable acceptance:
 - expected evidence:
 ```
 
-Specification owns proof intent. Implementation plan later owns exact commands and execution order.
+Specification owns proof intent. `defining-work` owns durable task boundaries;
+the native runtime owns temporary implementation decomposition. An
+implementation plan may record exact commands and execution order when that
+detail is required, but it remains an artifact rather than a runtime ledger.
 
 ### 10. Resolve Open Questions
 
@@ -286,7 +294,7 @@ Format records specification; it does not replace specification reasoning.
 ```yaml
 ---
 name: spec-drafting
-description: migrated specialist procedure for spec-drafting
+description: Use when a specification needs a precise behavioral and design contract before implementation planning.
 ---
 ```
 

@@ -1,6 +1,6 @@
 ---
 name: frontend-component-engineering
-description: migrated specialist procedure for frontend-component-engineering
+description: Use when stateful frontend components or pages need decisions about boundaries, state ownership, URL state, server data, or async behavior.
 ---
 
 # Frontend Component Engineering

@@ -1,26 +1,29 @@
 ---
 name: requesting-code-review
-description: migrated specialist procedure for requesting-code-review
+description: Use when completed code changes need independent review before further implementation, handoff, merge, or release.
 ---
 
 # Requesting Code Review
 
 Request independent review to catch issues before they cascade. Select review topology from the owning coordination method. The reviewer gets precisely crafted context for evaluation, never the producer session's history. This keeps review focused on the work product and preserves the producer context for continued work.
 
-**Core principle:** Review early, review often.
+**Core principle:** Review at proportionate checkpoints before irreversible
+integration or release.
 
-Review does not own execution or acceptance. The lead reconciles review
-evidence with Plan plus Git and the shared attempt contract before integration.
+Review does not own execution or acceptance. The caller reconciles review
+evidence with the approved scope, current Git, and fresh verification before
+integration.
 
 ## When to Request Review
 
-**Mandatory:**
-- After completing major feature
-- Before merge to main
-- When independent review is required by the active lifecycle or plan
+**Required when applicable:**
+- Before an irreversible merge, release, or publication when repository policy
+  or the approved scope requires independent review
+- After a major feature, high-risk change, or material security/data boundary
+- When an independent review boundary is explicitly required
 
-Task-scoped review in `executing-work` owns per-task review;
-do not dispatch a second whole-branch review for the same task.
+Do not require a separate review after every task when focused checks or a
+natural checkpoint provide sufficient evidence.
 
 **Optional but valuable:**
 - When stuck (fresh perspective)
@@ -35,7 +38,8 @@ BASE_SHA=$(git rev-parse "$APPROVED_BASE")
 HEAD_SHA=$(git rev-parse HEAD)
 ```
 
-`APPROVED_BASE` must come from the active plan, caller, or recorded merge base.
+`APPROVED_BASE` must come from the caller, approved scope, or recorded merge
+base.
 Do not infer a base from commit count; `HEAD~1` can omit multi-commit changes.
 
 **2. Select review topology:**
@@ -103,7 +107,7 @@ HEAD_SHA=$(git rev-parse HEAD)
 
 [Dispatch reviewer through selected topology]
   DESCRIPTION: Added verifyIndex() and repairIndex() with 4 issue types
-  PLAN_OR_REQUIREMENTS: Task 2 from the active plan
+  PLAN_OR_REQUIREMENTS: Approved scope for the change
   BASE_SHA: a7981ec
   HEAD_SHA: 3df7661
 
@@ -121,12 +125,12 @@ You: [Fix progress indicators]
 ## Integration
 
 **Delegated or parallel execution:**
-- Review after EACH task
+- Review at natural checkpoints or before integration
 - Catch issues before they compound
-- Fix before moving to next task
+- Fix required findings before proceeding
 
 **Executing Plans:**
-- Review after each task or at natural checkpoints
+- Review when the approved scope or risk warrants it
 - Get feedback, apply, continue
 
 **Ad-Hoc Development:**

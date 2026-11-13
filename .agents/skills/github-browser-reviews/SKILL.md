@@ -1,6 +1,6 @@
 ---
 name: github-browser-reviews
-description: migrated specialist procedure for github-browser-reviews
+description: Use when a GitHub pull request needs browser-based inspection, review, or evidence through the supported GitHub browser flow.
 ---
 
 # GitHub Browser Reviews

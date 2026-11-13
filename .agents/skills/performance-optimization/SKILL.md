@@ -1,6 +1,6 @@
 ---
 name: performance-optimization
-description: migrated specialist procedure for performance-optimization
+description: Use when measured latency, throughput, memory, query, bundle, rendering, Core Web Vitals, or prompt-cache behavior needs diagnosis and verification.
 ---
 
 # Performance Optimization

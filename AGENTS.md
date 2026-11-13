@@ -29,6 +29,23 @@ lifecycle or Codex execution loops in Python. Python adapters may provide
 headless facts and compatibility seams, but they are not a second coordination
 authority.
 
+## Agent Memory
+
+Use memory only for verified, reusable project facts, workflows, invariants,
+or recurring failures. Never store secrets, credentials, private governance,
+personal data, transient progress, runtime IDs, or facts already recoverable
+from source, tests, Git, or current runtime state. Memory informs work but does
+not override current source, tests, repository guidance, or user constraints.
+
+## Command Safety
+
+Prefer read-only inspection before mutation and use native repository tools when
+available. Before recursive delete or move, resolve and verify the absolute
+target remains inside the intended workspace or explicitly named directory.
+Keep path discovery and file mutation in one shell; never pass an unverified
+computed path to destructive commands. Do not expose credentials in commands,
+logs, patches, or generated artifacts.
+
 ## Execution And Recovery
 
 Prefer the current Codex runtime. Let Codex use native subagents when useful

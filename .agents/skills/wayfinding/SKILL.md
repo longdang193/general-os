@@ -1,6 +1,6 @@
 ---
 name: wayfinding
-description: migrated specialist procedure for wayfinding
+description: Use when the user explicitly invokes wayfinding for a known destination with materially unresolved dependent decisions expected to span sessions.
 ---
 
 # Wayfinding Through Unresolved Decisions
@@ -35,8 +35,9 @@ reversible, design-clear work uses the existing direct execution route.
 Create one active map at
 `docs/superpowers/plans/wayfinding/<YYYY-MM-DD-HH-MM-topic>/map.md`.
 
-one named lead controller is the sole writer. Other sessions return read-only
-findings to that writer. Do not allow concurrent map edits, merge competing
+The current coordinator is the sole writer. Other sessions return read-only
+findings to that coordinator. This is artifact ownership, not a second
+coordination authority. Do not allow concurrent map edits, merge competing
 maps, or copy settled decisions into the map, specification, and plan. Each
 artifact keeps one owner and links to the others.
 
@@ -76,10 +77,10 @@ Close only when all conditions hold:
 - approved behavior has been promoted once through `spec-drafting`;
 - handoff is recorded.
 
-After closure, return to the current plan and resolve the next task through
-the chief-of-staff decision flow and `defining-work` when implementation
-sequencing is needed. Apply the next applicable gate from current `AGENTS.md`
-guidance. Wayfinding does not pre-author plan tasks,
+After closure, return to durable coordination state and use the chief-of-staff
+decision flow and `defining-work` when implementation sequencing is needed.
+Apply the next applicable gate from current `AGENTS.md` guidance. Wayfinding
+does not pre-author plan tasks,
 dependency order, write ownership, executor choice, or verification commands.
 
 ## Verification

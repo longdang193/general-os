@@ -1,6 +1,6 @@
 ---
 name: creating-learning-materials
-description: migrated specialist procedure for creating-learning-materials
+description: Use when creating source-grounded questions, exercises, flashcards, quizzes, or other learning materials.
 ---
 # Creating Learning Materials
 

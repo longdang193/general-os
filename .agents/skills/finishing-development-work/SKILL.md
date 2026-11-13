@@ -1,6 +1,6 @@
 ---
 name: finishing-development-work
-description: migrated specialist procedure for finishing-development-work
+description: Use when verified development work needs an authorized commit, push, merge, pull request, retention, or cleanup disposition.
 ---
 # Finishing A Development Branch
 
@@ -46,11 +46,11 @@ When verified work used external worker runtime or another delegated executor:
 
 ## Authorization Rule
 
-Verification makes closure actions eligible. For an assigned lane, an explicit
-active-plan lane authority selects bounded lifecycle actions. User authorization
-remains required for exceptional or destructive actions.
+Verification makes closure actions eligible. Closure actions still require
+explicit user authorization or an applicable repository policy; an
+implementation plan does not grant Git or publication authority.
 
-Do not commit, fetch, pull, create branch, rebase, merge, push, create or update pull request, apply or drop stash, delete branch, prune metadata, or remove worktree without explicit authorization for that action. An active approved plan may grant an assigned implementation lane bounded authority for its exact lane: branch/worktree creation or reuse, lane commits, lane push, and PR create/update. Implementation lanes may implement, commit, push, and manage their assigned PR when granted. `finishing-development-work` owns worktree cleanup after retirement, clean-state proof, released retention dependencies, and exact authorization. Independent Codex review lanes own assigned review actions. A designated Codex integration action owns an exact approved PR merge after review and verification gates pass. Direct or exceptional base mutation, force push, PR retargeting, branch-protection bypass, semantic conflict resolution, unrelated branch/worktree mutation, destructive recovery, unknown-file discard, and merging another lane remain user-authorized.
+Do not commit, fetch, pull, create branch, rebase, merge, push, create or update pull request, apply or drop stash, delete branch, prune metadata, or remove worktree without explicit authorization for that action. Implementation plans may describe an intended lane or PR workflow, but they do not grant lifecycle authority. `finishing-development-work` owns worktree cleanup after retirement, clean-state proof, released retention dependencies, and exact authorization. Direct or exceptional base mutation, force push, PR retargeting, branch-protection bypass, semantic conflict resolution, unrelated branch/worktree mutation, destructive recovery, unknown-file discard, and merging another lane remain user-authorized.
 
 Never infer a file is “superseded.” Before reconciliation can remove or overwrite
 content, show every overlapping file with hashes and diff summary, then require an
@@ -120,7 +120,7 @@ If verified in-scope changes are uncommitted:
 
 1. show exact staged, unstaged, and untracked scope
 2. preserve unrelated changes
-3. use active plan lane authority when present; otherwise request commit authorization and message
+3. request explicit commit authorization and message
 4. stage only approved files
 5. commit
 6. inspect hook output and repository state
@@ -144,14 +144,13 @@ Do not choose option for user.
 
 ## 6. Push Branch And Pull Request Path
 
-After explicit selection and applicable active-plan lane authority or explicit
-user authorization:
+After explicit selection and explicit user authorization:
 
 1. confirm named branch and committed verified state
 2. confirm remote target
 3. request network authorization when required
 4. push lane branch
-5. create or update pull request when active lane authority allows it and support exists
+5. create or update a pull request when explicit authorization allows it and support exists
 6. record branch, remote, commit SHA, and pull-request result
 7. keep the lane process and worktree available for review fixes and integration
 8. after whole-plan verification, review acceptance, and expected-head confirmation, retire the top-level lane process, confirm no live process owns the worktree, then remove it only when cleanup is granted and safe
@@ -183,7 +182,8 @@ git -C <base-worktree> merge --ff-only <lane-branch>
 
 7. if fast-forward fails, stop with `reconciliation-required`
 8. rerun required post-merge checks on base worktree
-9. push base only with separate explicit authorization; exact approved PR merge is the only plan-granted base write
+9. push base only with separate explicit authorization; an approved PR merge
+   still requires the repository's normal review and merge controls
 
 Never run `git checkout main` blindly inside lane worktree.
 
@@ -287,8 +287,8 @@ Never recursively delete worktree directory directly. Never discard unrelated ch
 Cleanup occurs only after selected Git disposition is complete, the lane main
 agent and relevant descendants/resources are retired, no live process owns the
 worktree, all verification/debugging/recovery/handoff retention dependencies are
-released, and exact cleanup authorization exists through the active plan or
-explicit user authorization. Timeout, silence, missing observation, or transport
+released, and exact cleanup authorization exists through explicit user
+authorization. Timeout, silence, missing observation, or transport
 failure is not proof of retirement.
 
 - native-created workspace: use native cleanup tool

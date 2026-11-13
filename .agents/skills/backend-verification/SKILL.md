@@ -1,6 +1,6 @@
 ---
 name: backend-verification
-description: migrated specialist procedure for backend-verification
+description: Use when backend behavior needs direct boundary, failure-path, state, dependency, contract, trace, or performance evidence.
 ---
 
 # Backend Verification

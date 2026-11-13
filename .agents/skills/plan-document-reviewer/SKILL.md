@@ -1,6 +1,6 @@
 ---
 name: plan-document-reviewer
-description: migrated specialist procedure for plan-document-reviewer
+description: Use when a specification or implementation plan needs correctness and readiness review before approval, handoff, or costly execution.
 ---
 # Plan Document Reviewer
 
@@ -24,7 +24,8 @@ Skip for tiny, local, reversible tasks with settled behavior and obvious proof.
 ## Ownership Boundaries
 
 - `spec-drafting` creates approved behavior, interfaces, decisions, invariants, acceptance criteria, and validation intent.
-- `defining-work` creates exact tasks, files, commands, dependencies, and task-local verification.
+- `defining-work` chooses the smallest durable representation: direct execution, a goal, a semantic task graph, or a durable coordination plan.
+- An implementation plan may add exact files, symbols, commands, dependencies, and execution order when review or handoff requires them; those details do not become runtime state or authority grants.
 - this skill identifies readiness defects in those artifacts without silently rewriting them
 - `workspace-isolation` optionally establishes isolated workspace identity
 - `executing-work` discovers implementation reality and performs task-local proof
@@ -108,11 +109,11 @@ For an implementation plan:
 - generated outputs derive from named canonical inputs
 - execution approach, dependency order, and shared-write ownership are explicit when they affect safe execution
 - final verification can prove every completion criterion
-- when coordination is `git-tracked`, a fresh lead controller with no prior
-  session can recover workspace, branch, base, active task, dependencies,
-  ownership, proof, blockers, and next action from plan plus Git alone
-- exactly one coordination owner writes plan state; active writers obey mode,
-  dependency, and worktree constraints
+- durable task state comes from `state/coordination.json`, repository and
+  workspace facts come from current Git, and native execution state comes from
+  the active runtime
+- no plan silently grants Git, publication, merge, or runtime authority; those
+  actions require explicit user or repository authorization
 
 ### 5. Classify Findings
 

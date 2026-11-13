@@ -34,11 +34,12 @@ the deterministic projection without launching a runtime. The command never
 infers model or effort from rank or profile name.
 
 When CoS selects Orca, `build_orca_launch(project_profile(profile))` performs
-the one-way handoff into the native CLI contract. It maps the explicit
-`harness`, `model`, `effort`, and `instructions` values to `--agent`,
-`--model`, `--effort`, and `--prompt`; omitted values remain omitted so Orca
-keeps its own defaults. The handoff is an ephemeral command description, not a
-second profile registry or a durable runtime record.
+the one-way handoff into the native CLI contract. Orca requires an explicit
+`harness`; `model`, `effort`, and `instructions` may be omitted and then retain
+their native defaults subject to launch validation. Explicit values map to
+`--agent`, `--model`, `--effort`, and `--prompt`. The handoff is an ephemeral
+command description, not a second profile registry or a durable runtime
+record.
 
 The maintained Python Orca surface only observes `orca status --json` for
 read-only smoke evidence. It does not dispatch, inspect, cancel, or mirror

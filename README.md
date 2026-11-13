@@ -39,5 +39,6 @@ predecessor skills and 11 predecessor rules without importing generated adapter
 trees or a second orchestration authority.
 
 Before acceptance, run `pytest -q`,
-`python -m general_os state validate state/coordination.json`, and the focused
-contract suite documented in the active implementation plan.
+`python -m general_os state validate state/coordination.json`, and
+`pytest -q tests/test_documentation_contracts.py` when documentation or
+governance contracts changed.

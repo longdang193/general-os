@@ -1,6 +1,6 @@
 ---
 name: dashboard-reporting
-description: migrated specialist procedure for dashboard-reporting
+description: Use when turning an analytical or business decision need into a report, dashboard, scorecard, analysis, export, or semantic metric view.
 ---
 
 # Dashboard Reporting

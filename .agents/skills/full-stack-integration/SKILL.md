@@ -1,6 +1,6 @@
 ---
 name: full-stack-integration
-description: migrated specialist procedure for full-stack-integration
+description: Use when frontend behavior crosses backend APIs, routes, schemas, or typed client boundaries and needs end-to-end reconciliation.
 ---
 
 # Full-Stack Integration

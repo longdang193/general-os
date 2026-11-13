@@ -1,6 +1,6 @@
 ---
 name: brainstorming
-description: migrated specialist procedure for brainstorming
+description: Use when unresolved problem framing or design options need structured exploration before specification or implementation.
 ---
 # Brainstorming Ideas Into Designs
 
@@ -26,7 +26,11 @@ This skill produces design artifacts only.
 - Brainstorming owns problem exploration, options, trade-offs, recommendations, assumptions, and unresolved questions.
 - When approved direction still needs prototype validation, hand off to `spec-drafting`; do not create a second permanent brainstorming or UI-intent artifact.
 - Approved behavior, interfaces, decisions, and invariants belong in specifications.
-- Exact tasks, sequencing, dependencies, and execution approach belong in implementation plans.
+- Approved behavior, interfaces, decisions, and invariants belong in
+  specifications. Use `defining-work` for durable task boundaries and
+  coordination; native runtimes own temporary execution planning. An
+  implementation plan may retain concrete files and steps when review or
+  handoff requires them.
 
 ## Evidence Capability
 

@@ -1,6 +1,6 @@
 ---
 name: code-standards
-description: migrated specialist procedure for code-standards
+description: Use when creating or modifying source code where consistency, type safety, naming, errors, dependencies, or maintainability matter.
 ---
 # Code Standards
 

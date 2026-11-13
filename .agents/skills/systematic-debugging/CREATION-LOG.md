@@ -2,6 +2,9 @@
 
 Reference example of extracting, structuring, and bulletproofing a critical skill.
 
+This file is historical reference material only. It is not active runtime
+guidance; current repository skills and `AGENTS.md` are authoritative.
+
 ## Source Material
 
 Extracted debugging framework from `/Users/jesse/.claude/CLAUDE.md`:

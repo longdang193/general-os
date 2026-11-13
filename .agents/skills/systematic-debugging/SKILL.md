@@ -1,6 +1,6 @@
 ---
 name: systematic-debugging
-description: migrated specialist procedure for systematic-debugging
+description: Use when diagnosing a bug, failure, or unexpected behavior before proposing a fix.
 ---
 # Systematic Debugging
 
