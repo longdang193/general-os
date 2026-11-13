@@ -18,9 +18,9 @@ are observations, not another durable ledger.
 
 ## Execution boundary
 
-An empty task list is a valid goal-only intent assignment for the current Codex
-runtime. It has no durable completion or acceptance record, so recovery may
-redispatch the goal; use a task graph when acceptance must be persisted. When a
+An empty task list is a valid goal-only intent assignment. It has no durable
+completion or acceptance record, so recovery may redispatch the goal; use a task
+graph when acceptance must be persisted. When a
 task has an objective, that objective is the assignment; the global goal is not
 copied into the task or used as a second task assignment. Codex may use native
 subagents inside that assignment. Project-level CoS selects Orca only when independent
@@ -113,9 +113,11 @@ push, or convert a runtime completion report into acceptance. Git and the
 project-level CoS acceptance path remain authoritative.
 
 Completed tasks retain their accepted snapshot identity and task-contract
-fingerprint as durable acceptance evidence. Recovery revalidates both against
-current Git and current task semantics; missing or mismatched evidence makes the
-task and any completed dependents pending until fresh acceptance is obtained.
+fingerprint as durable acceptance evidence. The snapshot identity records where
+the result was accepted; later commits or unrelated Git changes do not erase
+that historical result. Recovery revalidates the task-contract fingerprint and
+dependency closure. Current or final verification still uses a fresh Git
+snapshot before relying on the result for new acceptance or publication.
 
 Completed tasks must have completed dependencies. A retryable `FAIL` leaves an
 active task unchanged and returns a blocked task to `pending`; `BLOCKED` is

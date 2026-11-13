@@ -218,12 +218,11 @@ def revalidate_completed_tasks(
     state: CoordinationState,
     snapshot: GitSnapshot,
 ) -> CoordinationState:
+    """Revalidate durable task semantics without treating later Git as task failure."""
     stale: set[str] = set()
     for task in state.tasks:
         if task.state == "completed" and (
-            snapshot.identity is None
-            or task.accepted_snapshot_identity != snapshot.identity
-            or task.accepted_task_contract_identity != task.contract_identity()
+            task.accepted_task_contract_identity != task.contract_identity()
         ):
             stale.add(task.id)
 

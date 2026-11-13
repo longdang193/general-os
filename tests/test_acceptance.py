@@ -272,21 +272,70 @@ def test_boundary_evidence_is_task_bound():
     assert decision.status == "FAIL"
 
 
-def test_revalidate_completed_tasks_demotes_stale_dependents():
+def test_revalidate_completed_tasks_preserves_acceptance_after_later_git_change():
     state = CoordinationState(
         goal="goal",
         tasks=(
-            Task(id="dependency", state="completed", accepted_snapshot_identity="old"),
+            Task(
+                id="dependency",
+                state="completed",
+                accepted_snapshot_identity="accepted-before-commit",
+                accepted_task_contract_identity=Task(id="dependency").contract_identity(),
+            ),
             Task(
                 id="work",
                 state="completed",
                 depends_on=("dependency",),
-                accepted_snapshot_identity="old",
+                accepted_snapshot_identity="accepted-before-commit",
+                accepted_task_contract_identity=Task(
+                    id="work", depends_on=("dependency",)
+                ).contract_identity(),
             ),
         ),
     )
 
-    updated = revalidate_completed_tasks(state, snapshot(identity="new"))
+    updated = revalidate_completed_tasks(state, snapshot(identity="after-commit"))
+
+    assert updated == state
+
+
+def test_revalidate_completed_tasks_demotes_changed_task_and_dependents():
+    dependency = Task(id="dependency")
+    state = CoordinationState(
+        goal="goal",
+        tasks=(
+            Task(
+                id="dependency",
+                state="completed",
+                accepted_snapshot_identity="accepted",
+                accepted_task_contract_identity=dependency.contract_identity(),
+            ),
+            Task(
+                id="work",
+                state="completed",
+                depends_on=("dependency",),
+                accepted_snapshot_identity="accepted",
+                accepted_task_contract_identity=Task(
+                    id="work", depends_on=("dependency",)
+                ).contract_identity(),
+            ),
+        ),
+    )
+
+    changed = CoordinationState(
+        goal=state.goal,
+        tasks=(
+            Task(
+                id="dependency",
+                objective="changed",
+                state="completed",
+                accepted_snapshot_identity="accepted",
+                accepted_task_contract_identity=dependency.contract_identity(),
+            ),
+            state.tasks[1],
+        ),
+    )
+    updated = revalidate_completed_tasks(changed, snapshot(identity="later"))
 
     assert [task.state for task in updated.tasks] == ["pending", "pending"]
     assert all(task.accepted_snapshot_identity is None for task in updated.tasks)

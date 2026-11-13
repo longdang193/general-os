@@ -44,14 +44,16 @@ Do not infer a base from commit count; `HEAD~1` can omit multi-commit changes.
 
 **2. Select review topology:**
 
-Ordinary execution may dispatch a native reviewer subagent. CoS coordination
-may dispatch an independent worker only when that boundary is selected. Neither
-choice changes the review contract or makes the reviewer a merge owner.
+CoS selects the review boundary. Ordinary execution may use a native Codex
+reviewer subagent; an independent review workstream uses Orca. Native Orca
+owns internal worker dispatch and topology. Neither choice changes the review
+contract or makes the reviewer a merge owner.
 
-**3. Dispatch independent reviewer:**
+**3. Dispatch the reviewer through the selected runtime:**
 
-Dispatch a controller-selected discovered-profile reviewer,
-filling the template at `code-reviewer.md`
+Fill the template at `code-reviewer.md`. If the selected runtime needs a
+profile, use only an explicit semantic profile from `agents/*.toml`; never
+invent a worker-level or `discovered-profile` registry.
 Review context must include each applicable frontend, backend, and E2E evidence
 class plus approved deviations.
 

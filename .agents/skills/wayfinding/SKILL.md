@@ -32,8 +32,11 @@ reversible, design-clear work uses the existing direct execution route.
 
 ## Map Ownership
 
-Create one active map at
-`docs/superpowers/plans/wayfinding/<YYYY-MM-DD-HH-MM-topic>/map.md`.
+Create one task-owned design map at
+`docs/wayfinding/<YYYY-MM-DD-HH-MM-topic>/map.md`. This is a
+non-authoritative design artifact, not current governance or durable
+coordination state; `state/coordination.json` remains the only durable
+coordination ledger.
 
 The current coordinator is the sole writer. Other sessions return read-only
 findings to that coordinator. This is artifact ownership, not a second
@@ -41,24 +44,27 @@ coordination authority. Do not allow concurrent map edits, merge competing
 maps, or copy settled decisions into the map, specification, and plan. Each
 artifact keeps one owner and links to the others.
 
-Use a concise task-owned map in the current response or plan. Keep map
-entries short and provisional.
+Use a concise task-owned map in the current response or plan. Keep entries
+short and provisional. Record unresolved questions, evidence, alternatives,
+and links only. Do not persist task states, owners, handoff status, stale or
+reopen transitions, supersession state, dependencies, schedules, or runtime
+identities in the map.
 
 ## Decision Frontier
 
-Open items are precise questions, not build tasks. Every item has an ID,
-question, dependencies, state, and decision-work owner. Do not add code slices,
-implementation acceptance tests, estimates, schedules, tracker IDs, or builder
-assignments.
+Open items are precise questions, not build tasks. Give items short local labels
+only when needed for discussion; they are not durable task IDs. Do not add code
+slices, implementation acceptance tests, workflow state, owners, dependencies,
+estimates, schedules, tracker IDs, or builder assignments.
 
 Record evidence and alternatives needed to answer a question. Keep approved
 behavior, interfaces, invariants, and design decisions out of the map's
 canonical truth; promote them once through `spec-drafting`.
 
-When an upstream decision changes, mark affected downstream items stale or
-reopen them. Do not close the map or create implementation tickets while stale
-items remain. If the whole map is replaced, mark the old map `superseded` and
-link exactly one successor.
+When an upstream decision changes, record the affected question and evidence in
+the non-authoritative artifact, then promote the settled result once through
+the specification path. Do not close the map, create implementation tickets,
+or encode workflow transitions in it.
 
 ## Code Pressure
 
@@ -87,9 +93,9 @@ dependency order, write ownership, executor choice, or verification commands.
 ## Verification
 
 Before handoff, verify that the map has one writer, decision questions only,
-clear dependencies, no duplicated canonical prose, and no stale items. Verify
-that rejected entry cases route without opening a map. Verify that closure,
-promotion, handoff, and supersession are recorded.
+no workflow ledger fields, no duplicated canonical prose, and clear evidence
+links. Verify that rejected entry cases route without opening a map and that
+settled decisions are promoted through the specification path.
 
 ## Explicit Deferrals
 

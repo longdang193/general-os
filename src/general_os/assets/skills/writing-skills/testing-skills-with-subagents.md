@@ -15,7 +15,7 @@ skill before deciding whether the skill prevents the right failures.
 `test-driven-development` first. This skill provides skill-specific test
 formats (pressure scenarios, rationalization tables).
 
-**Complete worked example:** See examples/CLAUDE_MD_TESTING.md for a full test campaign testing CLAUDE.md documentation variants.
+**Complete worked example:** See examples/CLAUDE_MD_TESTING.md for a full test campaign testing agent-guidance documentation variants.
 
 ## When to Use
 

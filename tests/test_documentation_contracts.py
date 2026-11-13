@@ -121,6 +121,29 @@ def test_migrated_guidance_uses_current_owners_and_review_statuses():
     assert "review-local verdict" in contents
 
 
+def test_review_and_wayfinding_guidance_keep_topology_and_state_native():
+    root = Path(__file__).parents[1]
+    review = (root / ".agents" / "skills" / "requesting-code-review" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    reviewer = (
+        root / ".agents" / "skills" / "requesting-code-review" / "code-reviewer.md"
+    ).read_text(encoding="utf-8")
+    wayfinding = (root / ".agents" / "skills" / "wayfinding" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "CoS selects the review boundary" in review
+    assert "Native Orca" in review
+    assert "controller-selected discovered-profile reviewer" not in review
+    assert "Reviewer:" in reviewer
+    assert "controller-selected profile" not in reviewer
+    assert "docs/wayfinding/" in wayfinding
+    assert "remains the only durable" in " ".join(wayfinding.split())
+    assert "workflow state" in wayfinding
+    assert "docs/superpowers/plans/wayfinding/" not in wayfinding
+
+
 def test_core_governance_skills_define_native_ownership():
     root = Path(__file__).parents[1]
     skill_paths = {
@@ -314,6 +337,9 @@ def test_publication_boundary_separates_local_git_from_external_disposition():
         / "finishing-development-work"
         / "SKILL.md"
     ).read_text(encoding="utf-8")
+    derived_publication = (
+        root / "src" / "general_os" / "assets" / "docs" / "rules" / "publication-boundary.md"
+    ).read_text(encoding="utf-8")
     normalized_finishing = " ".join(finishing.split())
 
     assert "verified commits" in publication
@@ -323,6 +349,8 @@ def test_publication_boundary_separates_local_git_from_external_disposition():
     assert "Require explicit action-specific authority for push" in normalized_finishing
     assert "Do not commit, fetch, pull" not in finishing
     assert finishing == derived_finishing
+    assert "approved scope and repository workflow" in publication
+    assert publication == derived_publication
 
 
 def test_readme_has_stable_verification_commands():

@@ -9,14 +9,13 @@ Git, not from Codex or Orca session history:
 3. Determine unfinished dependency-ready semantic work, or redispatch the global
    goal when the task graph is empty. Goal-only state is intent-only and has no
    durable completion record; use a task graph when completion must be retained.
-4. Revalidate every completed task against its accepted `GitSnapshot.identity`
-   and the current work snapshot identity. The identity includes implementation
-   changes and untracked content but excludes `state/coordination.json`, which
-   is the durable semantic state written by acceptance itself. If evidence is missing or
-   mismatched after checkout, reset, or other material Git divergence, move the
-   task to `pending` and invalidate completed dependents transitively.
+4. Revalidate every completed task's accepted task-contract fingerprint and
+   dependency closure. The accepted `GitSnapshot.identity` remains historical
+   evidence of where acceptance occurred; later commits or unrelated Git changes
+   do not automatically demote completed tasks. A fresh current Git snapshot is
+   still required before relying on the result for new acceptance or publication.
 5. Reuse required evidence only after checking that it is fresh and applies to
-   the current task and complete Git snapshot identity.
+   the current task and complete current Git snapshot identity.
 6. Start a fresh native assignment. Use the current Codex runtime by default;
    use Orca only when the unfinished work needs an independent workstream and
    the configured boundary is available.

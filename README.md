@@ -3,11 +3,12 @@
 `general-os` is a small durable semantic coordination layer above Git, native
 Codex execution, and optional Orca orchestration.
 
-It decides and remembers durable intent. Codex reasons and executes. Native
-Codex subagents may decompose a bounded assignment while remaining subordinate
-to that assignment. Orca is used only when work needs an independently managed
-workstream or that boundary is materially useful. Git proves repository state
-and provides recovery truth.
+General-os remembers durable semantics. Project-level CoS chooses the execution
+boundary; the selected native runtime executes and owns its topology; Git proves
+repository state; and CoS accepts verified results. Native Codex subagents may
+decompose a bounded assignment while remaining subordinate to that assignment.
+Orca is used only when work needs an independently managed workstream or that
+boundary is materially useful.
 
 The durable coordination object is `state/coordination.json`. It stores the
 goal, optional task objectives and dependencies, acceptance criteria, and only

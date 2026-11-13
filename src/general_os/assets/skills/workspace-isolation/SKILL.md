@@ -57,11 +57,13 @@ runtime is retired and approved scope or durable coordination state, current
 Git, and workspace ownership reconcile. Never reuse a workspace for an
 unrelated task or concurrent writer.
 
-## 2. Obtain Isolation Consent
+## 2. Check Isolation Authority
 
-Use explicit user instruction or repository instruction when available.
-Otherwise ask before creating a worktree. A worktree decision does not grant
-commit, push, merge, publication, or runtime authority.
+Within approved repository scope, the selected native runtime may create a safe
+local worktree when isolation is needed. Require explicit authority before
+effects outside that scope or before destructive, unusual, external, or
+conflict-sensitive operations. A worktree decision does not grant commit,
+push, merge, publication, or runtime authority.
 
 Worktree creation may create branch and filesystem state. Do not create it merely because skill exists.
 

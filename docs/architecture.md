@@ -23,8 +23,9 @@ inherit that runtime's defaults. There is no second Orca profile registry.
 The read-only `general-os profile resolve` command exposes only the explicit
 `harness`, `model`, `effort`, and `instructions` facts; rank, name, and provider
 never synthesize runtime settings.
-The selected Orca worker is harness-neutral: its resolved runtime may be Codex,
-Claude, or another explicitly supported harness without changing durable state.
+The Orca execution boundary is harness-neutral. Explicit general-os profile
+facts provide workstream-level context; native Orca owns internal worker
+specialization and topology without changing durable state.
 
 Do not mirror runtime IDs, progress, heartbeats, worker registries, or
 temporary plans into general-os. If a fact can be read reliably from Git,
@@ -98,10 +99,13 @@ versions fail closed.
 Loaded state carries an in-memory source digest, and saves compare that digest
 under an interprocess lock before atomic replacement.
 
-Acceptance uses the current Git snapshot identity. Required independent work
-also needs typed ephemeral boundary evidence tied to that identity; a runtime
-completion report alone is not acceptance. Profiles fail closed when the
-registry or requested default is missing, and local `deny` is a hard ceiling
+Acceptance uses the current Git snapshot identity and records that identity as
+historical evidence for the accepted result. Required independent work also
+needs typed ephemeral boundary evidence tied to that identity; a runtime
+completion report alone is not acceptance. Later Git changes do not by
+themselves erase completed task results, while fresh current verification is
+still required before new acceptance or publication. Profiles fail closed when
+the registry or requested default is missing, and local `deny` is a hard ceiling
 for durable policy exceptions.
 
 Execution-level failures stay inside the selected runtime when they can be

@@ -2,7 +2,7 @@
 
 Local implementation and verification do not publish by default. Routine
 reversible local Git work—inspection, local branches, verified commits, and
-read-only fetch—follows the active plan and repository workflow; it is not
+read-only fetch—follows approved scope and repository workflow; it is not
 publication. Push, merge, release, force operations, destructive cleanup,
 conflict resolution, stash destruction, and worktree removal require explicit
 authority and fresh Git evidence. Keep private governance, credentials,
