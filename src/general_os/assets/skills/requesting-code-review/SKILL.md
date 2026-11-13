@@ -44,10 +44,10 @@ Do not infer a base from commit count; `HEAD~1` can omit multi-commit changes.
 
 **2. Select review topology:**
 
-CoS selects the review boundary. Ordinary execution may use a native Codex
-reviewer subagent; an independent review workstream uses Orca. Native Orca
-owns internal worker dispatch and topology. Neither choice changes the review
-contract or makes the reviewer a merge owner.
+Codex decides whether ordinary local execution benefits from a native reviewer
+subagent. CoS selects an independent review boundary only when the review must
+be an Orca workstream. Native Orca owns internal worker dispatch and topology.
+Neither choice changes the review contract or makes the reviewer a merge owner.
 
 **3. Dispatch the reviewer through the selected runtime:**
 
@@ -113,7 +113,7 @@ HEAD_SHA=$(git rev-parse HEAD)
   BASE_SHA: a7981ec
   HEAD_SHA: 3df7661
 
-[Subagent returns]:
+[Reviewer returns]:
   Strengths: Clean architecture, real tests
   Issues:
     Important: Missing progress indicators

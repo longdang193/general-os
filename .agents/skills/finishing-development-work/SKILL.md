@@ -141,7 +141,9 @@ If verified in-scope changes are uncommitted:
 4. stage only approved files
 5. commit
 6. inspect hook output and repository state
-7. rerun affected verification if hooks changed content
+7. treat a content-preserving local commit as a Git identity transition, not
+   behavioral proof failure; rebind closure evidence to the new committed HEAD
+8. rerun affected verification if hooks changed content or integration result
 
 Do not use broad staging when unrelated changes exist.
 

@@ -10,8 +10,10 @@ description: Use when creating, editing, testing, or maintaining reusable agent 
 
 **Canonical repo-local skills in this project live under `.agents/skills/`. User-level skill directories remain platform-specific.**
 
-For discipline skills, write pressure scenarios with subagents, observe the
-baseline, write the skill, verify compliance, and refactor to close loopholes.
+For discipline skills, write pressure scenarios in an isolated fresh context,
+observe the baseline, write the skill, verify compliance, and refactor to close
+loopholes. The native runtime chooses whether that context is a subagent,
+fresh session, or another supported mechanism.
 For metadata, reference, or mechanical edits, use focused contract and
 retrieval validation instead of inventing pressure scenarios.
 
@@ -37,7 +39,7 @@ A **skill** is a reference guide for proven techniques, patterns, or tools. Skil
 
 | TDD Concept | Skill Creation |
 |-------------|----------------|
-| **Test case** | Pressure scenario with subagent |
+| **Test case** | Pressure scenario in an isolated fresh context |
 | **Production code** | Skill document (SKILL.md) |
 | **Test fails (RED)** | Agent violates rule without skill (baseline) |
 | **Test passes (GREEN)** | Agent complies with skill present |
@@ -540,7 +542,8 @@ For skills that change agent behavior, follow the TDD cycle:
 
 ### RED: Write Failing Test (Baseline)
 
-Run pressure scenario with subagent WITHOUT the skill. Document exact behavior:
+Run the pressure scenario in an isolated fresh context WITHOUT the skill.
+Document exact behavior:
 - What choices did they make?
 - What rationalizations did they use (verbatim)?
 - Which pressures triggered violations?

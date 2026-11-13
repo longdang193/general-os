@@ -132,8 +132,12 @@ def test_review_and_wayfinding_guidance_keep_topology_and_state_native():
     wayfinding = (root / ".agents" / "skills" / "wayfinding" / "SKILL.md").read_text(
         encoding="utf-8"
     )
+    derived_wayfinding = (
+        root / "src" / "general_os" / "assets" / "skills" / "wayfinding" / "SKILL.md"
+    ).read_text(encoding="utf-8")
 
-    assert "CoS selects the review boundary" in review
+    assert "Codex decides whether ordinary local execution" in review
+    assert "CoS selects an independent review boundary" in review
     assert "Native Orca" in review
     assert "controller-selected discovered-profile reviewer" not in review
     assert "Reviewer:" in reviewer
@@ -142,6 +146,10 @@ def test_review_and_wayfinding_guidance_keep_topology_and_state_native():
     assert "remains the only durable" in " ".join(wayfinding.split())
     assert "workflow state" in wayfinding
     assert "docs/superpowers/plans/wayfinding/" not in wayfinding
+    assert "current author" in wayfinding
+    assert "no item is stale" not in wayfinding
+    assert "handoff is recorded" not in wayfinding
+    assert wayfinding == derived_wayfinding
 
 
 def test_core_governance_skills_define_native_ownership():
@@ -315,6 +323,9 @@ def test_coordination_guidance_does_not_force_native_topology():
     assert "Always use subagents" not in writing
     assert "50-100x context savings" not in writing
     assert "let the active runtime choose" in writing
+    assert "isolated fresh context" in writing
+    assert "with subagent" not in writing
+    assert "CoS decides acceptance after" in chief
     assert isolation == derived_isolation
     assert writing == derived_writing
     assert chief == derived_chief
@@ -348,6 +359,7 @@ def test_publication_boundary_separates_local_git_from_external_disposition():
     assert "may proceed within the approved scope" in finishing
     assert "Require explicit action-specific authority for push" in normalized_finishing
     assert "Do not commit, fetch, pull" not in finishing
+    assert "content-preserving local commit" in finishing
     assert finishing == derived_finishing
     assert "approved scope and repository workflow" in publication
     assert publication == derived_publication

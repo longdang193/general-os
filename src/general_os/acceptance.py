@@ -214,11 +214,28 @@ def apply_task_transition(
     return replace(state, tasks=tasks)
 
 
+def completed_tasks_requiring_reverification(
+    state: CoordinationState,
+    snapshot: GitSnapshot,
+) -> tuple[str, ...]:
+    """Return completed tasks whose accepted Git evidence differs from current Git."""
+
+    return tuple(
+        task.id
+        for task in state.tasks
+        if task.state == "completed"
+        and (
+            snapshot.identity is None
+            or task.accepted_snapshot_identity != snapshot.identity
+        )
+    )
+
+
 def revalidate_completed_tasks(
     state: CoordinationState,
     snapshot: GitSnapshot,
 ) -> CoordinationState:
-    """Revalidate durable task semantics without treating later Git as task failure."""
+    """Revalidate durable task semantics after any needed fresh Git verification."""
     stale: set[str] = set()
     for task in state.tasks:
         if task.state == "completed" and (

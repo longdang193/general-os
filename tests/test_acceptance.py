@@ -5,6 +5,7 @@ from general_os.acceptance import (
     BoundaryEvidence,
     VerificationResult,
     apply_task_transition,
+    completed_tasks_requiring_reverification,
     create_verification_result,
     evaluate_acceptance,
     revalidate_completed_tasks,
@@ -297,6 +298,25 @@ def test_revalidate_completed_tasks_preserves_acceptance_after_later_git_change(
     updated = revalidate_completed_tasks(state, snapshot(identity="after-commit"))
 
     assert updated == state
+
+
+def test_git_divergence_marks_ephemeral_reverification_candidates():
+    state = CoordinationState(
+        goal="goal",
+        tasks=(
+            Task(
+                id="work",
+                state="completed",
+                accepted_snapshot_identity="accepted",
+                accepted_task_contract_identity=Task(id="work").contract_identity(),
+            ),
+            Task(id="pending"),
+        ),
+    )
+
+    assert completed_tasks_requiring_reverification(
+        state, snapshot(identity="current")
+    ) == ("work",)
 
 
 def test_revalidate_completed_tasks_demotes_changed_task_and_dependents():

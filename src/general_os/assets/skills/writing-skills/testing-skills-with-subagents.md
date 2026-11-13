@@ -1,4 +1,4 @@
-# Testing Skills With Subagents
+# Testing Skills In Isolated Contexts
 
 **Load this reference when:** creating or editing skills, before deployment, to verify they work under pressure and resist rationalization.
 
@@ -6,7 +6,9 @@
 
 **Testing discipline skills applies TDD to process documentation.**
 
-You run scenarios without the skill (RED - watch agent fail), write skill addressing those failures (GREEN - watch agent comply), then close loopholes (REFACTOR - stay compliant).
+You run scenarios without the skill in an isolated fresh context (RED - watch
+agent fail), write the skill addressing those failures (GREEN - watch agent
+comply), then close loopholes (REFACTOR - stay compliant).
 
 **Core principle:** For discipline skills, observe an agent fail without the
 skill before deciding whether the skill prevents the right failures.

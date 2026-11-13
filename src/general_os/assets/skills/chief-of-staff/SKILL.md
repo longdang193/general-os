@@ -57,8 +57,8 @@ second runtime scheduler.
 - `BLOCKED` means a material Git, authority, dependency, credential, user-
   decision, or required-runtime boundary prevents safe progress.
 
-Runtime completion is evidence, not acceptance. Only the durable state owner
-changes task state after verification.
+Runtime completion is evidence, not acceptance. CoS decides acceptance after
+verification; general-os persists the resulting durable task state.
 
 ## Recovery
 

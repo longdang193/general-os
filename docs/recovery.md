@@ -14,6 +14,9 @@ Git, not from Codex or Orca session history:
    evidence of where acceptance occurred; later commits or unrelated Git changes
    do not automatically demote completed tasks. A fresh current Git snapshot is
    still required before relying on the result for new acceptance or publication.
+   When accepted and current identities differ, treat the affected completed
+   tasks as ephemeral re-verification candidates and run task-level verification
+   against current Git before relying on them; do not persist a candidate list.
 5. Reuse required evidence only after checking that it is fresh and applies to
    the current task and complete current Git snapshot identity.
 6. Start a fresh native assignment. Use the current Codex runtime by default;

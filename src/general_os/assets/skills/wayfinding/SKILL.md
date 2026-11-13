@@ -38,8 +38,8 @@ non-authoritative design artifact, not current governance or durable
 coordination state; `state/coordination.json` remains the only durable
 coordination ledger.
 
-The current coordinator is the sole writer. Other sessions return read-only
-findings to that coordinator. This is artifact ownership, not a second
+The current author is the sole writer. Other sessions return read-only findings
+to that author. This is artifact ownership, not a second
 coordination authority. Do not allow concurrent map edits, merge competing
 maps, or copy settled decisions into the map, specification, and plan. Each
 artifact keeps one owner and links to the others.
@@ -69,22 +69,23 @@ or encode workflow transitions in it.
 ## Code Pressure
 
 If the user asks for code while the decision frontier is unresolved, refuse the
-code request and record it as out of scope. Do not skip the map, writer control,
-decision questions, closure checks, or downstream handoff. Continue only with
+code request and record it as out of scope. Do not skip the map, author control,
+decision questions, promotion checks, or links to the owning planning flow.
+Continue only with
 decision discovery; implementation begins later through the approved durable
 scope or specification and the planning tier selected by `defining-work`.
 
-## Closure And Handoff
+## Completion And Promotion
 
-Close only when all conditions hold:
+Finish the design exploration only when all conditions hold:
 
 - destination remains valid;
 - no material dependent decision or relevant fog remains;
-- no item is stale;
 - approved behavior has been promoted once through `spec-drafting`;
-- handoff is recorded.
+- the resulting specification or decision link is available to the owning
+  planning flow.
 
-After closure, return to durable coordination state and use the chief-of-staff
+After promotion, return to durable coordination state and use the chief-of-staff
 decision flow and `defining-work` when implementation sequencing is needed.
 Apply the next applicable gate from current `AGENTS.md` guidance. Wayfinding
 does not pre-author plan tasks,
@@ -92,10 +93,10 @@ dependency order, write ownership, executor choice, or verification commands.
 
 ## Verification
 
-Before handoff, verify that the map has one writer, decision questions only,
-no workflow ledger fields, no duplicated canonical prose, and clear evidence
-links. Verify that rejected entry cases route without opening a map and that
-settled decisions are promoted through the specification path.
+Before promotion, verify that the map has one author, decision questions only, no
+workflow ledger fields, no duplicated canonical prose, and clear evidence or
+specification links. Verify that rejected entry cases route without opening a
+map and that settled decisions are promoted through the specification path.
 
 ## Explicit Deferrals
 

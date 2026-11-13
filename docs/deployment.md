@@ -52,7 +52,7 @@ general-os deploy --repo . --adapter codex --strict-migration
 ```
 
 The first command installs or checks only the central runtime surface. The
-The central `--check` and `--prune` forms inspect or maintain only the central
+central `--check` and `--prune` forms inspect or maintain only the central
 installation. The `--repo` forms explicitly opt into one-shot project adoption
 or project-adoption inspection for that project.
 `--dry-run` plans without writing. `--check` reports drift and returns

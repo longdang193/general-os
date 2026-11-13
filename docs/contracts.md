@@ -118,6 +118,9 @@ the result was accepted; later commits or unrelated Git changes do not erase
 that historical result. Recovery revalidates the task-contract fingerprint and
 dependency closure. Current or final verification still uses a fresh Git
 snapshot before relying on the result for new acceptance or publication.
+Snapshot divergence is an ephemeral signal for selecting completed tasks for
+fresh task-level verification; it is not itself a durable failure or a reason
+to demote a task.
 
 Completed tasks must have completed dependencies. A retryable `FAIL` leaves an
 active task unchanged and returns a blocked task to `pending`; `BLOCKED` is
