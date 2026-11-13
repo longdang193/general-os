@@ -44,6 +44,15 @@ def test_root_guidance_and_templates_define_durable_ownership():
     assert template["goal"]
     assert isinstance(template["tasks"], list)
     assert template["tasks"] == []
+    for term in (
+        "Durable sequencing",
+        "Constraints / decisions",
+        "Verification",
+        "Stop / escalation conditions",
+        "durable coordination",
+        "implementation plans",
+    ):
+        assert term in detailed_plan
 
 
 def test_migrated_guidance_uses_current_owners_and_review_statuses():
@@ -87,7 +96,16 @@ def test_core_governance_skills_define_native_ownership():
     contents = {name: path.read_text(encoding="utf-8") for name, path in skill_paths.items()}
     assert all("Use when" in text for text in contents.values())
     assert "canonical coordination intelligence" in contents["chief-of-staff"]
-    assert '"tasks": []' in contents["defining-work"]
+    defining_work = contents["defining-work"]
+    for term in (
+        '"tasks": []',
+        "Direct execution",
+        "fresh capable executor",
+        "native runtime",
+        "update_plan",
+        "runtime IDs",
+    ):
+        assert term in defining_work
     assert "update_plan" in contents["executing-work"]
     assert "PASS" in contents["verification-before-completion"]
     assert "orca skills get orchestration --full" in contents["orca-orchestration"]
