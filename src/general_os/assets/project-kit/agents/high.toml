@@ -1,6 +1,2 @@
 name = "high"
-rank = 3
-harness = "codex"
-model = "combo-high"
-effort = "high"
-provider = "native"
+instructions = "Use stronger native reasoning and broader verification when it materially improves correctness. Let the selected runtime choose its native implementation."

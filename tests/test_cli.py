@@ -21,10 +21,10 @@ def test_profile_resolve_returns_one_way_projection(capsys):
 
     output = json.loads(capsys.readouterr().out)
     assert output == {
-        "effort": "high",
-        "harness": "codex",
-        "instructions": "",
-        "model": "combo-high",
+        "effort": None,
+        "harness": None,
+        "instructions": "Use stronger native reasoning and broader verification when it materially improves correctness. Let the selected runtime choose its native implementation.",
+        "model": None,
         "profile": "high",
     }
 

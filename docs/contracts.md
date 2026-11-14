@@ -42,14 +42,11 @@ The projection shape is `{harness, model, effort, instructions}` plus the
 resolved profile name. Missing model, harness, or effort values are `null` in
 the projection; missing instructions serialize as the empty string sentinel.
 `model = "codex"` is not a valid substitute for the `codex` harness. The
-supplied capability profiles explicitly configure the Codex model identifiers
-`combo-low`, `combo-normal`, `combo-high`, and `combo-xhigh` with their
-corresponding effort levels; these values are owned by `agents/*.toml`, not
-reconstructed from rank or profile name.
-
-The four general-purpose profiles explicitly configure the `combo-*` model and
-effort pairs. Specialized profiles intentionally omit those runtime facts and
-inherit native defaults. The optional Orca handoff consumes that projection once as a semantic
+shipped capability profiles omit runtime harness, model, and effort facts by
+default; project-local profiles may provide explicit values when a runtime
+constraint is intentional. These values are owned by `agents/*.toml`, not
+reconstructed from rank or profile name. The optional Orca handoff consumes
+that projection once as a semantic
 workstream contract containing the objective, task identity, relevant context
 and constraints, acceptance/evidence requirements, explicit profile facts, and
 the relevant repository or work boundary. The native Orca entrypoint provided
@@ -144,9 +141,11 @@ local policy; malformed exceptions fail closed. A configured local `deny`
 ceiling remains absolute.
 
 The configured local `remote_side_effects = "deny"` policy cannot be widened by
-durable state. Missing profile directories, missing requested profiles, unknown
-profile fields, invalid ranks, and invalid runtime text fail closed. Orca
-status observation defaults to a finite 30-second timeout.
+durable state. Missing requested profiles, unknown profile fields, invalid
+ranks, and invalid runtime text fail closed. When no profile is explicitly
+requested, a missing profile directory or `normal.toml` inherits native
+runtime defaults. Orca status observation defaults to a finite 30-second
+timeout.
 
 ## Deployment
 

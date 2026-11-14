@@ -42,7 +42,7 @@ def load_profiles(directory: str | Path) -> dict[str, ProfileSpec]:
     profile_dir = Path(directory)
     profiles: dict[str, ProfileSpec] = {}
     if not profile_dir.is_dir():
-        raise ProfileError(f"profile directory not found: {profile_dir}")
+        return profiles
     for path in sorted(profile_dir.glob("*.toml")):
         try:
             raw = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -89,7 +89,9 @@ def resolve_profile(
     name: str | None,
     profiles: dict[str, ProfileSpec],
 ) -> ProfileSpec:
-    requested = name or "normal"
+    if name is None:
+        return profiles.get("normal", ProfileSpec(name="normal"))
+    requested = name
     try:
         return profiles[requested]
     except KeyError as exc:

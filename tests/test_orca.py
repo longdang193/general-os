@@ -4,12 +4,7 @@ import subprocess
 import pytest
 
 from general_os.orca import OrcaCliStatusObserver, build_orca_launch
-from general_os.profiles import (
-    ProfileProjection,
-    load_profiles,
-    project_profile,
-    resolve_profile,
-)
+from general_os.profiles import ProfileProjection
 
 
 def completed(payload, *, returncode=0, stderr=""):
@@ -144,40 +139,11 @@ def test_orca_launch_omits_native_defaults():
 
 def test_orca_launch_projects_ephemeral_assignment_when_profile_is_empty():
     launch = build_orca_launch(
-        ProfileProjection("codex", "combo-normal", "medium", ""),
+        ProfileProjection("codex", "verified-model", "medium", ""),
         "Implement X and verify pytest -q.",
     )
 
     assert launch.argv("orca")[-2:] == ("--prompt", "Implement X and verify pytest -q.")
-
-
-@pytest.mark.parametrize(
-    ("name", "model", "effort"),
-    [
-        ("low", "combo-low", "low"),
-        ("normal", "combo-normal", "medium"),
-        ("high", "combo-high", "high"),
-        ("xhigh", "combo-xhigh", "xhigh"),
-    ],
-)
-def test_orca_launch_uses_only_supplied_profile_projection(name, model, effort):
-    profile = resolve_profile(name, load_profiles("agents"))
-
-    launch = build_orca_launch(project_profile(profile))
-
-    assert launch.model == model
-    assert launch.effort == effort
-    assert launch.argv("orca") == (
-        "orca",
-        "agent",
-        "launch",
-        "--agent",
-        "codex",
-        "--model",
-        model,
-        "--effort",
-        effort,
-    )
 
 
 @pytest.mark.parametrize(

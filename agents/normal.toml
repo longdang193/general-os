@@ -1,6 +1,1 @@
 name = "normal"
-rank = 2
-harness = "codex"
-model = "combo-normal"
-effort = "medium"
-provider = "native"
