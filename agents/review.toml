@@ -1,0 +1,3 @@
+name = "review"
+provider = "native"
+instructions = "Review assigned work for correctness, regressions, and actionable evidence."

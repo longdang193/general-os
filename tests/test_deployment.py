@@ -18,6 +18,11 @@ def make_source(root: Path) -> None:
         "agents/high.toml": 'name = "high"\n',
         "agents/low.toml": 'name = "low"\n',
         "agents/normal.toml": 'name = "normal"\n',
+        "agents/review.toml": 'name = "review"\ninstructions = "Review assigned work."\n',
+        "agents/review-1.toml": 'name = "review-1"\ninstructions = "Review correctness and regressions."\n',
+        "agents/review-2.toml": 'name = "review-2"\ninstructions = "Review contracts and risks."\n',
+        "agents/review-3.toml": 'name = "review-3"\ninstructions = "Review integration and acceptance."\n',
+        "agents/ui.toml": 'name = "ui"\ninstructions = "Review visual and accessibility behavior."\n',
         "agents/xhigh.toml": 'name = "xhigh"\n',
         "repo_config/runtime-policy.toml": "[runtime]\nnative_subagents_enabled = true\n",
         "state/coordination.json": '{"version": 1, "goal": "test", "tasks": []}\n',
@@ -50,6 +55,8 @@ def test_first_install_copies_complete_skills_and_seeds_only_absent_project_file
     assert (central / "skills/demo/scripts/helper.txt").exists()
     assert str(central / "docs" / "rules" / "example.md").replace("\\", "/") in installed
     assert (project / "AGENTS.md").read_text(encoding="utf-8") == "project guidance\n"
+    assert (project / "agents/review.toml").exists()
+    assert (project / "agents/ui.toml").exists()
     assert not (project / "state/coordination.json").exists()
     adoption = json.loads((project / "repo_config/general-os.lock.json").read_text())
     assert set(adoption) == {"schema_version", "adopted_from", "adopted_revision", "seeded_paths"}

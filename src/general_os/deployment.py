@@ -25,6 +25,11 @@ PROJECT_SEEDS = (
     Path("agents") / "high.toml",
     Path("agents") / "low.toml",
     Path("agents") / "normal.toml",
+    Path("agents") / "review.toml",
+    Path("agents") / "review-1.toml",
+    Path("agents") / "review-2.toml",
+    Path("agents") / "review-3.toml",
+    Path("agents") / "ui.toml",
     Path("agents") / "xhigh.toml",
     Path("repo_config") / "runtime-policy.toml",
 )

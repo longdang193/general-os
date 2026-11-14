@@ -1,0 +1,3 @@
+name = "ui"
+provider = "native"
+instructions = "Review visual hierarchy, interaction behavior, accessibility, and responsive states."

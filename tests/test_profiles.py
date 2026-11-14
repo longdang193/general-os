@@ -1,6 +1,14 @@
+from pathlib import Path
+
 import pytest
 
-from general_os.profiles import ProfileError, load_profiles, project_profile, resolve_profile
+from general_os.profiles import (
+    ProfileError,
+    ProfileProjection,
+    load_profiles,
+    project_profile,
+    resolve_profile,
+)
 
 
 def test_load_profiles_and_resolve_named_profile(tmp_path):
@@ -100,3 +108,29 @@ def test_provided_profiles_own_verified_combo_configuration(name, model, effort)
 
     assert projection.model == model
     assert projection.effort == effort
+
+
+@pytest.mark.parametrize("name", ["review", "review-1", "review-2", "review-3", "ui"])
+def test_specialized_profiles_inherit_native_runtime_defaults(name):
+    profile = resolve_profile(name, load_profiles("agents"))
+
+    assert profile.provider == "native"
+    assert profile.rank is None
+    assert project_profile(profile) == ProfileProjection(
+        harness=None,
+        model=None,
+        effort=None,
+        instructions=profile.instructions,
+    )
+    assert profile.instructions
+
+
+def test_packaged_profiles_match_canonical_profiles():
+    canonical = Path("agents")
+    packaged = Path("src/general_os/assets/project-kit/agents")
+
+    assert sorted(path.name for path in canonical.glob("*.toml")) == sorted(
+        path.name for path in packaged.glob("*.toml")
+    )
+    for path in canonical.glob("*.toml"):
+        assert path.read_bytes() == (packaged / path.name).read_bytes()
