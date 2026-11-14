@@ -5,9 +5,17 @@ description: Use when CoS selects Orca for an independently managed top-level wo
 
 # Orca Orchestration
 
-Use this skill only when CoS has selected an independent execution boundary.
-Ordinary work stays in the current Codex runtime, and native Codex subagents
-remain subordinate to that assignment.
+Use this skill only when CoS has selected Orca for one independently owned
+semantic workstream. Selection may be required or opportunistic; it is not
+limited to a predefined task category or to a `requires_independent_boundary`
+flag. Ordinary work stays in the current Codex runtime, and native Codex
+subagents remain subordinate to that assignment.
+
+Orca may be useful for investigation, independent hypothesis testing, parallel
+research, debugging, implementation, reviews, synthesis, or other work where
+its native orchestration materially helps. These are examples, not mandatory
+workflows or a routing table; the installed native guidance chooses the worker
+count, roles, dependencies, and execution topology.
 
 ## Native Instructions
 

@@ -293,13 +293,38 @@ def test_native_cos_keeps_orca_optional_but_allows_material_independence():
     chief = (root / ".agents" / "skills" / "chief-of-staff" / "SKILL.md").read_text(
         encoding="utf-8"
     )
+    orca = (root / ".agents" / "skills" / "orca-orchestration" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
     runtime = (root / "docs" / "runtime-adapters.md").read_text(encoding="utf-8")
+    derived_chief = (
+        root / "src" / "general_os" / "assets" / "skills" / "chief-of-staff" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    derived_orca = (
+        root / "src" / "general_os" / "assets" / "skills" / "orca-orchestration" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    derived_runtime = (
+        root / "src" / "general_os" / "assets" / "docs" / "runtime-adapters.md"
+    ).read_text(encoding="utf-8")
+    normalized_chief = " ".join(chief.split())
+    normalized_orca = " ".join(orca.split())
+    normalized_runtime = " ".join(runtime.split())
 
     assert "materially useful" in chief
     assert "hard requirement" in chief
-    assert "primary execution path" in runtime
-    assert "required independent" in runtime
-    assert "blocks when Orca is disabled or unavailable" in runtime
+    assert "smallest effective native execution boundary" in chief
+    assert "expected benefit, cost, and coordination overhead" in normalized_chief
+    assert "false` does not prohibit selecting" in chief
+    assert "independent hypothesis testing" in normalized_orca
+    assert "examples, not mandatory workflows" in normalized_orca
+    assert "primary execution path" in normalized_runtime
+    assert "Required independent" in normalized_runtime
+    assert "blocks when Orca is disabled or unavailable" in normalized_runtime
+    assert "expected benefit, cost, and coordination overhead" in normalized_runtime
+    assert "false` does not prohibit Orca selection" in normalized_runtime
+    assert chief == derived_chief
+    assert orca == derived_orca
+    assert runtime == derived_runtime
 
 
 def test_coordination_guidance_does_not_force_native_topology():

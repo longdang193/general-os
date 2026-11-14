@@ -37,12 +37,15 @@ second runtime scheduler.
    Codex and blocks only work whose durable contract requires independence.
 4. Resolve the semantic profile without translating missing metadata into
    guessed runtime model or effort settings.
-5. Select the current Codex runtime by default. Let Codex decide whether native
-   subagents help its bounded assignment.
+5. Select the smallest effective native execution boundary based on the task's
+   requirements, native capabilities, expected benefit, cost, and coordination
+   overhead. Prefer the current Codex runtime for ordinary work and let Codex
+   decide whether native subagents help its bounded assignment.
 6. Select Orca when independent ownership is required or materially useful and
-   `orca_enabled` permits that boundary.
-   `requires_independent_boundary: true` is a hard requirement, not the whole
-   Orca-selection algorithm.
+   `orca_enabled` permits that boundary. Predefined use cases are examples, not
+   restrictions. `requires_independent_boundary: true` is a hard requirement,
+   not the whole Orca-selection algorithm; `false` does not prohibit selecting
+   Orca when its native orchestration offers material benefit.
 7. If the required independent boundary is unavailable, return a real
    blocker. Do not mutate permission because runtime health changed.
 8. Reconcile runtime evidence with current Git and fresh verification before

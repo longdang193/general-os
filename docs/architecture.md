@@ -79,7 +79,11 @@ episode is not reconstructed.
 
 The native CoS skill reads durable state and current Git, determines
 dependency-ready semantic work, resolves the semantic profile, and chooses the
-smallest safe execution boundary:
+smallest effective native execution boundary based on task requirements,
+available capabilities, expected benefit, cost, and coordination overhead. CoS
+chooses the semantic boundary and acceptance requirements; the selected runtime
+chooses its internal planning, delegation, execution topology, and worker
+lifecycle:
 
 1. Codex handles ordinary work directly.
 2. Codex may use native subagents when that helps its bounded assignment; those
