@@ -11,18 +11,15 @@ remain subordinate to that assignment.
 
 ## Native Instructions
 
-Before the first Orca orchestration mutation in the current agent
-session/version context, load the installed guidance:
-
-```text
-orca skills get orchestration --full
-```
-
-Reuse that guidance for subsequent mutations in the same session. Reload it
-only after context loss, an Orca runtime/version change, or unavailable
-guidance. Use the installed guidance for all worker lifecycle, inspection,
-wait, retry, messaging, release, and cleanup operations. Do not recreate those
-commands in `general-os` code or this skill.
+Before the first Orca mutation in the current agent session/version context,
+load the installed, version-matched guidance for the selected native path.
+Use lightweight handoff guidance for simple independent assignments and full
+orchestration guidance only when supervised coordination is needed. Reuse the
+loaded guidance for subsequent mutations in the same session. Reload it only
+after context loss, an Orca runtime/version change, or unavailable guidance.
+Use the installed guidance for all worker lifecycle, inspection, wait, retry,
+messaging, release, and cleanup operations. Do not recreate those commands in
+`general-os` code or this skill.
 
 ## Handoff
 
@@ -47,6 +44,10 @@ otherwise the native runtime inherits its native defaults. Orca is harness-neutr
 the installed version decides its internal orchestration and execution
 topology, including decomposition, workers, supervision, retries, questions,
 nested helpers, synthesis, release, and cleanup.
+
+After CoS selects Orca, let the installed native guidance choose the smallest
+useful path—lightweight handoff, independent workspace, or supervised
+orchestration. Do not add that topology choice to durable general-os state.
 
 `build_orca_launch(project_profile(profile), assignment)` remains a low-level
 leaf/compatibility projection for simple native CLI launch paths. It maps only

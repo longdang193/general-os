@@ -29,6 +29,16 @@ def test_inspect_git_observes_branch_revision_and_changes(tmp_path):
     assert snapshot.clean is False
 
 
+def test_inspect_can_skip_expensive_identity(tmp_path):
+    run_git(tmp_path, "init", "--initial-branch", "main")
+    (tmp_path / "README.md").write_text("draft\n", encoding="utf-8")
+
+    snapshot = GitRepository(tmp_path).inspect(include_identity=False)
+
+    assert snapshot.changed_files == ("README.md",)
+    assert snapshot.identity is None
+
+
 def test_inspect_git_reports_conflicting_index_status(tmp_path):
     run_git(tmp_path, "init", "--initial-branch", "main")
     (tmp_path / "file.txt").write_text("content\n", encoding="utf-8")

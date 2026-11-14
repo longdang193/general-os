@@ -143,6 +143,9 @@ If verified in-scope changes are uncommitted:
 6. inspect hook output and repository state
 7. treat a content-preserving local commit as a Git identity transition, not
    behavioral proof failure; rebind closure evidence to the new committed HEAD
+   without creating, rewriting, or upgrading verifier-produced `PASS`
+   evidence. Acceptance still requires evidence valid for the new Git state;
+   reuse prior behavioral checks only when their validity is established.
 8. rerun affected verification if hooks changed content or integration result
 
 Do not use broad staging when unrelated changes exist.
@@ -216,10 +219,12 @@ When fast-forward is impossible or conflicts exist, report:
 - exact conflicting or overlapping files when known
 - smallest resolution option
 
-Before rebase, merge, conflict resolution, stash apply or pop, reset, checkout
-restore, worktree cleanup, or deletion, collect and show evidence for every
-overlapping file, including tracked, untracked, ignored, conflict, and stash-only
-files:
+Use the smallest evidence procedure that matches the risk. Safe local commits,
+read-only fetches, clean fast-forwards, and bounded integrations without
+overlap need current Git facts and focused checks only. Before rebase, merge,
+conflict resolution, stash apply or pop, reset, checkout restore, worktree
+cleanup, or deletion, collect and show evidence for every overlapping file,
+including tracked, untracked, ignored, conflict, and stash-only files:
 
 - path and source state: base, workstream, current worktree, index, untracked, or stash ID
 - blob or content hashes for each available source

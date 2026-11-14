@@ -185,7 +185,8 @@ def test_core_governance_skills_define_native_ownership():
         assert term in defining_work
     assert "update_plan" in contents["executing-work"]
     assert "PASS" in contents["verification-before-completion"]
-    assert "orca skills get orchestration --full" in contents["orca-orchestration"]
+    assert "version-matched guidance" in contents["orca-orchestration"]
+    assert "lightweight handoff guidance" in contents["orca-orchestration"]
 
 
 def test_goal_only_and_reusable_skill_boundaries_are_explicit():
@@ -198,6 +199,9 @@ def test_goal_only_and_reusable_skill_boundaries_are_explicit():
     learning = (
         root / ".agents" / "skills" / "creating-learning-materials" / "SKILL.md"
     ).read_text(encoding="utf-8")
+    brainstorming = (root / ".agents" / "skills" / "brainstorming" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
     historical_plans = (root / "docs" / "superpowers" / "plans" / "README.md").read_text(
         encoding="utf-8"
     )
@@ -209,6 +213,8 @@ def test_goal_only_and_reusable_skill_boundaries_are_explicit():
     assert "user-supplied output location" in learning
     assert "OneDrive" not in learning
     assert "never override" in historical_plans
+    assert "design-artifact" in brainstorming
+    assert "docs/superpowers/plans/brainstorming/" not in brainstorming
 
 
 def test_orca_skill_and_runtime_docs_keep_native_ownership_explicit():
@@ -232,7 +238,8 @@ def test_orca_skill_and_runtime_docs_keep_native_ownership_explicit():
     assert "runtime IDs" in runtime
     assert "requires an explicit" in runtime
     assert "native defaults" in runtime
-    assert "orca skills get orchestration --full" in skill
+    assert "version-matched guidance" in skill
+    assert "lightweight handoff guidance" in skill
     assert "orca_enabled" in skill
     assert "native" in skill.lower()
     assert "worker lifecycle" in skill

@@ -16,10 +16,14 @@ work blocks when Orca is disabled or unavailable rather than falling back to
 Codex. Ordinary work remains Codex-first.
 
 `general-os` observes current Orca availability through the CLI `status --json`
-boundary. The repository `orca-orchestration` skill loads Orca's
-version-matched guidance with `orca skills get orchestration --full` before
-mutation and leaves worker lifecycle, inspection, retry, release, and cleanup
-inside native Orca.
+boundary. The repository `orca-orchestration` skill loads the installed,
+version-matched guidance for the selected native Orca path before mutation;
+simple independent assignments use lightweight handoff guidance, while
+supervised assignments use the native orchestration guidance. worker lifecycle,
+inspection, retry, release, and cleanup remain inside native Orca.
+
+After CoS selects Orca, native guidance chooses the smallest useful execution
+path. That topology choice is not a durable general-os routing field.
 
 `agents/*.toml` is the sole profile registry. Profile names do not imply
 runtime model or effort values. Explicit facts may be projected one way to the

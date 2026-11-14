@@ -72,7 +72,9 @@ source-first design, but never replaces mandatory evidence.
 6. Present the current situation, core problem, options, comparison, recommendation, unresolved questions, and immediate next decision.
 7. Ask the user to approve, revise, or reject the recommendation.
 8. Do not create a report by default. If the user requests a detailed report:
-   - write report to `docs/superpowers/plans/brainstorming/<report_id>/report.md`
+   - write the report to a user-supplied or repository-owned design-artifact
+     path; do not use the historical `docs/superpowers/plans/**` tree by
+     default
    - link supporting files directly only when they materially help
 9. Restate accepted recommendations in approved direct scope or a specification; do not treat the report as design truth.
 10. Request approval before implementation planning when a plan is needed. Direct approved scope may proceed without a saved spec or plan when the change is local, reversible, and design-clear.
@@ -81,7 +83,8 @@ source-first design, but never replaces mandatory evidence.
 ## Output Paths
 
 - specifications -> keep in the current task or an existing repository-owned path when requested
-- detailed brainstorming reports -> `docs/superpowers/plans/brainstorming/<report_id>/report.md`
+- detailed brainstorming reports -> a user-supplied or repository-owned
+  design-artifact path
 
 ## Guardrails
 

@@ -218,7 +218,7 @@ def completed_tasks_requiring_reverification(
     state: CoordinationState,
     snapshot: GitSnapshot,
 ) -> tuple[str, ...]:
-    """Return completed tasks whose accepted Git evidence differs from current Git."""
+    """Signal completed tasks for targeted re-verification when Git evidence differs."""
 
     return tuple(
         task.id

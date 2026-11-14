@@ -39,7 +39,7 @@ def run_accept(args: argparse.Namespace) -> int:
     task = next((item for item in state.tasks if item.id == args.task_id), None)
     if task is None:
         raise StateError(f"unknown task: {args.task_id}")
-    snapshot = inspect_git(args.repo)
+    snapshot = inspect_git(args.repo, include_identity=False)
     verification = VerificationResult(
         status=args.status,
         blocker_category=args.blocker_category,

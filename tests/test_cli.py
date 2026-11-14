@@ -62,6 +62,7 @@ def test_orca_smoke_reports_observed_status_without_claiming_worker_completion(
 def test_accept_persists_material_blocker_but_not_retryable_failure(
     tmp_path, monkeypatch, capsys
 ):
+    inspect_calls = []
     state_path = tmp_path / "coordination.json"
     save_state(
         state_path,
@@ -70,7 +71,9 @@ def test_accept_persists_material_blocker_but_not_retryable_failure(
     monkeypatch.setattr(
         cli,
         "inspect_git",
-        lambda _: GitSnapshot("main", "abc123", (), (), True),
+        lambda _, **kwargs: (
+            inspect_calls.append(kwargs) or GitSnapshot("main", "abc123", (), (), True)
+        ),
     )
 
     assert (
@@ -114,6 +117,7 @@ def test_accept_persists_material_blocker_but_not_retryable_failure(
     )
     capsys.readouterr()
     assert load_state(state_path).tasks[0].state == "blocked"
+    assert inspect_calls == [{"include_identity": False}, {"include_identity": False}]
     assert load_state(state_path).tasks[0].blocker_category == "dependency"
 
 
@@ -128,7 +132,7 @@ def test_accept_requires_verifier_snapshot_identity(tmp_path, monkeypatch, capsy
     monkeypatch.setattr(
         cli,
         "inspect_git",
-        lambda _: GitSnapshot("main", "abc123", (), (), True, "current"),
+        lambda _, **kwargs: GitSnapshot("main", "abc123", (), (), True, "current"),
     )
 
     with pytest.raises(SystemExit):
@@ -247,7 +251,7 @@ def test_accept_persists_blocked_retry_recovery(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(
         cli,
         "inspect_git",
-        lambda _: GitSnapshot("main", "abc123", (), (), True),
+        lambda _, **kwargs: GitSnapshot("main", "abc123", (), (), True),
     )
 
     assert (
@@ -277,7 +281,7 @@ def test_accept_rejects_blocked_without_category_or_reason(tmp_path, monkeypatch
     monkeypatch.setattr(
         cli,
         "inspect_git",
-        lambda _: GitSnapshot("main", "abc123", (), (), True),
+        lambda _, **kwargs: GitSnapshot("main", "abc123", (), (), True),
     )
 
     with pytest.raises(SystemExit):

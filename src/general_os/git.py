@@ -44,7 +44,7 @@ class GitRepository:
     def _run(self, *args: str) -> str:
         return self._run_bytes(*args).decode("utf-8", errors="surrogateescape").strip()
 
-    def inspect(self) -> GitSnapshot:
+    def inspect(self, *, include_identity: bool = True) -> GitSnapshot:
         branch = self._run("branch", "--show-current") or "HEAD"
         status_bytes = self._run_bytes(
             "status", "--porcelain=v1", "--untracked-files=all", "-z"
@@ -63,7 +63,7 @@ class GitRepository:
             revision = None
         changed = tuple(dict.fromkeys(changed_files))
         conflict_paths = tuple(dict.fromkeys(conflicts))
-        identity = self._identity(branch, revision, records)
+        identity = self._identity(branch, revision, records) if include_identity else None
         return GitSnapshot(
             branch=branch,
             revision=revision,
@@ -109,14 +109,10 @@ class GitRepository:
             digest.update(b"\0")
             digest.update(diff)
             digest.update(b"\0")
-        untracked_status = self._run_bytes(
-            "status", "--porcelain=v1", "--untracked-files=all", "-z"
-        )
         untracked = [
-            os.fsdecode(record[3:])
-            for record in untracked_status.split(b"\0")
-            if record.startswith(b"?? ")
-            and not self._is_coordination_state(os.fsdecode(record[3:]))
+            path
+            for code, path in status
+            if code == "??" and not self._is_coordination_state(path)
         ]
         for path in sorted(untracked):
             candidate = self.root / path
@@ -160,5 +156,5 @@ class GitRepository:
         return tuple(records)
 
 
-def inspect_git(root: str | Path) -> GitSnapshot:
-    return GitRepository(root).inspect()
+def inspect_git(root: str | Path, *, include_identity: bool = True) -> GitSnapshot:
+    return GitRepository(root).inspect(include_identity=include_identity)
