@@ -1,1 +1,4 @@
 name = "low"
+harness = "codex"
+model = "combo-low"
+effort = "low"

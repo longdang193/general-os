@@ -1,2 +1,5 @@
 name = "xhigh"
-instructions = "Use the strongest available native reasoning and broadest verification when the task warrants it. Let the selected runtime choose its native implementation."
+harness = "codex"
+model = "combo-xhigh"
+effort = "xhigh"
+instructions = "Use the strongest available native reasoning, investigation, planning, and verification when the task warrants it. Use the selected runtime's native capabilities rather than reproducing those mechanisms externally."

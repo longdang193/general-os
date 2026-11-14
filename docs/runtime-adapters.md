@@ -34,10 +34,12 @@ runtime model or effort values. Explicit facts may be projected one way to the
 selected native runtime; missing facts inherit native defaults. Orca remains
 harness-neutral and may run Codex, Claude, or another explicitly supported
 harness according to the resolved runtime configuration.
-Shipped profiles omit runtime model and effort values by default; project-local
-profiles may provide explicit facts when a runtime constraint is intentional.
-The runtime adapter passes explicit values through without maintaining another
-combo or model registry.
+Shipped profiles may carry verified Codex model and effort preferences. These
+are explicit optional runtime settings where supported, not universal routing
+truth; missing or unsupported settings fall back to native behavior.
+Project-local profiles may provide other explicit facts when a runtime
+constraint is intentional. The runtime adapter passes explicit values through
+without maintaining another combo or model registry.
 Use `general-os profile resolve --name <name> --directory agents` to inspect
 the deterministic projection without launching a runtime. The command never
 infers model or effort from rank or profile name.

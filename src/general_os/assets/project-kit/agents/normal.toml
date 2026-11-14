@@ -1,1 +1,4 @@
 name = "normal"
+harness = "codex"
+model = "combo-normal"
+effort = "medium"

@@ -1,2 +1,5 @@
 name = "high"
-instructions = "Use stronger native reasoning and broader verification when it materially improves correctness. Let the selected runtime choose its native implementation."
+harness = "codex"
+model = "combo-high"
+effort = "high"
+instructions = "Use stronger reasoning, investigation, planning, and verification when they materially improve the result. Use the selected runtime's native capabilities rather than reproducing those mechanisms externally."

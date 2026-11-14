@@ -42,10 +42,12 @@ The projection shape is `{harness, model, effort, instructions}` plus the
 resolved profile name. Missing model, harness, or effort values are `null` in
 the projection; missing instructions serialize as the empty string sentinel.
 `model = "codex"` is not a valid substitute for the `codex` harness. The
-shipped capability profiles omit runtime harness, model, and effort facts by
-default; project-local profiles may provide explicit values when a runtime
-constraint is intentional. These values are owned by `agents/*.toml`, not
-reconstructed from rank or profile name. The optional Orca handoff consumes
+shipped capability profiles may carry verified Codex harness, model, and effort
+preferences. These are explicit optional runtime settings where supported, not
+universal routing truth; missing or unsupported settings fall back to native
+behavior. Project-local profiles may provide other explicit values when a
+runtime constraint is intentional. These values are owned by `agents/*.toml`,
+not reconstructed from rank or profile name. The optional Orca handoff consumes
 that projection once as a semantic
 workstream contract containing the objective, task identity, relevant context
 and constraints, acceptance/evidence requirements, explicit profile facts, and

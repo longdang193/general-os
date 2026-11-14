@@ -25,6 +25,8 @@ Codex agent loop.
 The current Codex runtime is the normal interactive execution path. General-os
 does not maintain a second Python interactive runtime; compatibility proof must
 not be presented as native Codex execution evidence.
+Use the native mechanisms opportunistically; the assignment does not prescribe
+Goal Mode versus direct work, plan shape, or native subagent count.
 
 ## Native Subagents
 

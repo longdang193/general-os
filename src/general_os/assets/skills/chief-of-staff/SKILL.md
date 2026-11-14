@@ -36,11 +36,15 @@ second runtime scheduler.
    an independent boundary. A disabled Orca capability keeps ordinary work on
    Codex and blocks only work whose durable contract requires independence.
 4. Resolve the semantic profile without translating missing metadata into
-   guessed runtime model or effort settings.
+   guessed runtime model or effort settings. Treat explicit harness, model,
+   and effort values as optional preferences only where the selected runtime
+   supports them; they do not prescribe Orca topology or replace native
+   runtime decisions.
 5. Select the smallest effective native execution boundary based on the task's
    requirements, native capabilities, expected benefit, cost, and coordination
    overhead. Prefer the current Codex runtime for ordinary work and let Codex
-   decide whether native subagents help its bounded assignment.
+   decide whether to use Goal Mode, `update_plan`, tools, approvals, or native
+   subagents for its bounded assignment.
 6. Select Orca when independent ownership is required or materially useful and
    `orca_enabled` permits that boundary. Predefined use cases are examples, not
    restrictions. `requires_independent_boundary: true` is a hard requirement,

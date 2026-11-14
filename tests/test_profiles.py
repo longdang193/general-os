@@ -95,17 +95,22 @@ def test_profile_schema_rejects_invalid_fields(tmp_path, field, value, message):
         load_profiles(tmp_path)
 
 
-@pytest.mark.parametrize("name", ["low", "normal", "high", "xhigh"])
-def test_provided_profiles_inherit_native_runtime_defaults(name):
+@pytest.mark.parametrize(
+    ("name", "model", "effort"),
+    [
+        ("low", "combo-low", "low"),
+        ("normal", "combo-normal", "medium"),
+        ("high", "combo-high", "high"),
+        ("xhigh", "combo-xhigh", "xhigh"),
+    ],
+)
+def test_provided_profiles_keep_verified_codex_preferences(name, model, effort):
     profile = resolve_profile(name, load_profiles("agents"))
     projection = project_profile(profile)
 
-    assert projection == ProfileProjection(
-        harness=None,
-        model=None,
-        effort=None,
-        instructions=profile.instructions,
-    )
+    assert projection.harness == "codex"
+    assert projection.model == model
+    assert projection.effort == effort
 
 
 @pytest.mark.parametrize("name", ["review", "ui"])
