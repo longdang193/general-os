@@ -240,6 +240,8 @@ def test_orca_skill_and_runtime_docs_keep_native_ownership_explicit():
     assert "native defaults" in runtime
     assert "version-matched guidance" in skill
     assert "lightweight handoff guidance" in skill
+    assert "ownership handoff" in skill
+    assert "not semantic task completion" in skill
     assert "orca_enabled" in skill
     assert "native" in skill.lower()
     assert "worker lifecycle" in skill
@@ -249,11 +251,15 @@ def test_orca_skill_and_runtime_docs_keep_native_ownership_explicit():
     assert "semantic workstream" in normalized_skill
     assert "execution topology" in normalized_skill
     assert "partial progress" in normalized_skill
+    assert "ownership handoff" in normalized_skill
+    assert "not semantic task completion" in normalized_skill
     assert "current Git" in normalized_skill
     assert skill == derived_skill
     assert runtime == derived_runtime
-    assert "native Orca coordinator" in normalized_runtime
+    assert "native Orca" in normalized_runtime
     assert "partial progress" in normalized_runtime
+    assert "ownership handoff" in normalized_runtime
+    assert "not semantic task completion" in normalized_runtime
     assert "build_orca_launch(project_profile(profile)) performs" not in normalized_runtime
 
 
@@ -270,6 +276,10 @@ def test_architecture_contract_keeps_project_and_runtime_ownership_separate():
         assert "semantic workstream" in text or "workstream contract" in text
         assert "partial progress" in text
         assert "does not silently merge" in text or "does not silently merge runtime" in text
+
+    assert "lightweight ownership handoff" in architecture
+    assert "not durable general-os acceptance" in architecture
+    assert "Transfer or runtime completion is not durable" in contracts
 
     assert "~/.agents/general-os/" in deployment
     assert "seed-only" in deployment

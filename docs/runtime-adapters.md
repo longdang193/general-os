@@ -38,13 +38,16 @@ the deterministic projection without launching a runtime. The command never
 infers model or effort from rank or profile name.
 
 When project-level CoS selects Orca, general-os hands the native Orca
-coordinator/coordinating agent provided by the installed version a semantic
-workstream contract: objective, task identity, relevant context and
-constraints, acceptance/evidence requirements, explicit profile facts, and the
-relevant repository or work boundary. Orca owns internal orchestration and
-execution topology, including decomposition, workers, supervision, retries,
-nested helpers, fan-in, and cleanup. Its returned outcome/evidence bundle may
-report success, partial progress, failure, or a material blocker.
+entrypoint selected by the installed version a semantic workstream contract:
+objective, task identity, relevant context and constraints, acceptance/evidence
+requirements, explicit profile facts, and the relevant repository or work
+boundary. The selected native path owns internal orchestration and execution
+topology, including decomposition, workers, supervision, retries, nested
+helpers, fan-in, and cleanup when those capabilities are used. A supervised
+path may return an outcome/evidence bundle reporting success, partial progress,
+failure, or a material blocker. A lightweight ownership handoff may return
+only a transfer acknowledgement, if the native path reports one; transfer is
+not semantic task completion.
 
 `build_orca_launch(project_profile(profile), assignment)` remains a low-level
 one-way leaf/compatibility projection into the native CLI. Orca requires an explicit

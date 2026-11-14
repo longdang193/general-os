@@ -50,12 +50,15 @@ reconstructed from rank or profile name.
 The optional Orca handoff consumes that projection once as a semantic
 workstream contract containing the objective, task identity, relevant context
 and constraints, acceptance/evidence requirements, explicit profile facts, and
-the relevant repository or work boundary. The native Orca coordinator or
-coordinating agent provided by the installed version decides whether and how
-to create internal runtime tasks, workers, dependencies, retries, supervision,
-nested helpers, and synthesis. Worker count, worker roles, runtime IDs,
-internal DAGs, polling, heartbeats, retry counters, and temporary plans are
-not general-os contract fields.
+the relevant repository or work boundary. The native Orca entrypoint provided
+by the installed version decides whether and how to create internal runtime
+tasks, workers, dependencies, retries, supervision, nested helpers, and
+synthesis. A supervised path may return an outcome/evidence bundle; a
+lightweight ownership handoff may return only a transfer acknowledgement, if
+the native path reports one. Transfer or runtime completion is not durable
+task acceptance. Worker count, worker roles, runtime IDs, internal DAGs,
+polling, heartbeats, retry counters, and temporary plans are not general-os
+contract fields.
 
 `build_orca_launch(project_profile(profile), assignment)` remains a low-level
 one-way leaf/compatibility projection for the native CLI: `harness` becomes

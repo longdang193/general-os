@@ -24,8 +24,8 @@ messaging, release, and cleanup operations. Do not recreate those commands in
 ## Handoff
 
 Project-level CoS chooses this boundary for one independently owned semantic
-workstream. General-os owns the durable semantic assignment and passes the
-native Orca coordinator/coordinating agent provided by the installed version:
+workstream. General-os owns the durable semantic assignment and passes it to
+the native Orca entrypoint selected by the installed version:
 
 - task objective and semantic identity;
 - relevant context and material constraints;
@@ -56,13 +56,15 @@ ephemeral assignment to Orca launch flags; it does not define the conceptual
 multi-agent boundary, create a second profile registry, or persist runtime
 configuration.
 
-The native coordinator returns one semantic outcome/evidence bundle for the
-delegated assignment. That bundle may report success, partial progress,
-failure, or a material blocker. Never persist or mirror Run IDs, Task IDs,
-Dispatch IDs, worker IDs, heartbeats, progress, or other Orca runtime state in
-`general-os` durable state. Project-level CoS must inspect current Git, evaluate
-fresh evidence, and decide durable task acceptance; Orca completion cannot
-complete a general-os task by itself.
+The selected native path determines what is returned. Supervised orchestration
+may return one semantic outcome/evidence bundle reporting success, partial
+progress, failure, or a material blocker. A lightweight ownership handoff may
+return only a transfer acknowledgement, if the native path reports one; the
+handoff is not semantic task completion. Never persist or mirror Run IDs, Task
+IDs, Dispatch IDs, worker IDs, heartbeats, progress, or other Orca runtime
+state in `general-os` durable state. Project-level CoS must inspect current Git,
+evaluate fresh evidence, and decide durable task acceptance; neither a native
+outcome nor a successful handoff completes a general-os task by itself.
 
 ## Degradation
 

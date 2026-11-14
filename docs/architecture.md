@@ -56,12 +56,14 @@ work boundary. It does not prescribe worker count or roles, runtime IDs,
 internal DAGs, polling, heartbeats, retry counters, nested helper identities,
 or temporary runtime plans.
 
-The native Orca coordinator owns internal decomposition, fan-out, supervision,
-retries, bounded worker questions, nested helpers, fan-in, and cleanup. It
-returns a semantic outcome/evidence bundle for the delegated assignment. That
-bundle may represent success, partial progress, failure, or a material blocker;
-it is not durable general-os acceptance. Project-level CoS inspects current
-Git, runs or evaluates fresh verification, and decides `PASS`, `FAIL`, or
+The selected native Orca path owns internal decomposition, fan-out,
+supervision, retries, bounded worker questions, nested helpers, fan-in, and
+cleanup when those capabilities are used. A supervised path may return a
+semantic outcome/evidence bundle representing success, partial progress,
+failure, or a material blocker. A lightweight ownership handoff may return
+only a transfer acknowledgement, if the native path reports one; transfer is
+not durable general-os acceptance. Project-level CoS inspects current Git,
+runs or evaluates fresh verification, and decides `PASS`, `FAIL`, or
 `BLOCKED` for the durable task.
 
 General-os does not silently merge runtime worktrees, publish, or push. Git
