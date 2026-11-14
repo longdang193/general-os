@@ -10,10 +10,12 @@ description: Use when creating, editing, testing, or maintaining reusable agent 
 
 **Canonical repo-local skills in this project live under `.agents/skills/`. User-level skill directories remain platform-specific.**
 
-For discipline skills, write pressure scenarios in an isolated fresh context,
-observe the baseline, write the skill, verify compliance, and refactor to close
-loopholes. The native runtime chooses whether that context is a subagent,
-fresh session, or another supported mechanism.
+For higher-risk discipline skills, write pressure scenarios in an isolated fresh
+context, observe the baseline, write the skill, verify compliance, and refactor
+to close important loopholes. For lower-risk behavior changes, use the smallest
+focused scenario and structural checks that provide confidence. The native
+runtime chooses whether that context is a subagent, fresh session, or another
+supported mechanism.
 For metadata, reference, or mechanical edits, use focused contract and
 retrieval validation instead of inventing pressure scenarios.
 
@@ -542,7 +544,8 @@ For skills that change agent behavior, follow the TDD cycle:
 
 ### RED: Write Failing Test (Baseline)
 
-Run the pressure scenario in an isolated fresh context WITHOUT the skill.
+Run one or more proportionate pressure scenarios in an isolated fresh context
+WITHOUT the skill.
 Document exact behavior:
 - What choices did they make?
 - What rationalizations did they use (verbatim)?
@@ -556,9 +559,11 @@ Write skill that addresses those specific rationalizations. Don't add extra cont
 
 Run same scenarios WITH skill. Agent should now comply.
 
-### REFACTOR: Close Loopholes
+### REFACTOR: Close Important Loopholes
 
-Agent found new rationalization? Add explicit counter. Re-test until bulletproof.
+If the agent found a meaningful new rationalization, add an explicit counter and
+re-test that failure mode. Do not require exhaustive adversarial testing for
+low-risk edits; document residual risk when broader testing is not justified.
 
 **Testing methodology:** See `testing-skills-with-subagents.md` for the complete
 discipline-skill testing methodology:
@@ -611,7 +616,7 @@ checks. Pressure testing is optional unless the edit changes agent behavior.
 Use platform-native task tracking when the selected validation path needs it.
 
 **RED Phase - Write Failing Test:**
-- [ ] Create pressure scenarios (3+ combined pressures for discipline skills)
+- [ ] Create one or more pressure scenarios proportionate to the skill's behavioral risk
 - [ ] Run scenarios WITHOUT skill - document baseline behavior verbatim
 - [ ] Identify patterns in rationalizations/failures
 
@@ -627,12 +632,12 @@ Use platform-native task tracking when the selected validation path needs it.
 - [ ] One excellent example (not multi-language)
 - [ ] Run scenarios WITH skill - verify agents now comply
 
-**REFACTOR Phase - Close Loopholes:**
-- [ ] Identify NEW rationalizations from testing
+**REFACTOR Phase - Close Important Loopholes:**
+- [ ] Identify meaningful new rationalizations from testing
 - [ ] Add explicit counters (if discipline skill)
 - [ ] Build rationalization table from all test iterations
 - [ ] Create red flags list
-- [ ] Re-test until bulletproof
+- [ ] Re-test key failure modes and document residual risk
 
 **Quality Checks:**
 - [ ] Small flowchart only if decision non-obvious

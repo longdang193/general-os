@@ -47,7 +47,9 @@ supplied capability profiles explicitly configure the Codex model identifiers
 corresponding effort levels; these values are owned by `agents/*.toml`, not
 reconstructed from rank or profile name.
 
-The optional Orca handoff consumes that projection once as a semantic
+The four general-purpose profiles explicitly configure the `combo-*` model and
+effort pairs. Specialized profiles intentionally omit those runtime facts and
+inherit native defaults. The optional Orca handoff consumes that projection once as a semantic
 workstream contract containing the objective, task identity, relevant context
 and constraints, acceptance/evidence requirements, explicit profile facts, and
 the relevant repository or work boundary. The native Orca entrypoint provided
@@ -65,7 +67,8 @@ one-way leaf/compatibility projection for the native CLI: `harness` becomes
 `--agent`, explicit `model` and `effort` become their matching flags, and the
 ephemeral assignment plus explicit `instructions` become the launch prompt.
 Missing fields are omitted; no Orca profile registry or runtime state is
-created. Orca rejects an incomplete launch when the harness is absent or effort
+created. A semantic profile alone is not a complete Orca launch configuration;
+the low-level helper requires an explicit harness. Orca rejects an incomplete launch when the harness is absent or effort
 is supplied without an explicit model. This helper does not define the
 conceptual multi-agent boundary.
 
@@ -147,9 +150,11 @@ status observation defaults to a finite 30-second timeout.
 
 ## Deployment
 
-The central installation at `~/.agents/general-os/` is governed by
-`managed.json`, which stores only central managed-file digests and source
-provenance. Project adoption is represented by
+The central installation under `~/.agents/` is governed by
+`~/.agents/general-os/managed.json`, which stores only central managed-file
+digests and source provenance. Runtime skill files live at
+`~/.agents/skills/`; shared docs live at `~/.agents/general-os/docs/`.
+Project adoption is represented by
 `repo_config/general-os.lock.json`; it stores schema, source, source revision,
 and seeded paths only. Deployment is central-only unless `--repo` explicitly
 opts into one-shot adoption. Adoption never seeds `state/coordination.json`,

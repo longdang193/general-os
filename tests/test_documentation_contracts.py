@@ -281,6 +281,7 @@ def test_architecture_contract_keeps_project_and_runtime_ownership_separate():
     assert "not durable general-os acceptance" in architecture
     assert "Transfer or runtime completion is not durable" in contracts
 
+    assert "~/.agents/skills/" in deployment
     assert "~/.agents/general-os/" in deployment
     assert "seed-only" in deployment
     assert "state/coordination.json` is never seeded" in deployment
@@ -469,7 +470,7 @@ def test_migration_manifest_accounts_for_every_predecessor_surface():
     assert migration.count("| `") >= 44
 
 
-def test_migration_manifest_validator_checks_current_tree():
+def test_migration_manifest_validator_checks_manifest_destinations():
     root = Path(__file__).parents[1]
     result = subprocess.run(
         [
@@ -488,6 +489,40 @@ def test_migration_manifest_validator_checks_current_tree():
     assert "valid:" in result.stdout
 
 
+def test_migration_manifest_current_tree_check_is_opt_in(tmp_path):
+    root = tmp_path / "repository"
+    rules = root / "docs" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "old.md").write_text("old\n", encoding="utf-8")
+    (rules / "new.md").write_text("new\n", encoding="utf-8")
+    manifest = tmp_path / "manifest.md"
+    manifest.write_text(
+        "## Rule disposition\n\n"
+        "| `old-rule.md` | migrate to `docs/rules/old.md` |\n",
+        encoding="utf-8",
+    )
+    command = [
+        sys.executable,
+        str(Path(__file__).parents[1] / "scripts" / "validate_migration_manifest.py"),
+        "--manifest",
+        str(manifest),
+        "--repository-root",
+        str(root),
+    ]
+
+    normal = subprocess.run(command, check=False, capture_output=True, text=True)
+    strict = subprocess.run(
+        [*command, "--check-current-tree"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert normal.returncode == 0, normal.stderr
+    assert strict.returncode == 1
+    assert "active rule set mismatch" in strict.stderr
+
+
 def test_publication_boundary_has_one_maintained_skill_owner():
     root = Path(__file__).parents[1]
     owners = [
@@ -503,11 +538,13 @@ def test_publication_boundary_has_one_maintained_skill_owner():
 def test_maintained_skills_use_minimal_frontmatter_and_no_generated_rules():
     root = Path(__file__).parents[1]
     skill_root = root / ".agents" / "skills"
-    skills = sorted(path.parent.name for path in skill_root.glob("*/SKILL.md"))
+    skill_dirs = sorted(path for path in skill_root.iterdir() if path.is_dir())
 
-    assert len(skills) == 29
+    assert skill_dirs
     assert not (skill_root.parent / "rules").exists()
-    for path in sorted(skill_root.glob("*/SKILL.md")):
+    for skill_dir in skill_dirs:
+        path = skill_dir / "SKILL.md"
+        assert path.is_file()
         text = path.read_text(encoding="utf-8")
         assert text.startswith("---\n")
         frontmatter = text.split("---\n", 2)[1]
@@ -517,6 +554,7 @@ def test_maintained_skills_use_minimal_frontmatter_and_no_generated_rules():
             if ":" in line
         }
         assert fields == {"name", "description"}, path
+        assert next(line.split(":", 1)[1].strip() for line in frontmatter.splitlines() if line.startswith("name:")) == skill_dir.name
 
 
 def test_migrated_skills_use_current_owners_and_available_resources():

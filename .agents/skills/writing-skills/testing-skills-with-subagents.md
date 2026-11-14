@@ -55,7 +55,7 @@ observe what agents naturally do before writing the skill.
 
 **Process:**
 
-- [ ] **Create pressure scenarios** (3+ combined pressures)
+- [ ] **Create one or more pressure scenarios proportionate to the skill's risk**
 - [ ] **Run WITHOUT skill** - give agents realistic task with pressures
 - [ ] **Document choices and rationalizations** word-for-word
 - [ ] **Identify patterns** - which excuses appear repeatedly?
@@ -242,7 +242,7 @@ Agent should now:
 
 **If agent finds NEW rationalization:** Continue REFACTOR cycle.
 
-**If agent follows rule:** Success - skill is bulletproof for this scenario.
+**If agent follows rule:** Success for this scenario; record any untested risk.
 
 ## Meta-Testing (When GREEN Isn't Working)
 
@@ -271,16 +271,16 @@ it crystal clear that Option A was the only acceptable answer?
    - Make key points more prominent
    - Add foundational principle early
 
-## When Skill is Bulletproof
+## When Testing Is Sufficient
 
-**Signs of bulletproof skill:**
+**Signs the tested scope is sufficient:**
 
 1. **Agent chooses correct option** under maximum pressure
 2. **Agent cites skill sections** as justification
 3. **Agent acknowledges temptation** but follows rule anyway
 4. **Meta-testing reveals** "skill was clear, I should follow it"
 
-**Not bulletproof if:**
+**More testing is needed if:**
 - Agent finds new rationalizations
 - Agent argues skill is wrong
 - Agent creates "hybrid approaches"
@@ -317,7 +317,7 @@ Meta-test: "Skill was clear, I should follow it"
 Before deploying skill, verify you followed RED-GREEN-REFACTOR:
 
 **RED Phase:**
-- [ ] Created pressure scenarios (3+ combined pressures)
+- [ ] Created pressure scenarios proportionate to the skill's risk
 - [ ] Ran scenarios WITHOUT skill (baseline)
 - [ ] Documented agent failures and rationalizations verbatim
 
@@ -359,8 +359,8 @@ Agents resist single pressure, break under multiple.
 ✅ Fix: Add explicit negations for each specific rationalization.
 
 **❌ Stopping after first pass**
-Tests pass once ≠ bulletproof.
-✅ Fix: Continue REFACTOR cycle until no new rationalizations.
+One passing scenario does not cover every risk.
+✅ Fix: Test the important failure modes and document residual risk.
 
 ## Quick Reference (TDD Cycle)
 

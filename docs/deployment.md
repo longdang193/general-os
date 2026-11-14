@@ -8,21 +8,34 @@ recovery truth.
 
 ## Central installation
 
-The central installation lives at `~/.agents/general-os/` and contains:
+The central installation uses two coordinated paths under `~/.agents/`:
 
-- complete runtime-clean skill directories under `skills/`;
+- `~/.agents/skills/`, the runtime discovery path used by Codex and other
+  configured runtimes;
+- `~/.agents/general-os/`, the general-os provenance and shared-docs path.
+
+The provenance path contains:
+
 - shared rules and templates under `docs/`; and
 - `managed.json`, the central provenance lock.
 
+Complete runtime-clean skill directories are installed directly under
+`~/.agents/skills/`, so runtime discovery and deployment target the same tree.
 Skill references to repository-relative shared docs are rewritten in the
-installed copy to the central `docs/` tree. Canonical repository sources are
-never rewritten. The central lock stores source revision, manifest digest, and
-the last centrally managed digest for each installed file.
+installed copy to `~/.agents/general-os/docs/`. Canonical repository sources
+are never rewritten. The central lock stores source revision, manifest digest,
+and the last centrally managed digest for each installed file.
 
 An unchanged centrally managed file may be updated. A locally modified or
 unowned file is preserved. A byte-identical unowned file may be adopted. The
 lock is written last; failed application restores all files changed by that
-attempt.
+attempt. Existing unrelated directories under `~/.agents/skills/` are not
+removed or overwritten.
+
+An older `~/.agents/general-os/skills/` directory is legacy residue from the
+previous target contract. It is not read or updated by current deployment;
+verify active skills under `~/.agents/skills/` instead. Deployment leaves that
+legacy directory untouched unless an explicit migration cleanup is performed.
 
 ## Project adoption
 

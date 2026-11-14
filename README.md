@@ -21,8 +21,9 @@ retryable or incomplete evidence yields `FAIL`, and only a material safety,
 authority, dependency, Git, or required-runtime boundary yields `BLOCKED`.
 
 Profiles are named semantic choices from `agents/*.toml`, the sole profile
-registry. The supplied profiles explicitly own the configured `combo-*` model
-and effort values; projection passes those facts one way to the selected
+registry. The four general-purpose profiles explicitly own their configured
+`combo-*` model and effort values; specialized profiles intentionally inherit
+native defaults. Projection passes explicit facts one way to the selected
 runtime. Orca is optional and harness-neutral, while ordinary work remains in
 the current Codex runtime. Inspect the explicit projection with `python -m
 general_os profile resolve --name high --directory agents`; the command is
@@ -39,10 +40,11 @@ Reusable skills live under `.agents/skills/`; active shared rules live under
 predecessor skills and 11 predecessor rules without importing generated adapter
 trees or a second orchestration authority.
 
-Before acceptance, run `pytest -q`,
-`python -m general_os state validate state/coordination.json`, and
-`pytest -q tests/test_documentation_contracts.py` when documentation or
-governance contracts changed.
+Before acceptance, run `pytest -q` and
+`python -m general_os state validate state/coordination.json`. During
+documentation or governance changes, use
+`pytest -q tests/test_documentation_contracts.py` as the focused check before
+the broader suite.
 
 ## Central deployment
 

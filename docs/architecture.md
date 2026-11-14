@@ -117,11 +117,13 @@ runtime chatter and internal fan-in out of the project coordination layer.
 
 ## Central deployment ownership
 
-`general-os deploy` installs complete runtime-clean skill directories and
-shared docs under `~/.agents/general-os/`. Its `managed.json` lock owns only
-central installation provenance and managed-file digests. Canonical repository
-skills remain the source of truth; staged copies rewrite shared-doc references
-to the installed central docs tree.
+`general-os deploy` installs complete runtime-clean skill directories under
+`~/.agents/skills/` and shared docs under `~/.agents/general-os/docs/`. Its
+`managed.json` lock under `~/.agents/general-os/` owns only central
+installation provenance and managed-file digests. Canonical repository skills
+remain the source of truth; staged copies rewrite shared-doc references to the
+installed central docs tree. Unrelated existing skill directories are
+preserved.
 
 Project adoption is seed-only. `repo_config/general-os.lock.json` records the
 source revision and paths that were seeded, but it does not own project-file

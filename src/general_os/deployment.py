@@ -22,15 +22,6 @@ CENTRAL_LOCK = Path("managed.json")
 PROJECT_LOCK = Path("repo_config") / "general-os.lock.json"
 PROJECT_SEEDS = (
     Path("AGENTS.md"),
-    Path("agents") / "high.toml",
-    Path("agents") / "low.toml",
-    Path("agents") / "normal.toml",
-    Path("agents") / "review.toml",
-    Path("agents") / "review-1.toml",
-    Path("agents") / "review-2.toml",
-    Path("agents") / "review-3.toml",
-    Path("agents") / "ui.toml",
-    Path("agents") / "xhigh.toml",
     Path("repo_config") / "runtime-policy.toml",
 )
 
@@ -54,6 +45,7 @@ class DeploymentPlan:
     source_root: Path
     repo_root: Path | None
     central_root: Path
+    skill_root: Path
     adapter: str
     actions: tuple[Action, ...]
     warnings: tuple[str, ...]
@@ -82,6 +74,7 @@ class DeploymentPlan:
             "source_root": str(self.source_root),
             "repo_root": str(self.repo_root) if self.repo_root is not None else None,
             "central_root": str(self.central_root),
+            "skill_root": str(self.skill_root),
             "source_revision": self.source_revision,
             "manifest_digest": self.manifest_digest,
             "actions": [action.as_dict() for action in self.actions],
@@ -244,6 +237,13 @@ def _staged_sources(source_root: Path, central_root: Path) -> dict[str, bytes]:
     }
 
 
+def _central_destination(relative: str, central_root: Path) -> Path:
+    """Resolve managed files to the runtime discovery or provenance tree."""
+    if relative == "skills" or relative.startswith("skills/"):
+        return central_root.parent / _safe_relative(relative, central_root.parent)
+    return central_root / _safe_relative(relative, central_root)
+
+
 def _manifest_digest(sources: dict[str, bytes]) -> str:
     digest = hashlib.sha256()
     for relative in sorted(sources):
@@ -272,7 +272,12 @@ def _residue(repo_root: Path) -> tuple[str, ...]:
 def _project_sources(source_root: Path) -> dict[Path, bytes]:
     sources: dict[Path, bytes] = {}
     project_root = _project_root(source_root)
-    for relative in PROJECT_SEEDS:
+    seed_paths = PROJECT_SEEDS + tuple(
+        path.relative_to(project_root)
+        for path in sorted((project_root / "agents").glob("*.toml"))
+        if path.is_file()
+    )
+    for relative in seed_paths:
         source = project_root / relative
         if source.is_file():
             sources[relative] = source.read_bytes()
@@ -337,6 +342,7 @@ def build_plan(
     source = Path(source_root).resolve() if source_root else PACKAGE_ASSETS.resolve()
     central = (Path(home).expanduser() if home is not None else Path.home()) / ".agents" / CENTRAL_DIRNAME
     central = central.resolve()
+    skill_root = central.parent / "skills"
     central_sources = _staged_sources(source, central)
     source_revision = _source_revision(source)
     manifest_digest = _manifest_digest(central_sources)
@@ -346,7 +352,7 @@ def build_plan(
     actions: list[Action] = []
     next_managed: dict[str, str] = {}
     for relative, desired in sorted(central_sources.items()):
-        destination = central / relative
+        destination = _central_destination(relative, central)
         prior = old_managed.get(relative)
         action = _action_for_current(relative, destination, desired, prior)
         actions.append(action)
@@ -359,7 +365,7 @@ def build_plan(
     for relative, prior in sorted(old_managed.items()):
         if relative in desired_paths or not prune:
             continue
-        destination = central / _safe_relative(relative, central)
+        destination = _central_destination(relative, central)
         if not destination.exists():
             actions.append(Action("remove", relative, "owned file is already absent"))
             continue
@@ -370,10 +376,12 @@ def build_plan(
         next_managed[relative] = prior
 
     project_lock: dict[str, object] = {"seeded_paths": []}
+    project_seed_paths: set[Path] = set()
     if adopt:
         assert repo is not None
         existing_project_lock = _load_project_lock(repo / PROJECT_LOCK)
         project_sources = _project_sources(source)
+        project_seed_paths = set(project_sources)
         seeded_paths: set[str] = set()
         if existing_project_lock is None:
             for relative, desired in sorted(project_sources.items()):
@@ -420,13 +428,14 @@ def build_plan(
         + [
             f"preserved existing project file: {action.path}"
             for action in actions
-            if action.kind == "preserve" and action.path in {item.as_posix() for item in PROJECT_SEEDS}
+            if action.kind == "preserve" and action.path in {item.as_posix() for item in project_seed_paths}
         ]
     )
     return DeploymentPlan(
         source_root=source,
         repo_root=repo,
         central_root=central,
+        skill_root=skill_root,
         adapter=adapter,
         actions=tuple(actions),
         warnings=warnings,
@@ -476,7 +485,7 @@ def apply_plan(plan: DeploymentPlan) -> None:
         if action.kind not in {"create", "update", "remove"}:
             continue
         if action.path in central_paths or action.path.startswith(("skills/", "docs/")):
-            target = plan.central_root / _safe_relative(action.path, plan.central_root)
+            target = _central_destination(action.path, plan.central_root)
             data = central_sources.get(action.path)
         elif action.path == str(CENTRAL_LOCK):
             target = plan.central_root / CENTRAL_LOCK

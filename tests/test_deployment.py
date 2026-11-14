@@ -50,9 +50,10 @@ def test_first_install_copies_complete_skills_and_seeds_only_absent_project_file
     assert code == 0
     assert report["status"] == "applied"
     central = home / ".agents" / "general-os"
-    installed = (central / "skills/demo/SKILL.md").read_text(encoding="utf-8")
+    skills = home / ".agents" / "skills"
+    installed = (skills / "demo/SKILL.md").read_text(encoding="utf-8")
     assert "See `docs/rules/example.md`" not in installed
-    assert (central / "skills/demo/scripts/helper.txt").exists()
+    assert (skills / "demo/scripts/helper.txt").exists()
     assert str(central / "docs" / "rules" / "example.md").replace("\\", "/") in installed
     assert (project / "AGENTS.md").read_text(encoding="utf-8") == "project guidance\n"
     assert (project / "agents/review.toml").exists()
@@ -99,6 +100,62 @@ def test_central_only_deploy_does_not_mutate_project(tmp_path):
     assert (project / "AGENTS.md").read_text(encoding="utf-8") == "local project guidance\n"
     assert not (project / "repo_config").exists()
     assert (home / ".agents/general-os/managed.json").exists()
+
+
+def test_central_deploy_preserves_unrelated_shared_skills(tmp_path):
+    source = tmp_path / "source"
+    home = tmp_path / "home"
+    source.mkdir()
+    make_source(source)
+    unrelated = home / ".agents/skills/unrelated/SKILL.md"
+    unrelated.parent.mkdir(parents=True)
+    unrelated.write_text("user-owned skill\n", encoding="utf-8")
+
+    code, _ = deploy(source_root=source, home=home)
+
+    assert code == 0
+    assert unrelated.read_text(encoding="utf-8") == "user-owned skill\n"
+    assert (home / ".agents/skills/demo/SKILL.md").exists()
+
+
+def test_project_adoption_discovers_new_profile_files(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    future_profile = source / "agents/future.toml"
+    future_profile.write_text('name = "future"\nprovider = "native"\n', encoding="utf-8")
+
+    code, _ = run_apply(source, project, home)
+
+    assert code == 0
+    assert (project / "agents/future.toml").read_text(encoding="utf-8") == future_profile.read_text(encoding="utf-8")
+
+
+def test_shared_skill_updates_and_conflicts_are_checked_at_runtime_discovery_path(tmp_path):
+    source = tmp_path / "source"
+    home = tmp_path / "home"
+    source.mkdir()
+    make_source(source)
+    deploy(source_root=source, home=home)
+
+    skill = source / ".agents/skills/demo/SKILL.md"
+    skill.write_text("updated\n", encoding="utf-8")
+    code, report = deploy(source_root=source, home=home)
+    assert code == 0
+    assert (home / ".agents/skills/demo/SKILL.md").read_text(encoding="utf-8") == "updated\n"
+    assert any(item["kind"] == "update" and item["path"] == "skills/demo/SKILL.md" for item in report["actions"])
+
+    destination = home / ".agents/skills/demo/SKILL.md"
+    destination.write_text("local change\n", encoding="utf-8")
+    skill.write_text("upstream change\n", encoding="utf-8")
+    code, report = deploy(source_root=source, home=home, check=True)
+    assert code == 1
+    assert report["status"] == "drift"
+    assert destination.read_text(encoding="utf-8") == "local change\n"
+    assert any(item["kind"] == "preserve" and item["path"] == "skills/demo/SKILL.md" for item in report["actions"])
 
 
 def test_packaged_assets_support_central_deployment(tmp_path):
@@ -176,10 +233,10 @@ def test_owned_files_update_and_unowned_conflicts_are_preserved(tmp_path):
     skill.write_text(skill.read_text(encoding="utf-8") + "updated\n", encoding="utf-8")
     code, report = run_apply(source, project, home)
     assert code == 0
-    assert "updated" in (home / ".agents/general-os/skills/demo/SKILL.md").read_text()
+    assert "updated" in (home / ".agents/skills/demo/SKILL.md").read_text()
     assert any(item["kind"] == "update" for item in report["actions"])
 
-    conflict = home / ".agents/general-os/skills/demo/SKILL.md"
+    conflict = home / ".agents/skills/demo/SKILL.md"
     conflict.write_text("local change\n", encoding="utf-8")
     skill.write_text(skill.read_text(encoding="utf-8") + "again\n", encoding="utf-8")
     code, report = run_apply(source, project, home)
@@ -195,7 +252,7 @@ def test_byte_identical_unmarked_file_is_adopted(tmp_path):
     source.mkdir()
     project.mkdir()
     make_source(source)
-    destination = home / ".agents/general-os/skills/demo/SKILL.md"
+    destination = home / ".agents/skills/demo/SKILL.md"
     destination.parent.mkdir(parents=True)
     destination.write_bytes(
         deployment._rewrite_skill_references(
@@ -220,7 +277,7 @@ def test_prune_only_removes_owned_unchanged_files(tmp_path):
     project.mkdir()
     make_source(source)
     run_apply(source, project, home)
-    removed = home / ".agents/general-os/skills/demo/scripts/helper.txt"
+    removed = home / ".agents/skills/demo/scripts/helper.txt"
     modified = home / ".agents/general-os/docs/templates/example.md"
     modified.write_text("local template\n", encoding="utf-8")
     (source / ".agents/skills/demo/scripts/helper.txt").unlink()
@@ -256,7 +313,7 @@ def test_failed_application_rolls_back_and_writes_lock_last(tmp_path, monkeypatc
         run_apply(source, project, home)
 
     assert calls[-1] == "managed.json"
-    assert not (home / ".agents/general-os/skills/demo/SKILL.md").exists()
+    assert not (home / ".agents/skills/demo/SKILL.md").exists()
     assert not (project / "repo_config/general-os.lock.json").exists()
 
 

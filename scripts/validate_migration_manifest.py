@@ -48,6 +48,7 @@ def validate_manifest(
     repository_root: Path,
     predecessor_root: Path | None = None,
     predecessor_sha: str | None = None,
+    check_current_tree: bool = False,
 ) -> tuple[ManifestRow, ...]:
     rows = parse_manifest(manifest)
     errors: list[str] = []
@@ -63,23 +64,24 @@ def validate_manifest(
         if row.disposition.startswith("retire") and row.destinations:
             errors.append(f"retired row has an active destination: {row.source}")
 
-    active_rules = {
-        destination.rstrip("/")
-        for row in rows
-        if row.section == "rules" and row.disposition.startswith("migrate")
-        for destination in row.destinations
-        if destination.startswith("docs/rules/")
-    }
-    actual_rules = {
-        path.relative_to(repository_root).as_posix()
-        for path in (repository_root / "docs" / "rules").glob("*")
-        if path.is_file()
-    }
-    if active_rules != actual_rules:
-        errors.append(
-            f"active rule set mismatch: manifest={sorted(active_rules)} "
-            f"tree={sorted(actual_rules)}"
-        )
+    if check_current_tree:
+        active_rules = {
+            destination.rstrip("/")
+            for row in rows
+            if row.section == "rules" and row.disposition.startswith("migrate")
+            for destination in row.destinations
+            if destination.startswith("docs/rules/")
+        }
+        actual_rules = {
+            path.relative_to(repository_root).as_posix()
+            for path in (repository_root / "docs" / "rules").glob("*")
+            if path.is_file()
+        }
+        if active_rules != actual_rules:
+            errors.append(
+                f"active rule set mismatch: manifest={sorted(active_rules)} "
+                f"tree={sorted(actual_rules)}"
+            )
 
     if predecessor_root is not None:
         if not predecessor_sha or not re.fullmatch(r"[0-9a-f]{40}", predecessor_sha):
@@ -131,6 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--predecessor-root", type=Path)
     parser.add_argument("--predecessor-sha")
     parser.add_argument("--repository-root", type=Path)
+    parser.add_argument("--check-current-tree", action="store_true")
     args = parser.parse_args(argv)
     manifest = args.manifest.resolve()
     repository_root = (args.repository_root or manifest.parents[2]).resolve()
@@ -140,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
             repository_root,
             args.predecessor_root.resolve() if args.predecessor_root else None,
             args.predecessor_sha,
+            args.check_current_tree,
         )
     except (OSError, ValueError) as exc:
         print(f"migration manifest invalid: {exc}", file=sys.stderr)

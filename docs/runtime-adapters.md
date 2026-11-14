@@ -30,9 +30,10 @@ runtime model or effort values. Explicit facts may be projected one way to the
 selected native runtime; missing facts inherit native defaults. Orca remains
 harness-neutral and may run Codex, Claude, or another explicitly supported
 harness according to the resolved runtime configuration.
-The provided profiles carry explicit `combo-*` model and effort values; the
-runtime adapter passes them through without maintaining another combo or model
-registry.
+The four general-purpose profiles carry explicit `combo-*` model and effort
+values; specialized profiles intentionally omit those facts and inherit native
+defaults. The runtime adapter passes explicit values through without maintaining
+another combo or model registry.
 Use `general-os profile resolve --name <name> --directory agents` to inspect
 the deterministic projection without launching a runtime. The command never
 infers model or effort from rank or profile name.
@@ -55,7 +56,9 @@ one-way leaf/compatibility projection into the native CLI. Orca requires an expl
 then retain their native defaults subject to launch validation. Explicit values
 map to `--agent`, `--model`, `--effort`, and `--prompt`. The helper is not the
 conceptual multi-agent boundary and the handoff remains an ephemeral command
-description, not a second profile registry or a durable runtime record.
+description, not a second profile registry or a durable runtime record. A
+semantic profile without an explicit harness is not by itself a complete Orca
+launch configuration.
 
 The maintained Python Orca surface only observes `orca status --json` for
 read-only smoke evidence. It does not dispatch, inspect, cancel, or mirror
