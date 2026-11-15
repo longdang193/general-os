@@ -365,6 +365,59 @@ def test_apply_rejects_target_drift_before_writing(tmp_path):
     assert target.read_text(encoding="utf-8") == "newer local content\n"
 
 
+def test_apply_rechecks_each_target_before_writing(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    user_target = project / "AGENTS.md"
+    original_restore = deployment._restore
+    injected = False
+
+    def mutate_next_target(path, data):
+        nonlocal injected
+        original_restore(path, data)
+        if not injected and path != user_target:
+            injected = True
+            user_target.write_text("user edit\n", encoding="utf-8")
+
+    monkeypatch.setattr(deployment, "_restore", mutate_next_target)
+    with pytest.raises(DeploymentError, match="stale deployment plan: target changed"):
+        run_apply(source, project, home)
+
+    assert user_target.read_text(encoding="utf-8") == "user edit\n"
+
+
+def test_plan_captures_target_precondition_with_action_decision(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    run_apply(source, project, home)
+    skill = source / ".agents/skills/demo/SKILL.md"
+    skill.write_text("upstream update\n", encoding="utf-8")
+    destination = home / ".agents/skills/demo/SKILL.md"
+    original_action = deployment._action_for_current
+
+    def mutate_after_decision(relative, path, desired, prior):
+        action, current = original_action(relative, path, desired, prior)
+        if relative == "skills/demo/SKILL.md" and action.kind == "update":
+            path.write_text("user edit\n", encoding="utf-8")
+        return action, current
+
+    monkeypatch.setattr(deployment, "_action_for_current", mutate_after_decision)
+    plan = deployment.build_plan(project, source_root=source, home=home, adopt=True)
+
+    with pytest.raises(DeploymentError, match="stale deployment plan: target changed"):
+        deployment.apply_plan(plan)
+
+    assert destination.read_text(encoding="utf-8") == "user edit\n"
+
+
 def test_rollback_preserves_user_edit_after_a_write(tmp_path, monkeypatch):
     source = tmp_path / "source"
     project = tmp_path / "project"

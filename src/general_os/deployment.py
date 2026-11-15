@@ -384,22 +384,25 @@ def _action_for_current(
     destination: Path,
     desired: bytes,
     prior_digest: str | None,
-) -> Action:
+) -> tuple[Action, bytes | None]:
     if not destination.exists():
-        return Action("create", relative, "destination absent")
+        return Action("create", relative, "destination absent"), None
     current = destination.read_bytes()
     current_digest = _digest(current)
     desired_digest = _digest(desired)
     if current_digest == desired_digest:
         if prior_digest is None:
-            return Action("adopt", relative, "byte-identical unmarked file adopted")
-        return Action("unchanged", relative, "already matches desired content")
+            return Action("adopt", relative, "byte-identical unmarked file adopted"), current
+        return Action("unchanged", relative, "already matches desired content"), current
     if prior_digest and current_digest == prior_digest:
-        return Action("update", relative, "centrally managed content changed upstream")
-    return Action(
-        "preserve",
-        relative,
-        "existing content is not centrally owned or was locally modified",
+        return Action("update", relative, "centrally managed content changed upstream"), current
+    return (
+        Action(
+            "preserve",
+            relative,
+            "existing content is not centrally owned or was locally modified",
+        ),
+        current,
     )
 
 
@@ -431,11 +434,14 @@ def build_plan(
     assert isinstance(old_managed, dict)
     actions: list[Action] = []
     next_managed: dict[str, str] = {}
+    target_preconditions: dict[str, str | None] = {}
     for relative, desired in sorted(central_sources.items()):
         destination = _central_destination(relative, central)
         prior = old_managed.get(relative)
-        action = _action_for_current(relative, destination, desired, prior)
+        action, current = _action_for_current(relative, destination, desired, prior)
         actions.append(action)
+        if action.kind in {"create", "update"}:
+            target_preconditions[str(destination)] = _digest(current) if current is not None else None
         if action.kind in {"create", "update", "adopt", "unchanged"}:
             next_managed[relative] = _digest(desired)
         elif isinstance(prior, str):
@@ -448,14 +454,21 @@ def build_plan(
         destination = _central_destination(relative, central)
         if not destination.exists():
             actions.append(Action("remove", relative, "owned file is already absent"))
+            target_preconditions[str(destination)] = None
             continue
-        if destination.is_file() and _digest(destination.read_bytes()) == prior:
+        if destination.is_file():
+            current = destination.read_bytes()
+        else:
+            current = None
+        if current is not None and _digest(current) == prior:
             actions.append(Action("remove", relative, "owned file is no longer in source manifest"))
+            target_preconditions[str(destination)] = _digest(current)
             continue
         actions.append(Action("preserve", relative, "prune skipped modified or missing file"))
         next_managed[relative] = prior
 
     project_lock: dict[str, object] = {"seeded_paths": []}
+    project_sources: dict[Path, bytes] = {}
     project_seed_paths: set[Path] = set()
     if adopt:
         assert repo is not None
@@ -468,20 +481,29 @@ def build_plan(
                 destination = repo / relative
                 if not destination.exists():
                     actions.append(Action("create", relative.as_posix(), "project semantic seed absent"))
+                    target_preconditions[str(destination)] = None
                     seeded_paths.add(relative.as_posix())
-                elif destination.read_bytes() == desired:
-                    actions.append(Action("unchanged", relative.as_posix(), "project semantic already present"))
                 else:
-                    actions.append(Action("preserve", relative.as_posix(), "existing project semantic preserved"))
+                    current = destination.read_bytes()
+                    if current == desired:
+                        actions.append(Action("unchanged", relative.as_posix(), "project semantic already present"))
+                    else:
+                        actions.append(Action("preserve", relative.as_posix(), "existing project semantic preserved"))
             project_lock = _project_lock_value(existing_project_lock, source_revision, seeded_paths)
             project_lock_path = repo / PROJECT_LOCK
             project_lock_bytes = _json_bytes(project_lock)
             if not project_lock_path.exists():
                 actions.append(Action("create", PROJECT_LOCK.as_posix(), "project adoption record absent"))
-            elif project_lock_path.read_bytes() != project_lock_bytes:
-                actions.append(Action("update", PROJECT_LOCK.as_posix(), "adoption record gains seed provenance"))
             else:
-                actions.append(Action("unchanged", PROJECT_LOCK.as_posix(), "adoption record already matches"))
+                current = project_lock_path.read_bytes()
+                if current != project_lock_bytes:
+                    actions.append(Action("update", PROJECT_LOCK.as_posix(), "adoption record gains seed provenance"))
+                else:
+                    actions.append(Action("unchanged", PROJECT_LOCK.as_posix(), "adoption record already matches"))
+            if actions[-1].kind in {"create", "update"}:
+                target_preconditions[str(project_lock_path)] = (
+                    _digest(current) if project_lock_path.exists() else None
+                )
         else:
             project_lock = existing_project_lock
 
@@ -497,27 +519,16 @@ def build_plan(
     central_lock_bytes = _json_bytes(central_lock)
     if not central_lock_path.exists():
         actions.append(Action("create", str(CENTRAL_LOCK), "central deployment lock absent"))
-    elif central_lock_path.read_bytes() != central_lock_bytes:
-        actions.append(Action("update", str(CENTRAL_LOCK), "central provenance changed"))
     else:
-        actions.append(Action("unchanged", str(CENTRAL_LOCK), "central provenance already matches"))
-
-    project_sources = _project_sources(source) if adopt else {}
-    target_preconditions: dict[str, str | None] = {}
-    for action in actions:
-        if action.kind not in {"create", "update", "remove"}:
-            continue
-        target, _ = _target_for_action(
-            action,
-            central_sources=central_sources,
-            project_sources=project_sources,
-            central_lock=central_lock,
-            project_lock=project_lock,
-            central_root=central,
-            repo_root=repo,
+        current = central_lock_path.read_bytes()
+        if current != central_lock_bytes:
+            actions.append(Action("update", str(CENTRAL_LOCK), "central provenance changed"))
+        else:
+            actions.append(Action("unchanged", str(CENTRAL_LOCK), "central provenance already matches"))
+    if actions[-1].kind in {"create", "update"}:
+        target_preconditions[str(central_lock_path)] = (
+            _digest(current) if central_lock_path.exists() else None
         )
-        current = _target_bytes(target)
-        target_preconditions[str(target)] = _digest(current) if current is not None else None
 
     residue = _residue(repo) if repo is not None else ()
     warnings = tuple(
@@ -611,6 +622,11 @@ def apply_plan(plan: DeploymentPlan) -> None:
         written: set[Path] = set()
         try:
             for target in ordered:
+                expected_digest = plan.target_preconditions.get(str(target))
+                current = _target_bytes(target)
+                current_digest = _digest(current) if current is not None else None
+                if current_digest != expected_digest:
+                    raise DeploymentError(f"stale deployment plan: target changed: {target}")
                 _restore(target, targets[target])
                 written.add(target)
         except (OSError, ValueError) as exc:
