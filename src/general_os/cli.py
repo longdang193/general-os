@@ -10,6 +10,7 @@ from general_os.acceptance import (
     VerificationResult,
     apply_task_transition,
     evaluate_acceptance,
+    revalidate_completed_tasks,
 )
 from general_os.deployment import DeploymentError, deploy
 from general_os.git import inspect_git
@@ -25,6 +26,24 @@ def _print(value: object) -> None:
 def run_state_validate(args: argparse.Namespace) -> int:
     state = load_state(args.path)
     _print({"status": "valid", "goal": state.goal, "task_count": len(state.tasks)})
+    return 0
+
+
+def run_state_revalidate(args: argparse.Namespace) -> int:
+    state = load_state(args.state)
+    snapshot = inspect_git(args.repo, include_identity=True)
+    updated_state = revalidate_completed_tasks(state, snapshot)
+    changed = updated_state != state
+    if changed:
+        save_state(args.state, updated_state)
+    _print(
+        {
+            "status": "revalidated",
+            "changed": changed,
+            "goal": updated_state.goal,
+            "task_count": len(updated_state.tasks),
+        }
+    )
     return 0
 
 
@@ -99,6 +118,10 @@ def build_parser() -> argparse.ArgumentParser:
     validate = state_commands.add_parser("validate")
     validate.add_argument("path")
     validate.set_defaults(handler=run_state_validate)
+    revalidate = state_commands.add_parser("revalidate")
+    revalidate.add_argument("--state", required=True)
+    revalidate.add_argument("--repo", required=True)
+    revalidate.set_defaults(handler=run_state_revalidate)
 
     accept = commands.add_parser("accept")
     accept.add_argument("--state", required=True)

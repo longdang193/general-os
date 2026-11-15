@@ -27,7 +27,7 @@ class GitRepository:
     _COORDINATION_STATE = "state/coordination.json"
 
     def __init__(self, root: str | Path):
-        self.root = Path(root)
+        self.root = Path(root).resolve()
 
     def _run_bytes(self, *args: str) -> bytes:
         try:
@@ -45,6 +45,9 @@ class GitRepository:
         return self._run_bytes(*args).decode("utf-8", errors="surrogateescape").strip()
 
     def inspect(self, *, include_identity: bool = True) -> GitSnapshot:
+        repository_root = Path(self._run("rev-parse", "--show-toplevel")).resolve()
+        if repository_root != self.root:
+            return GitRepository(repository_root).inspect(include_identity=include_identity)
         branch = self._run("branch", "--show-current") or "HEAD"
         status_bytes = self._run_bytes(
             "status", "--porcelain=v1", "--untracked-files=all", "-z"
@@ -82,9 +85,13 @@ class GitRepository:
         digest = hashlib.sha256()
         repository_root = self._run("rev-parse", "--show-toplevel")
         common_dir = self._run("rev-parse", "--git-common-dir")
+        repository_path = Path(repository_root).resolve()
+        common_path = Path(common_dir)
+        if not common_path.is_absolute():
+            common_path = repository_path / common_path
         for value in (
-            str(Path(repository_root).resolve()),
-            str((self.root / common_dir).resolve()),
+            str(repository_path),
+            str(common_path.resolve()),
             branch,
             revision or "",
         ):

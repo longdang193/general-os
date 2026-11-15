@@ -39,6 +39,34 @@ def test_inspect_can_skip_expensive_identity(tmp_path):
     assert snapshot.identity is None
 
 
+def test_inspect_from_nested_directory_uses_repository_root_identity(tmp_path):
+    run_git(tmp_path, "init", "--initial-branch", "main")
+    readme = tmp_path / "README.md"
+    readme.write_text("initial\n", encoding="utf-8")
+    run_git(tmp_path, "add", "README.md")
+    run_git(
+        tmp_path,
+        "-c",
+        "user.name=Test User",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "initial",
+    )
+    readme.write_text("changed\n", encoding="utf-8")
+    (tmp_path / "root-untracked.txt").write_text("new\n", encoding="utf-8")
+    nested = tmp_path / "nested"
+    nested.mkdir()
+
+    root_snapshot = GitRepository(tmp_path).inspect()
+    nested_snapshot = GitRepository(nested).inspect()
+
+    assert nested_snapshot.changed_files == root_snapshot.changed_files
+    assert nested_snapshot.changed_files == ("README.md", "root-untracked.txt")
+    assert nested_snapshot.identity == root_snapshot.identity
+
+
 def test_inspect_git_reports_conflicting_index_status(tmp_path):
     run_git(tmp_path, "init", "--initial-branch", "main")
     (tmp_path / "file.txt").write_text("content\n", encoding="utf-8")

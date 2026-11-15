@@ -69,9 +69,13 @@ verification; general-os persists the resulting durable task state.
 
 ## Recovery
 
-When a runtime is lost, read durable state and current Git, determine unfinished
-work, and start a fresh native assignment. Do not reconstruct runtime sessions
-or persist runtime IDs, heartbeats, progress, or worker registries.
+When a runtime is lost, read durable state and current Git, then run
+`python -m general_os state revalidate --state state/coordination.json --repo .`
+before relying on completed-task state. This reuses task-contract and dependency
+revalidation only; compatibility failures stop without rewriting historical
+bytes and require explicit migration. Determine unfinished work and start a
+fresh native assignment. Do not reconstruct runtime sessions or persist runtime
+IDs, heartbeats, progress, or worker registries.
 
 ## Common Mistakes
 

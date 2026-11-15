@@ -314,6 +314,85 @@ def test_failed_application_rolls_back_and_writes_lock_last(tmp_path, monkeypatc
     assert not (project / "repo_config/general-os.lock.json").exists()
 
 
+def test_apply_rejects_source_drift_before_writing(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    plan = deployment.build_plan(project, source_root=source, home=home, adopt=True)
+    (source / ".agents/skills/demo/SKILL.md").write_text("changed\n", encoding="utf-8")
+
+    with pytest.raises(DeploymentError, match="stale deployment plan: source changed"):
+        deployment.apply_plan(plan)
+
+    assert not (home / ".agents/skills/demo/SKILL.md").exists()
+    assert not (project / "AGENTS.md").exists()
+
+
+def test_apply_rejects_project_source_drift_before_writing(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    plan = deployment.build_plan(project, source_root=source, home=home, adopt=True)
+    (source / "AGENTS.md").write_text("changed project guidance\n", encoding="utf-8")
+
+    with pytest.raises(DeploymentError, match="stale deployment plan: source changed"):
+        deployment.apply_plan(plan)
+
+    assert not (project / "AGENTS.md").exists()
+
+
+def test_apply_rejects_target_drift_before_writing(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    plan = deployment.build_plan(project, source_root=source, home=home, adopt=True)
+    target = home / ".agents/skills/demo/SKILL.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("newer local content\n", encoding="utf-8")
+
+    with pytest.raises(DeploymentError, match="stale deployment plan: target changed"):
+        deployment.apply_plan(plan)
+
+    assert target.read_text(encoding="utf-8") == "newer local content\n"
+
+
+def test_rollback_preserves_user_edit_after_a_write(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    calls = 0
+    original = deployment._atomic_write
+    edited = home / ".agents/skills/demo/SKILL.md"
+
+    def fail_after_user_edit(path, data):
+        nonlocal calls
+        calls += 1
+        result = original(path, data)
+        if path == edited:
+            edited.write_text("user edit\n", encoding="utf-8")
+        if path.name == "managed.json":
+            raise OSError("simulated lock failure")
+        return result
+
+    monkeypatch.setattr(deployment, "_atomic_write", fail_after_user_edit)
+    with pytest.raises(DeploymentError, match="rollback conflicts"):
+        run_apply(source, project, home)
+
+    assert edited.read_text(encoding="utf-8") == "user edit\n"
+
+
 def test_residue_is_report_only_unless_strict_migration(tmp_path):
     source = tmp_path / "source"
     project = tmp_path / "project"

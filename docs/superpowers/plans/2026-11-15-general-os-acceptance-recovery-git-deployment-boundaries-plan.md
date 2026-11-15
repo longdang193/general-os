@@ -3,7 +3,7 @@ layer: change
 artifact_type: plan
 template_id: implementation-plan
 contract_version: "1"
-status: proposed
+status: complete
 name: general-os-acceptance-recovery-git-deployment-boundaries
 targets:
   - src/general_os/state.py
@@ -11,7 +11,6 @@ targets:
   - src/general_os/cli.py
   - src/general_os/git.py
   - src/general_os/deployment.py
-  - src/general_os/profiles.py
   - .agents/skills/chief-of-staff/SKILL.md
   - src/general_os/assets/skills/chief-of-staff/SKILL.md
   - tests/test_state.py
@@ -186,7 +185,8 @@ unrelated Git state changed.
 
 **Dependencies:**
 
-Task A.
+None for implementation. Use Task A's completed identity behavior before
+final acceptance/recovery integration verification.
 
 **Durable sequencing:**
 
@@ -198,6 +198,13 @@ stricter persisted-state invariant. Do not silently rewrite such records.
 - Reuse `revalidate_completed_tasks` and existing compare-and-save semantics.
 - Revalidation must remain task-contract/dependency based and must not persist a
   global candidate list.
+- `load_state()` must perform a raw compatibility preflight before strict task
+  construction. A persisted completed task missing either acceptance identity
+  raises one deterministic compatibility `StateError` condition, performs no
+  save, and requires an explicit migration decision.
+- Newly constructed or normalized state uses the strict completed-task
+  invariant. `state revalidate` stops without writing when the compatibility
+  condition is present.
 - The recovery entry point may inspect current Git, invoke the existing
   revalidation helper, and compare-and-save only changed durable state. It must
   not select work, manufacture `PASS` evidence, or become a second coordinator.
@@ -227,6 +234,9 @@ stricter persisted-state invariant. Do not silently rewrite such records.
   identities.
 - Add CLI/integration coverage proving the recovery entry point invokes the
   existing revalidation behavior and preserves compare-and-save semantics.
+- Add coverage proving a legacy compatibility failure leaves the original state
+  bytes unchanged, and update any valid completed-task fixtures to carry both
+  acceptance identities.
 - Add documentation-contract coverage for the canonical and packaged CoS
   recovery guidance.
 - Run focused state, acceptance, recovery/documentation-contract, and Git tests.
@@ -259,25 +269,40 @@ None; integrate before final verification.
 **Constraints / decisions:**
 
 - Revalidate expected target ownership/content immediately before mutation.
+- Treat a stale plan as either planned-source drift or planned-target
+  precondition drift. Planned source bytes/digests and each mutable target's
+  expected existence/content must be captured or derived from the immutable
+  plan before writes begin.
+- Serialize cooperating general-os deployment writers with one narrow local
+  deployment lock. Do not claim to prevent arbitrary external filesystem writes
+  between a check and replacement.
 - On an intervening change, abort with a deterministic stale-plan report;
   require a fresh deployment invocation to replan, without overwriting the
   newer content.
-- Roll back only changes made by the current deployment attempt; never erase an
-  intervening user change.
+- Roll back only changes made by the current deployment attempt. Restore a
+  target only while its current bytes still equal the bytes written by this
+  attempt; otherwise preserve it and report a rollback conflict.
 - Do not add a daemon, service, or durable deployment session state.
 
 **Acceptance:**
 
 - A target modified between planning and application is detected and preserved.
+- A central or project source modified between planning and application is
+  detected before applying bytes different from the plan.
 - A successful application still updates owned unchanged targets and writes
   managed metadata in the existing order.
 - Injected application failures retain current rollback guarantees.
-- Concurrent or stale-plan handling has a deterministic failure report and no
-  silent overwrite.
+- A user change after one write and before an injected failure is preserved,
+  with a deterministic rollback-conflict report.
+- Concurrency guarantees are limited to cooperating deployment writers and
+  observable pre-mutation external changes; there is no silent overwrite claim
+  for arbitrary editors racing a filesystem replacement.
 
 **Verification:**
 
 - Add a focused stale-plan/concurrent-change regression.
+- Add separate regressions for central-source drift, project-source drift, and
+  a user edit after one write before an injected failure.
 - Run deployment and CLI tests, including dry-run, check, prune, adoption, and
   rollback coverage.
 
@@ -330,4 +355,15 @@ generated mirror reflect settled behavior contracts.
   compatibility handling, recovery revalidation, nested Git identity, stale
   deployment-plan protection, profile contract wording, and all existing
   native ownership boundaries.
+
+## Execution Evidence
+
+- Focused state, acceptance, CLI, Git, deployment, profile, and documentation
+  tests: `134 passed`.
+- Full test suite: `157 passed`.
+- `python -m general_os state validate state/coordination.json`: valid,
+  `task_count: 0`.
+- `git diff --check`: passed.
+- No commit, push, merge, publication, or cleanup was performed. Unrelated
+  `.serena/` state remains untouched.
 

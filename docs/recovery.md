@@ -6,10 +6,15 @@ Git, not from Codex or Orca session history:
 1. Read `state/coordination.json`.
 2. Inspect the current branch, revision, worktree, conflicts, and changed
    files directly from Git.
-3. Determine unfinished dependency-ready semantic work, or redispatch the global
+3. Run `python -m general_os state revalidate --state state/coordination.json
+   --repo .` before relying on completed-task state. This only applies the
+   existing task-contract and dependency revalidation semantics; compatibility
+   failures stop without rewriting historical bytes and require explicit
+   migration.
+4. Determine unfinished dependency-ready semantic work, or redispatch the global
    goal when the task graph is empty. Goal-only state is intent-only and has no
    durable completion record; use a task graph when completion must be retained.
-4. Revalidate every completed task's accepted task-contract fingerprint and
+5. Revalidate every completed task's accepted task-contract fingerprint and
    dependency closure. The accepted `GitSnapshot.identity` remains historical
    evidence of where acceptance occurred; later commits or unrelated Git changes
    do not automatically demote completed tasks. A fresh current Git snapshot is
@@ -19,9 +24,9 @@ Git, not from Codex or Orca session history:
    decision that relies on their evidence, not a mandate for a global sweep;
    run task-level verification against current Git only before relying on the
    affected result, and do not persist a candidate list.
-5. Reuse required evidence only after checking that it is fresh and applies to
+6. Reuse required evidence only after checking that it is fresh and applies to
    the current task and complete current Git snapshot identity.
-6. Start a fresh native assignment. Use the current Codex runtime by default;
+7. Start a fresh native assignment. Use the current Codex runtime by default;
    use Orca only when the unfinished work needs an independent workstream and
    the configured boundary is available.
 

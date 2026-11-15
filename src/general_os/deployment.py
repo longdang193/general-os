@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -52,8 +53,10 @@ class DeploymentPlan:
     residue: tuple[str, ...]
     source_revision: str
     manifest_digest: str
+    source_snapshot_digest: str
     central_lock: dict[str, object]
     project_lock: dict[str, object]
+    target_preconditions: dict[str, str | None]
 
     @property
     def pending(self) -> bool:
@@ -77,6 +80,7 @@ class DeploymentPlan:
             "skill_root": str(self.skill_root),
             "source_revision": self.source_revision,
             "manifest_digest": self.manifest_digest,
+            "source_snapshot_digest": self.source_snapshot_digest,
             "actions": [action.as_dict() for action in self.actions],
             "warnings": list(self.warnings),
             "residue": list(self.residue),
@@ -254,6 +258,82 @@ def _manifest_digest(sources: dict[str, bytes]) -> str:
     return digest.hexdigest()
 
 
+def _source_snapshot_digest(
+    central_sources: dict[str, bytes], project_sources: dict[Path, bytes]
+) -> str:
+    sources = {f"central/{path}": data for path, data in central_sources.items()}
+    sources.update({f"project/{path.as_posix()}": data for path, data in project_sources.items()})
+    return _manifest_digest(sources)
+
+
+def _target_bytes(path: Path) -> bytes | None:
+    if not path.exists():
+        return None
+    if not path.is_file():
+        raise DeploymentError(f"deployment target is not a file: {path}")
+    return path.read_bytes()
+
+
+def _target_for_action(
+    action: Action,
+    *,
+    central_sources: dict[str, bytes],
+    project_sources: dict[Path, bytes],
+    central_lock: dict[str, object],
+    project_lock: dict[str, object],
+    central_root: Path,
+    repo_root: Path | None,
+) -> tuple[Path, bytes | None]:
+    central_paths = set(central_sources) | set(central_lock["managed_files"])
+    if action.path in central_paths or action.path.startswith(("skills/", "docs/")):
+        target = _central_destination(action.path, central_root)
+        data = central_sources.get(action.path)
+    elif action.path == str(CENTRAL_LOCK):
+        target = central_root / CENTRAL_LOCK
+        data = _json_bytes(central_lock)
+    elif action.path == PROJECT_LOCK.as_posix():
+        if repo_root is None:
+            raise DeploymentError("project adoption target has no repository root")
+        target = repo_root / PROJECT_LOCK
+        data = _json_bytes(project_lock)
+    else:
+        if repo_root is None:
+            raise DeploymentError(f"project target has no repository root: {action.path}")
+        relative = _safe_relative(action.path, repo_root)
+        target = repo_root / relative
+        data = project_sources.get(relative)
+        if action.kind != "remove" and data is None:
+            raise DeploymentError(f"missing project seed source: {relative}")
+    return target, None if action.kind == "remove" else data
+
+
+@contextmanager
+def _deployment_lock(central_root: Path):
+    lock_name = hashlib.sha256(str(central_root.resolve()).encode("utf-8")).hexdigest()
+    lock_path = Path(tempfile.gettempdir()) / f"general-os-deployment-{lock_name}.lock"
+    with lock_path.open("a+b") as handle:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0, os.SEEK_END)
+            if handle.tell() == 0:
+                handle.write(b"\0")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def _residue(repo_root: Path) -> tuple[str, ...]:
     found: list[str] = []
     legacy_rules = repo_root / ".agents" / "rules"
@@ -422,6 +502,23 @@ def build_plan(
     else:
         actions.append(Action("unchanged", str(CENTRAL_LOCK), "central provenance already matches"))
 
+    project_sources = _project_sources(source) if adopt else {}
+    target_preconditions: dict[str, str | None] = {}
+    for action in actions:
+        if action.kind not in {"create", "update", "remove"}:
+            continue
+        target, _ = _target_for_action(
+            action,
+            central_sources=central_sources,
+            project_sources=project_sources,
+            central_lock=central_lock,
+            project_lock=project_lock,
+            central_root=central,
+            repo_root=repo,
+        )
+        current = _target_bytes(target)
+        target_preconditions[str(target)] = _digest(current) if current is not None else None
+
     residue = _residue(repo) if repo is not None else ()
     warnings = tuple(
         [f"predecessor residue: {item}" for item in residue]
@@ -442,8 +539,10 @@ def build_plan(
         residue=residue,
         source_revision=source_revision,
         manifest_digest=manifest_digest,
+        source_snapshot_digest=_source_snapshot_digest(central_sources, project_sources),
         central_lock=central_lock,
         project_lock=project_lock,
+        target_preconditions=target_preconditions,
     )
 
 
@@ -477,47 +576,66 @@ def _restore(path: Path, data: bytes | None) -> None:
 
 
 def apply_plan(plan: DeploymentPlan) -> None:
-    central_sources = _staged_sources(plan.source_root, plan.central_root)
-    project_sources = _project_sources(plan.source_root) if plan.repo_root is not None else {}
-    central_paths = set(central_sources) | set(plan.central_lock["managed_files"])
-    targets: dict[Path, bytes | None] = {}
-    for action in plan.actions:
-        if action.kind not in {"create", "update", "remove"}:
-            continue
-        if action.path in central_paths or action.path.startswith(("skills/", "docs/")):
-            target = _central_destination(action.path, plan.central_root)
-            data = central_sources.get(action.path)
-        elif action.path == str(CENTRAL_LOCK):
-            target = plan.central_root / CENTRAL_LOCK
-            data = _json_bytes(plan.central_lock)
-        elif action.path == PROJECT_LOCK.as_posix():
-            assert plan.repo_root is not None
-            target = plan.repo_root / PROJECT_LOCK
-            data = _json_bytes(plan.project_lock)
-        else:
-            relative = _safe_relative(action.path, plan.repo_root)
-            assert plan.repo_root is not None
-            target = plan.repo_root / relative
-            data = project_sources.get(relative)
-            if action.kind != "remove" and data is None:
-                raise DeploymentError(f"missing project seed source: {relative}")
-        targets[target] = None if action.kind == "remove" else data
+    with _deployment_lock(plan.central_root):
+        central_sources = _staged_sources(plan.source_root, plan.central_root)
+        project_sources = _project_sources(plan.source_root) if plan.repo_root is not None else {}
+        if _source_snapshot_digest(central_sources, project_sources) != plan.source_snapshot_digest:
+            raise DeploymentError("stale deployment plan: source changed")
 
-    backups = {target: target.read_bytes() if target.is_file() else None for target in targets}
-    lock_target = plan.central_root / CENTRAL_LOCK
-    ordered = [target for target in targets if target != lock_target]
-    if lock_target in targets:
-        ordered.append(lock_target)
-    try:
-        for target in ordered:
-            _restore(target, targets[target])
-    except (OSError, ValueError) as exc:
+        targets: dict[Path, bytes | None] = {}
+        for action in plan.actions:
+            if action.kind not in {"create", "update", "remove"}:
+                continue
+            target, data = _target_for_action(
+                action,
+                central_sources=central_sources,
+                project_sources=project_sources,
+                central_lock=plan.central_lock,
+                project_lock=plan.project_lock,
+                central_root=plan.central_root,
+                repo_root=plan.repo_root,
+            )
+            targets[target] = data
+
+        for target, expected_digest in plan.target_preconditions.items():
+            current = _target_bytes(Path(target))
+            current_digest = _digest(current) if current is not None else None
+            if current_digest != expected_digest:
+                raise DeploymentError(f"stale deployment plan: target changed: {target}")
+
+        backups = {target: _target_bytes(target) for target in targets}
+        lock_target = plan.central_root / CENTRAL_LOCK
+        ordered = [target for target in targets if target != lock_target]
+        if lock_target in targets:
+            ordered.append(lock_target)
+        written: set[Path] = set()
         try:
-            for target, data in backups.items():
-                _restore(target, data)
-        except OSError as rollback_error:
-            raise DeploymentError(f"deployment failed and rollback failed: {rollback_error}") from exc
-        raise DeploymentError(f"deployment rolled back: {exc}") from exc
+            for target in ordered:
+                _restore(target, targets[target])
+                written.add(target)
+        except (OSError, ValueError) as exc:
+            conflicts: list[str] = []
+            try:
+                for target in reversed(ordered):
+                    if target not in written:
+                        continue
+                    try:
+                        current = _target_bytes(target)
+                    except (OSError, DeploymentError):
+                        conflicts.append(str(target))
+                        continue
+                    if current != targets[target]:
+                        conflicts.append(str(target))
+                        continue
+                    _restore(target, backups[target])
+            except OSError as rollback_error:
+                raise DeploymentError(f"deployment failed and rollback failed: {rollback_error}") from exc
+            if conflicts:
+                raise DeploymentError(
+                    "deployment rolled back with rollback conflicts: "
+                    + ", ".join(conflicts)
+                ) from exc
+            raise DeploymentError(f"deployment rolled back: {exc}") from exc
 
 
 def deploy(

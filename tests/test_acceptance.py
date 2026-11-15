@@ -439,7 +439,14 @@ def test_verifier_evidence_is_bound_to_task():
 def test_successful_reverification_refreshes_snapshot_identity():
     state = CoordinationState(
         goal="goal",
-        tasks=(Task(id="work", state="completed", accepted_snapshot_identity="old"),),
+        tasks=(
+            Task(
+                id="work",
+                state="completed",
+                accepted_snapshot_identity="old",
+                accepted_task_contract_identity=Task(id="work").contract_identity(),
+            ),
+        ),
     )
     decision = evaluate_acceptance(
         Task(id="work"),
