@@ -418,6 +418,69 @@ def test_plan_captures_target_precondition_with_action_decision(tmp_path, monkey
     assert destination.read_text(encoding="utf-8") == "user edit\n"
 
 
+def test_plan_rejects_central_lock_changed_after_loader_read(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    run_apply(source, project, home)
+    (source / "docs/runtime-adapters.md").write_text("new adapter boundary\n", encoding="utf-8")
+    lock_path = home / ".agents/general-os/managed.json"
+    original_loader = deployment._load_central_lock
+
+    def load_then_mutate(path):
+        result = original_loader(path)
+        newer = json.loads(path.read_text(encoding="utf-8"))
+        newer["source_revision"] = "newer-metadata"
+        path.write_bytes(deployment._json_bytes(newer))
+        return result
+
+    monkeypatch.setattr(deployment, "_load_central_lock", load_then_mutate)
+    plan = deployment.build_plan(project, source_root=source, home=home, adopt=True)
+
+    with pytest.raises(DeploymentError, match="stale deployment plan: target changed"):
+        deployment.apply_plan(plan)
+
+    assert json.loads(lock_path.read_text(encoding="utf-8"))["source_revision"] == "newer-metadata"
+
+
+def test_plan_rejects_project_lock_created_after_loader_read(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    deploy(source_root=source, home=home)
+    lock_path = project / "repo_config/general-os.lock.json"
+    original_loader = deployment._load_project_lock
+
+    def load_then_create(path):
+        result = original_loader(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(
+            deployment._json_bytes(
+                {
+                    "schema_version": deployment.SCHEMA_VERSION,
+                    "adopted_from": "general-os",
+                    "adopted_revision": "newer-metadata",
+                    "seeded_paths": ["AGENTS.md"],
+                }
+            )
+        )
+        return result
+
+    monkeypatch.setattr(deployment, "_load_project_lock", load_then_create)
+    plan = deployment.build_plan(project, source_root=source, home=home, adopt=True)
+
+    with pytest.raises(DeploymentError, match="stale deployment plan: target changed"):
+        deployment.apply_plan(plan)
+
+    assert json.loads(lock_path.read_text(encoding="utf-8"))["adopted_revision"] == "newer-metadata"
+
+
 def test_rollback_preserves_user_edit_after_a_write(tmp_path, monkeypatch):
     source = tmp_path / "source"
     project = tmp_path / "project"

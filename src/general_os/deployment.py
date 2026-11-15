@@ -110,27 +110,42 @@ def _safe_relative(path: str, root: Path) -> Path:
     return candidate
 
 
-def _read_json(path: Path, *, label: str) -> dict[str, object]:
+def _read_json_bytes(source: bytes, path: Path, *, label: str) -> dict[str, object]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        value = json.loads(source)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise DeploymentError(f"invalid {label}: {path}") from exc
     if not isinstance(value, dict):
         raise DeploymentError(f"invalid {label}: {path}")
     return value
 
 
-def _load_central_lock(path: Path) -> dict[str, object]:
+def _read_json(path: Path, *, label: str) -> dict[str, object]:
+    try:
+        source = path.read_bytes()
+    except OSError as exc:
+        raise DeploymentError(f"invalid {label}: {path}") from exc
+    return _read_json_bytes(source, path, label=label)
+
+
+def _load_central_lock(path: Path) -> tuple[dict[str, object], bytes | None]:
     if not path.exists():
-        return {
-            "schema_version": SCHEMA_VERSION,
-            "source": "general-os",
-            "source_revision": "",
-            "manifest_digest": "",
-            "adapters": [],
-            "managed_files": {},
-        }
-    value = _read_json(path, label="central deployment lock")
+        return (
+            {
+                "schema_version": SCHEMA_VERSION,
+                "source": "general-os",
+                "source_revision": "",
+                "manifest_digest": "",
+                "adapters": [],
+                "managed_files": {},
+            },
+            None,
+        )
+    try:
+        source = path.read_bytes()
+    except OSError as exc:
+        raise DeploymentError(f"invalid central deployment lock: {path}") from exc
+    value = _read_json_bytes(source, path, label="central deployment lock")
     if value.get("schema_version") != SCHEMA_VERSION:
         raise DeploymentError(f"unsupported central lock schema: {path}")
     managed = value.get("managed_files")
@@ -141,13 +156,17 @@ def _load_central_lock(path: Path) -> dict[str, object]:
         raise DeploymentError(f"invalid managed_files in central lock: {path}")
     for key in managed:
         _safe_relative(key, path.parent)
-    return value
+    return value, source
 
 
-def _load_project_lock(path: Path) -> dict[str, object] | None:
+def _load_project_lock(path: Path) -> tuple[dict[str, object] | None, bytes | None]:
     if not path.exists():
-        return None
-    value = _read_json(path, label="project adoption record")
+        return None, None
+    try:
+        source = path.read_bytes()
+    except OSError as exc:
+        raise DeploymentError(f"invalid project adoption record: {path}") from exc
+    value = _read_json_bytes(source, path, label="project adoption record")
     expected = {"schema_version", "adopted_from", "adopted_revision", "seeded_paths"}
     if set(value) != expected or value.get("schema_version") != SCHEMA_VERSION:
         raise DeploymentError(f"invalid project adoption record: {path}")
@@ -158,7 +177,7 @@ def _load_project_lock(path: Path) -> dict[str, object] | None:
     paths = value.get("seeded_paths")
     if not isinstance(paths, list) or not all(isinstance(item, str) for item in paths):
         raise DeploymentError(f"invalid project adoption record: {path}")
-    return value
+    return value, source
 
 
 def _source_revision(source_root: Path) -> str:
@@ -429,7 +448,8 @@ def build_plan(
     central_sources = _staged_sources(source, central)
     source_revision = _source_revision(source)
     manifest_digest = _manifest_digest(central_sources)
-    old_lock = _load_central_lock(central / CENTRAL_LOCK)
+    central_lock_path = central / CENTRAL_LOCK
+    old_lock, old_lock_bytes = _load_central_lock(central_lock_path)
     old_managed = old_lock["managed_files"]
     assert isinstance(old_managed, dict)
     actions: list[Action] = []
@@ -472,7 +492,8 @@ def build_plan(
     project_seed_paths: set[Path] = set()
     if adopt:
         assert repo is not None
-        existing_project_lock = _load_project_lock(repo / PROJECT_LOCK)
+        project_lock_path = repo / PROJECT_LOCK
+        existing_project_lock, existing_project_lock_bytes = _load_project_lock(project_lock_path)
         project_sources = _project_sources(source)
         project_seed_paths = set(project_sources)
         seeded_paths: set[str] = set()
@@ -490,19 +511,19 @@ def build_plan(
                     else:
                         actions.append(Action("preserve", relative.as_posix(), "existing project semantic preserved"))
             project_lock = _project_lock_value(existing_project_lock, source_revision, seeded_paths)
-            project_lock_path = repo / PROJECT_LOCK
             project_lock_bytes = _json_bytes(project_lock)
-            if not project_lock_path.exists():
+            if existing_project_lock_bytes is None:
                 actions.append(Action("create", PROJECT_LOCK.as_posix(), "project adoption record absent"))
             else:
-                current = project_lock_path.read_bytes()
-                if current != project_lock_bytes:
+                if existing_project_lock_bytes != project_lock_bytes:
                     actions.append(Action("update", PROJECT_LOCK.as_posix(), "adoption record gains seed provenance"))
                 else:
                     actions.append(Action("unchanged", PROJECT_LOCK.as_posix(), "adoption record already matches"))
             if actions[-1].kind in {"create", "update"}:
                 target_preconditions[str(project_lock_path)] = (
-                    _digest(current) if project_lock_path.exists() else None
+                    _digest(existing_project_lock_bytes)
+                    if existing_project_lock_bytes is not None
+                    else None
                 )
         else:
             project_lock = existing_project_lock
@@ -515,19 +536,17 @@ def build_plan(
         "adapters": [adapter],
         "managed_files": dict(sorted(next_managed.items())),
     }
-    central_lock_path = central / CENTRAL_LOCK
     central_lock_bytes = _json_bytes(central_lock)
-    if not central_lock_path.exists():
+    if old_lock_bytes is None:
         actions.append(Action("create", str(CENTRAL_LOCK), "central deployment lock absent"))
     else:
-        current = central_lock_path.read_bytes()
-        if current != central_lock_bytes:
+        if old_lock_bytes != central_lock_bytes:
             actions.append(Action("update", str(CENTRAL_LOCK), "central provenance changed"))
         else:
             actions.append(Action("unchanged", str(CENTRAL_LOCK), "central provenance already matches"))
     if actions[-1].kind in {"create", "update"}:
         target_preconditions[str(central_lock_path)] = (
-            _digest(current) if central_lock_path.exists() else None
+            _digest(old_lock_bytes) if old_lock_bytes is not None else None
         )
 
     residue = _residue(repo) if repo is not None else ()
