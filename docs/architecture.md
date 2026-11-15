@@ -110,9 +110,10 @@ historical evidence for the accepted result. Required independent work also
 needs typed ephemeral boundary evidence tied to that identity; a runtime
 completion report alone is not acceptance. Later Git changes do not by
 themselves erase completed task results, while fresh current verification is
-still required before new acceptance or publication. Profiles fail closed when
-the registry or requested default is missing, and local `deny` is a hard ceiling
-for durable policy exceptions.
+still required before new acceptance or publication. Explicitly requested
+missing profiles fail clearly; implicit profile selection may use the neutral
+profile and inherit native runtime defaults. Local `deny` is a hard ceiling for
+durable policy exceptions.
 
 Execution-level failures stay inside the selected runtime when they can be
 resolved there. Only material authority, dependency, user, credential, Git,

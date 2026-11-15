@@ -4,7 +4,14 @@ from dataclasses import replace
 
 import pytest
 
-from general_os.state import CoordinationState, StateError, Task, load_state, save_state
+from general_os.state import (
+    CoordinationState,
+    StateCompatibilityError,
+    StateError,
+    Task,
+    load_state,
+    save_state,
+)
 
 
 def _concurrent_save(path, goal, barrier, results):
@@ -114,6 +121,17 @@ def test_legacy_state_reads_and_future_versions_fail(tmp_path):
     path.write_text(json.dumps({"version": 2, "goal": "future", "tasks": []}), encoding="utf-8")
     with pytest.raises(StateError, match="unsupported state version"):
         load_state(path)
+
+
+def test_legacy_completed_task_requires_migration_without_rewriting_bytes(tmp_path):
+    path = tmp_path / "coordination.json"
+    original = b'{"version": 1, "goal": "goal", "tasks": [{"id": "work", "state": "completed"}]}\n'
+    path.write_bytes(original)
+
+    with pytest.raises(StateCompatibilityError, match="explicit migration"):
+        load_state(path)
+
+    assert path.read_bytes() == original
 
     path.write_text(json.dumps({"version": True, "goal": "bool", "tasks": []}), encoding="utf-8")
     with pytest.raises(StateError, match="unsupported state version"):

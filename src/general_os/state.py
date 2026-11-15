@@ -26,6 +26,10 @@ class StateError(ValueError):
     """Raised when durable coordination state is invalid."""
 
 
+class StateCompatibilityError(StateError):
+    """Raised when historical state needs an explicit migration decision."""
+
+
 def _tuple_of_strings(value: Any, field_name: str) -> tuple[str, ...]:
     if value is None:
         return ()
@@ -84,6 +88,14 @@ class Task:
         ):
             raise StateError(
                 "accepted_task_contract_identity must be a non-empty string when provided"
+            )
+        if self.state == "completed" and (
+            not self.accepted_snapshot_identity
+            or not self.accepted_task_contract_identity
+        ):
+            raise StateError(
+                "completed tasks require accepted_snapshot_identity and "
+                "accepted_task_contract_identity"
             )
         if self.state == "blocked":
             if self.blocker_category not in BLOCKER_CATEGORIES:
@@ -318,6 +330,24 @@ def load_state(path: str | os.PathLike[str]) -> CoordinationState:
         raise StateError(f"invalid JSON state: {state_path}") from exc
     if not isinstance(raw, Mapping):
         raise StateError("state root must be an object")
+    raw_tasks = raw.get("tasks", ())
+    if isinstance(raw_tasks, list):
+        for raw_task in raw_tasks:
+            if (
+                isinstance(raw_task, Mapping)
+                and raw_task.get("state", "pending") == "completed"
+                and (
+                    not isinstance(raw_task.get("accepted_snapshot_identity"), str)
+                    or not raw_task.get("accepted_snapshot_identity", "").strip()
+                    or not isinstance(raw_task.get("accepted_task_contract_identity"), str)
+                    or not raw_task.get("accepted_task_contract_identity", "").strip()
+                )
+            ):
+                task_id = raw_task.get("id", "<unknown>")
+                raise StateCompatibilityError(
+                    "completed task requires explicit migration: "
+                    f"missing acceptance identities for {task_id}"
+                )
     state = CoordinationState.from_dict(raw)
     object.__setattr__(state, "_source_digest", _digest(source))
     return state

@@ -16,6 +16,52 @@ def test_state_validate_returns_json(capsys):
     assert output["status"] == "valid"
 
 
+def test_state_revalidate_demotes_contract_stale_completed_tasks(tmp_path, monkeypatch, capsys):
+    state_path = tmp_path / "coordination.json"
+    save_state(
+        state_path,
+        CoordinationState(
+            goal="goal",
+            tasks=(
+                Task(
+                    id="work",
+                    state="completed",
+                    objective="old",
+                    accepted_snapshot_identity="snapshot",
+                    accepted_task_contract_identity="old-contract",
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "inspect_git",
+        lambda _, **kwargs: GitSnapshot("main", "abc123", (), (), True, "current"),
+    )
+
+    assert main(["state", "revalidate", "--state", str(state_path), "--repo", "."]) == 0
+
+    assert json.loads(capsys.readouterr().out)["changed"] is True
+    assert load_state(state_path).tasks[0].state == "pending"
+
+
+def test_state_revalidate_does_not_write_unchanged_state(tmp_path, monkeypatch, capsys):
+    state_path = tmp_path / "coordination.json"
+    task = Task(id="work")
+    save_state(state_path, CoordinationState(goal="goal", tasks=(task,)))
+    original = state_path.read_bytes()
+    monkeypatch.setattr(
+        cli,
+        "inspect_git",
+        lambda _, **kwargs: GitSnapshot("main", "abc123", (), (), True, "current"),
+    )
+
+    assert main(["state", "revalidate", "--state", str(state_path), "--repo", "."]) == 0
+
+    assert json.loads(capsys.readouterr().out)["changed"] is False
+    assert state_path.read_bytes() == original
+
+
 def test_profile_resolve_returns_one_way_projection(capsys):
     assert main(["profile", "resolve", "--name", "high", "--directory", "agents"]) == 0
 

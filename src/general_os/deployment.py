@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -52,8 +53,10 @@ class DeploymentPlan:
     residue: tuple[str, ...]
     source_revision: str
     manifest_digest: str
+    source_snapshot_digest: str
     central_lock: dict[str, object]
     project_lock: dict[str, object]
+    target_preconditions: dict[str, str | None]
 
     @property
     def pending(self) -> bool:
@@ -77,6 +80,7 @@ class DeploymentPlan:
             "skill_root": str(self.skill_root),
             "source_revision": self.source_revision,
             "manifest_digest": self.manifest_digest,
+            "source_snapshot_digest": self.source_snapshot_digest,
             "actions": [action.as_dict() for action in self.actions],
             "warnings": list(self.warnings),
             "residue": list(self.residue),
@@ -106,27 +110,42 @@ def _safe_relative(path: str, root: Path) -> Path:
     return candidate
 
 
-def _read_json(path: Path, *, label: str) -> dict[str, object]:
+def _read_json_bytes(source: bytes, path: Path, *, label: str) -> dict[str, object]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        value = json.loads(source)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise DeploymentError(f"invalid {label}: {path}") from exc
     if not isinstance(value, dict):
         raise DeploymentError(f"invalid {label}: {path}")
     return value
 
 
-def _load_central_lock(path: Path) -> dict[str, object]:
+def _read_json(path: Path, *, label: str) -> dict[str, object]:
+    try:
+        source = path.read_bytes()
+    except OSError as exc:
+        raise DeploymentError(f"invalid {label}: {path}") from exc
+    return _read_json_bytes(source, path, label=label)
+
+
+def _load_central_lock(path: Path) -> tuple[dict[str, object], bytes | None]:
     if not path.exists():
-        return {
-            "schema_version": SCHEMA_VERSION,
-            "source": "general-os",
-            "source_revision": "",
-            "manifest_digest": "",
-            "adapters": [],
-            "managed_files": {},
-        }
-    value = _read_json(path, label="central deployment lock")
+        return (
+            {
+                "schema_version": SCHEMA_VERSION,
+                "source": "general-os",
+                "source_revision": "",
+                "manifest_digest": "",
+                "adapters": [],
+                "managed_files": {},
+            },
+            None,
+        )
+    try:
+        source = path.read_bytes()
+    except OSError as exc:
+        raise DeploymentError(f"invalid central deployment lock: {path}") from exc
+    value = _read_json_bytes(source, path, label="central deployment lock")
     if value.get("schema_version") != SCHEMA_VERSION:
         raise DeploymentError(f"unsupported central lock schema: {path}")
     managed = value.get("managed_files")
@@ -137,13 +156,17 @@ def _load_central_lock(path: Path) -> dict[str, object]:
         raise DeploymentError(f"invalid managed_files in central lock: {path}")
     for key in managed:
         _safe_relative(key, path.parent)
-    return value
+    return value, source
 
 
-def _load_project_lock(path: Path) -> dict[str, object] | None:
+def _load_project_lock(path: Path) -> tuple[dict[str, object] | None, bytes | None]:
     if not path.exists():
-        return None
-    value = _read_json(path, label="project adoption record")
+        return None, None
+    try:
+        source = path.read_bytes()
+    except OSError as exc:
+        raise DeploymentError(f"invalid project adoption record: {path}") from exc
+    value = _read_json_bytes(source, path, label="project adoption record")
     expected = {"schema_version", "adopted_from", "adopted_revision", "seeded_paths"}
     if set(value) != expected or value.get("schema_version") != SCHEMA_VERSION:
         raise DeploymentError(f"invalid project adoption record: {path}")
@@ -154,7 +177,7 @@ def _load_project_lock(path: Path) -> dict[str, object] | None:
     paths = value.get("seeded_paths")
     if not isinstance(paths, list) or not all(isinstance(item, str) for item in paths):
         raise DeploymentError(f"invalid project adoption record: {path}")
-    return value
+    return value, source
 
 
 def _source_revision(source_root: Path) -> str:
@@ -254,6 +277,82 @@ def _manifest_digest(sources: dict[str, bytes]) -> str:
     return digest.hexdigest()
 
 
+def _source_snapshot_digest(
+    central_sources: dict[str, bytes], project_sources: dict[Path, bytes]
+) -> str:
+    sources = {f"central/{path}": data for path, data in central_sources.items()}
+    sources.update({f"project/{path.as_posix()}": data for path, data in project_sources.items()})
+    return _manifest_digest(sources)
+
+
+def _target_bytes(path: Path) -> bytes | None:
+    if not path.exists():
+        return None
+    if not path.is_file():
+        raise DeploymentError(f"deployment target is not a file: {path}")
+    return path.read_bytes()
+
+
+def _target_for_action(
+    action: Action,
+    *,
+    central_sources: dict[str, bytes],
+    project_sources: dict[Path, bytes],
+    central_lock: dict[str, object],
+    project_lock: dict[str, object],
+    central_root: Path,
+    repo_root: Path | None,
+) -> tuple[Path, bytes | None]:
+    central_paths = set(central_sources) | set(central_lock["managed_files"])
+    if action.path in central_paths or action.path.startswith(("skills/", "docs/")):
+        target = _central_destination(action.path, central_root)
+        data = central_sources.get(action.path)
+    elif action.path == str(CENTRAL_LOCK):
+        target = central_root / CENTRAL_LOCK
+        data = _json_bytes(central_lock)
+    elif action.path == PROJECT_LOCK.as_posix():
+        if repo_root is None:
+            raise DeploymentError("project adoption target has no repository root")
+        target = repo_root / PROJECT_LOCK
+        data = _json_bytes(project_lock)
+    else:
+        if repo_root is None:
+            raise DeploymentError(f"project target has no repository root: {action.path}")
+        relative = _safe_relative(action.path, repo_root)
+        target = repo_root / relative
+        data = project_sources.get(relative)
+        if action.kind != "remove" and data is None:
+            raise DeploymentError(f"missing project seed source: {relative}")
+    return target, None if action.kind == "remove" else data
+
+
+@contextmanager
+def _deployment_lock(central_root: Path):
+    lock_name = hashlib.sha256(str(central_root.resolve()).encode("utf-8")).hexdigest()
+    lock_path = Path(tempfile.gettempdir()) / f"general-os-deployment-{lock_name}.lock"
+    with lock_path.open("a+b") as handle:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0, os.SEEK_END)
+            if handle.tell() == 0:
+                handle.write(b"\0")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def _residue(repo_root: Path) -> tuple[str, ...]:
     found: list[str] = []
     legacy_rules = repo_root / ".agents" / "rules"
@@ -304,22 +403,25 @@ def _action_for_current(
     destination: Path,
     desired: bytes,
     prior_digest: str | None,
-) -> Action:
+) -> tuple[Action, bytes | None]:
     if not destination.exists():
-        return Action("create", relative, "destination absent")
+        return Action("create", relative, "destination absent"), None
     current = destination.read_bytes()
     current_digest = _digest(current)
     desired_digest = _digest(desired)
     if current_digest == desired_digest:
         if prior_digest is None:
-            return Action("adopt", relative, "byte-identical unmarked file adopted")
-        return Action("unchanged", relative, "already matches desired content")
+            return Action("adopt", relative, "byte-identical unmarked file adopted"), current
+        return Action("unchanged", relative, "already matches desired content"), current
     if prior_digest and current_digest == prior_digest:
-        return Action("update", relative, "centrally managed content changed upstream")
-    return Action(
-        "preserve",
-        relative,
-        "existing content is not centrally owned or was locally modified",
+        return Action("update", relative, "centrally managed content changed upstream"), current
+    return (
+        Action(
+            "preserve",
+            relative,
+            "existing content is not centrally owned or was locally modified",
+        ),
+        current,
     )
 
 
@@ -346,16 +448,20 @@ def build_plan(
     central_sources = _staged_sources(source, central)
     source_revision = _source_revision(source)
     manifest_digest = _manifest_digest(central_sources)
-    old_lock = _load_central_lock(central / CENTRAL_LOCK)
+    central_lock_path = central / CENTRAL_LOCK
+    old_lock, old_lock_bytes = _load_central_lock(central_lock_path)
     old_managed = old_lock["managed_files"]
     assert isinstance(old_managed, dict)
     actions: list[Action] = []
     next_managed: dict[str, str] = {}
+    target_preconditions: dict[str, str | None] = {}
     for relative, desired in sorted(central_sources.items()):
         destination = _central_destination(relative, central)
         prior = old_managed.get(relative)
-        action = _action_for_current(relative, destination, desired, prior)
+        action, current = _action_for_current(relative, destination, desired, prior)
         actions.append(action)
+        if action.kind in {"create", "update"}:
+            target_preconditions[str(destination)] = _digest(current) if current is not None else None
         if action.kind in {"create", "update", "adopt", "unchanged"}:
             next_managed[relative] = _digest(desired)
         elif isinstance(prior, str):
@@ -368,18 +474,26 @@ def build_plan(
         destination = _central_destination(relative, central)
         if not destination.exists():
             actions.append(Action("remove", relative, "owned file is already absent"))
+            target_preconditions[str(destination)] = None
             continue
-        if destination.is_file() and _digest(destination.read_bytes()) == prior:
+        if destination.is_file():
+            current = destination.read_bytes()
+        else:
+            current = None
+        if current is not None and _digest(current) == prior:
             actions.append(Action("remove", relative, "owned file is no longer in source manifest"))
+            target_preconditions[str(destination)] = _digest(current)
             continue
         actions.append(Action("preserve", relative, "prune skipped modified or missing file"))
         next_managed[relative] = prior
 
     project_lock: dict[str, object] = {"seeded_paths": []}
+    project_sources: dict[Path, bytes] = {}
     project_seed_paths: set[Path] = set()
     if adopt:
         assert repo is not None
-        existing_project_lock = _load_project_lock(repo / PROJECT_LOCK)
+        project_lock_path = repo / PROJECT_LOCK
+        existing_project_lock, existing_project_lock_bytes = _load_project_lock(project_lock_path)
         project_sources = _project_sources(source)
         project_seed_paths = set(project_sources)
         seeded_paths: set[str] = set()
@@ -388,20 +502,29 @@ def build_plan(
                 destination = repo / relative
                 if not destination.exists():
                     actions.append(Action("create", relative.as_posix(), "project semantic seed absent"))
+                    target_preconditions[str(destination)] = None
                     seeded_paths.add(relative.as_posix())
-                elif destination.read_bytes() == desired:
-                    actions.append(Action("unchanged", relative.as_posix(), "project semantic already present"))
                 else:
-                    actions.append(Action("preserve", relative.as_posix(), "existing project semantic preserved"))
+                    current = destination.read_bytes()
+                    if current == desired:
+                        actions.append(Action("unchanged", relative.as_posix(), "project semantic already present"))
+                    else:
+                        actions.append(Action("preserve", relative.as_posix(), "existing project semantic preserved"))
             project_lock = _project_lock_value(existing_project_lock, source_revision, seeded_paths)
-            project_lock_path = repo / PROJECT_LOCK
             project_lock_bytes = _json_bytes(project_lock)
-            if not project_lock_path.exists():
+            if existing_project_lock_bytes is None:
                 actions.append(Action("create", PROJECT_LOCK.as_posix(), "project adoption record absent"))
-            elif project_lock_path.read_bytes() != project_lock_bytes:
-                actions.append(Action("update", PROJECT_LOCK.as_posix(), "adoption record gains seed provenance"))
             else:
-                actions.append(Action("unchanged", PROJECT_LOCK.as_posix(), "adoption record already matches"))
+                if existing_project_lock_bytes != project_lock_bytes:
+                    actions.append(Action("update", PROJECT_LOCK.as_posix(), "adoption record gains seed provenance"))
+                else:
+                    actions.append(Action("unchanged", PROJECT_LOCK.as_posix(), "adoption record already matches"))
+            if actions[-1].kind in {"create", "update"}:
+                target_preconditions[str(project_lock_path)] = (
+                    _digest(existing_project_lock_bytes)
+                    if existing_project_lock_bytes is not None
+                    else None
+                )
         else:
             project_lock = existing_project_lock
 
@@ -413,14 +536,18 @@ def build_plan(
         "adapters": [adapter],
         "managed_files": dict(sorted(next_managed.items())),
     }
-    central_lock_path = central / CENTRAL_LOCK
     central_lock_bytes = _json_bytes(central_lock)
-    if not central_lock_path.exists():
+    if old_lock_bytes is None:
         actions.append(Action("create", str(CENTRAL_LOCK), "central deployment lock absent"))
-    elif central_lock_path.read_bytes() != central_lock_bytes:
-        actions.append(Action("update", str(CENTRAL_LOCK), "central provenance changed"))
     else:
-        actions.append(Action("unchanged", str(CENTRAL_LOCK), "central provenance already matches"))
+        if old_lock_bytes != central_lock_bytes:
+            actions.append(Action("update", str(CENTRAL_LOCK), "central provenance changed"))
+        else:
+            actions.append(Action("unchanged", str(CENTRAL_LOCK), "central provenance already matches"))
+    if actions[-1].kind in {"create", "update"}:
+        target_preconditions[str(central_lock_path)] = (
+            _digest(old_lock_bytes) if old_lock_bytes is not None else None
+        )
 
     residue = _residue(repo) if repo is not None else ()
     warnings = tuple(
@@ -442,8 +569,10 @@ def build_plan(
         residue=residue,
         source_revision=source_revision,
         manifest_digest=manifest_digest,
+        source_snapshot_digest=_source_snapshot_digest(central_sources, project_sources),
         central_lock=central_lock,
         project_lock=project_lock,
+        target_preconditions=target_preconditions,
     )
 
 
@@ -477,47 +606,71 @@ def _restore(path: Path, data: bytes | None) -> None:
 
 
 def apply_plan(plan: DeploymentPlan) -> None:
-    central_sources = _staged_sources(plan.source_root, plan.central_root)
-    project_sources = _project_sources(plan.source_root) if plan.repo_root is not None else {}
-    central_paths = set(central_sources) | set(plan.central_lock["managed_files"])
-    targets: dict[Path, bytes | None] = {}
-    for action in plan.actions:
-        if action.kind not in {"create", "update", "remove"}:
-            continue
-        if action.path in central_paths or action.path.startswith(("skills/", "docs/")):
-            target = _central_destination(action.path, plan.central_root)
-            data = central_sources.get(action.path)
-        elif action.path == str(CENTRAL_LOCK):
-            target = plan.central_root / CENTRAL_LOCK
-            data = _json_bytes(plan.central_lock)
-        elif action.path == PROJECT_LOCK.as_posix():
-            assert plan.repo_root is not None
-            target = plan.repo_root / PROJECT_LOCK
-            data = _json_bytes(plan.project_lock)
-        else:
-            relative = _safe_relative(action.path, plan.repo_root)
-            assert plan.repo_root is not None
-            target = plan.repo_root / relative
-            data = project_sources.get(relative)
-            if action.kind != "remove" and data is None:
-                raise DeploymentError(f"missing project seed source: {relative}")
-        targets[target] = None if action.kind == "remove" else data
+    with _deployment_lock(plan.central_root):
+        central_sources = _staged_sources(plan.source_root, plan.central_root)
+        project_sources = _project_sources(plan.source_root) if plan.repo_root is not None else {}
+        if _source_snapshot_digest(central_sources, project_sources) != plan.source_snapshot_digest:
+            raise DeploymentError("stale deployment plan: source changed")
 
-    backups = {target: target.read_bytes() if target.is_file() else None for target in targets}
-    lock_target = plan.central_root / CENTRAL_LOCK
-    ordered = [target for target in targets if target != lock_target]
-    if lock_target in targets:
-        ordered.append(lock_target)
-    try:
-        for target in ordered:
-            _restore(target, targets[target])
-    except (OSError, ValueError) as exc:
+        targets: dict[Path, bytes | None] = {}
+        for action in plan.actions:
+            if action.kind not in {"create", "update", "remove"}:
+                continue
+            target, data = _target_for_action(
+                action,
+                central_sources=central_sources,
+                project_sources=project_sources,
+                central_lock=plan.central_lock,
+                project_lock=plan.project_lock,
+                central_root=plan.central_root,
+                repo_root=plan.repo_root,
+            )
+            targets[target] = data
+
+        for target, expected_digest in plan.target_preconditions.items():
+            current = _target_bytes(Path(target))
+            current_digest = _digest(current) if current is not None else None
+            if current_digest != expected_digest:
+                raise DeploymentError(f"stale deployment plan: target changed: {target}")
+
+        backups = {target: _target_bytes(target) for target in targets}
+        lock_target = plan.central_root / CENTRAL_LOCK
+        ordered = [target for target in targets if target != lock_target]
+        if lock_target in targets:
+            ordered.append(lock_target)
+        written: set[Path] = set()
         try:
-            for target, data in backups.items():
-                _restore(target, data)
-        except OSError as rollback_error:
-            raise DeploymentError(f"deployment failed and rollback failed: {rollback_error}") from exc
-        raise DeploymentError(f"deployment rolled back: {exc}") from exc
+            for target in ordered:
+                expected_digest = plan.target_preconditions.get(str(target))
+                current = _target_bytes(target)
+                current_digest = _digest(current) if current is not None else None
+                if current_digest != expected_digest:
+                    raise DeploymentError(f"stale deployment plan: target changed: {target}")
+                _restore(target, targets[target])
+                written.add(target)
+        except (OSError, ValueError) as exc:
+            conflicts: list[str] = []
+            try:
+                for target in reversed(ordered):
+                    if target not in written:
+                        continue
+                    try:
+                        current = _target_bytes(target)
+                    except (OSError, DeploymentError):
+                        conflicts.append(str(target))
+                        continue
+                    if current != targets[target]:
+                        conflicts.append(str(target))
+                        continue
+                    _restore(target, backups[target])
+            except OSError as rollback_error:
+                raise DeploymentError(f"deployment failed and rollback failed: {rollback_error}") from exc
+            if conflicts:
+                raise DeploymentError(
+                    "deployment rolled back with rollback conflicts: "
+                    + ", ".join(conflicts)
+                ) from exc
+            raise DeploymentError(f"deployment rolled back: {exc}") from exc
 
 
 def deploy(

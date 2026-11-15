@@ -314,6 +314,201 @@ def test_failed_application_rolls_back_and_writes_lock_last(tmp_path, monkeypatc
     assert not (project / "repo_config/general-os.lock.json").exists()
 
 
+def test_apply_rejects_source_drift_before_writing(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    plan = deployment.build_plan(project, source_root=source, home=home, adopt=True)
+    (source / ".agents/skills/demo/SKILL.md").write_text("changed\n", encoding="utf-8")
+
+    with pytest.raises(DeploymentError, match="stale deployment plan: source changed"):
+        deployment.apply_plan(plan)
+
+    assert not (home / ".agents/skills/demo/SKILL.md").exists()
+    assert not (project / "AGENTS.md").exists()
+
+
+def test_apply_rejects_project_source_drift_before_writing(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    plan = deployment.build_plan(project, source_root=source, home=home, adopt=True)
+    (source / "AGENTS.md").write_text("changed project guidance\n", encoding="utf-8")
+
+    with pytest.raises(DeploymentError, match="stale deployment plan: source changed"):
+        deployment.apply_plan(plan)
+
+    assert not (project / "AGENTS.md").exists()
+
+
+def test_apply_rejects_target_drift_before_writing(tmp_path):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    plan = deployment.build_plan(project, source_root=source, home=home, adopt=True)
+    target = home / ".agents/skills/demo/SKILL.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("newer local content\n", encoding="utf-8")
+
+    with pytest.raises(DeploymentError, match="stale deployment plan: target changed"):
+        deployment.apply_plan(plan)
+
+    assert target.read_text(encoding="utf-8") == "newer local content\n"
+
+
+def test_apply_rechecks_each_target_before_writing(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    user_target = project / "AGENTS.md"
+    original_restore = deployment._restore
+    injected = False
+
+    def mutate_next_target(path, data):
+        nonlocal injected
+        original_restore(path, data)
+        if not injected and path != user_target:
+            injected = True
+            user_target.write_text("user edit\n", encoding="utf-8")
+
+    monkeypatch.setattr(deployment, "_restore", mutate_next_target)
+    with pytest.raises(DeploymentError, match="stale deployment plan: target changed"):
+        run_apply(source, project, home)
+
+    assert user_target.read_text(encoding="utf-8") == "user edit\n"
+
+
+def test_plan_captures_target_precondition_with_action_decision(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    run_apply(source, project, home)
+    skill = source / ".agents/skills/demo/SKILL.md"
+    skill.write_text("upstream update\n", encoding="utf-8")
+    destination = home / ".agents/skills/demo/SKILL.md"
+    original_action = deployment._action_for_current
+
+    def mutate_after_decision(relative, path, desired, prior):
+        action, current = original_action(relative, path, desired, prior)
+        if relative == "skills/demo/SKILL.md" and action.kind == "update":
+            path.write_text("user edit\n", encoding="utf-8")
+        return action, current
+
+    monkeypatch.setattr(deployment, "_action_for_current", mutate_after_decision)
+    plan = deployment.build_plan(project, source_root=source, home=home, adopt=True)
+
+    with pytest.raises(DeploymentError, match="stale deployment plan: target changed"):
+        deployment.apply_plan(plan)
+
+    assert destination.read_text(encoding="utf-8") == "user edit\n"
+
+
+def test_plan_rejects_central_lock_changed_after_loader_read(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    run_apply(source, project, home)
+    (source / "docs/runtime-adapters.md").write_text("new adapter boundary\n", encoding="utf-8")
+    lock_path = home / ".agents/general-os/managed.json"
+    original_loader = deployment._load_central_lock
+
+    def load_then_mutate(path):
+        result = original_loader(path)
+        newer = json.loads(path.read_text(encoding="utf-8"))
+        newer["source_revision"] = "newer-metadata"
+        path.write_bytes(deployment._json_bytes(newer))
+        return result
+
+    monkeypatch.setattr(deployment, "_load_central_lock", load_then_mutate)
+    plan = deployment.build_plan(project, source_root=source, home=home, adopt=True)
+
+    with pytest.raises(DeploymentError, match="stale deployment plan: target changed"):
+        deployment.apply_plan(plan)
+
+    assert json.loads(lock_path.read_text(encoding="utf-8"))["source_revision"] == "newer-metadata"
+
+
+def test_plan_rejects_project_lock_created_after_loader_read(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    deploy(source_root=source, home=home)
+    lock_path = project / "repo_config/general-os.lock.json"
+    original_loader = deployment._load_project_lock
+
+    def load_then_create(path):
+        result = original_loader(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(
+            deployment._json_bytes(
+                {
+                    "schema_version": deployment.SCHEMA_VERSION,
+                    "adopted_from": "general-os",
+                    "adopted_revision": "newer-metadata",
+                    "seeded_paths": ["AGENTS.md"],
+                }
+            )
+        )
+        return result
+
+    monkeypatch.setattr(deployment, "_load_project_lock", load_then_create)
+    plan = deployment.build_plan(project, source_root=source, home=home, adopt=True)
+
+    with pytest.raises(DeploymentError, match="stale deployment plan: target changed"):
+        deployment.apply_plan(plan)
+
+    assert json.loads(lock_path.read_text(encoding="utf-8"))["adopted_revision"] == "newer-metadata"
+
+
+def test_rollback_preserves_user_edit_after_a_write(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    source.mkdir()
+    project.mkdir()
+    make_source(source)
+    calls = 0
+    original = deployment._atomic_write
+    edited = home / ".agents/skills/demo/SKILL.md"
+
+    def fail_after_user_edit(path, data):
+        nonlocal calls
+        calls += 1
+        result = original(path, data)
+        if path == edited:
+            edited.write_text("user edit\n", encoding="utf-8")
+        if path.name == "managed.json":
+            raise OSError("simulated lock failure")
+        return result
+
+    monkeypatch.setattr(deployment, "_atomic_write", fail_after_user_edit)
+    with pytest.raises(DeploymentError, match="rollback conflicts"):
+        run_apply(source, project, home)
+
+    assert edited.read_text(encoding="utf-8") == "user edit\n"
+
+
 def test_residue_is_report_only_unless_strict_migration(tmp_path):
     source = tmp_path / "source"
     project = tmp_path / "project"

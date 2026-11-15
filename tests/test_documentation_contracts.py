@@ -286,6 +286,10 @@ def test_architecture_contract_keeps_project_and_runtime_ownership_separate():
     assert "seed-only" in deployment
     assert "state/coordination.json` is never seeded" in deployment
     assert "runtime registry" in deployment
+    assert "state revalidate" in (root / "docs" / "recovery.md").read_text(
+        encoding="utf-8"
+    )
+    assert "implicit profile selection may use the neutral" in architecture
 
 
 def test_native_cos_keeps_orca_optional_but_allows_material_independence():
