@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -352,7 +353,13 @@ def _deployment_lock(central_root: Path):
             try:
                 lock()
                 break
-            except (BlockingIOError, OSError) as exc:
+            except OSError as exc:
+                contention = isinstance(exc, BlockingIOError) or (
+                    os.name == "nt"
+                    and exc.errno in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}
+                )
+                if not contention:
+                    raise DeploymentError(f"deployment lock failed: {lock_path}") from exc
                 if time.monotonic() >= deadline:
                     raise DeploymentError(f"deployment lock unavailable: {lock_path}") from exc
                 time.sleep(DEPLOYMENT_LOCK_RETRY_SECONDS)

@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import pytest
 
+import general_os.state as state_module
 from general_os.state import (
     CoordinationState,
     StateError,
@@ -11,6 +12,12 @@ from general_os.state import (
     load_state,
     save_state,
 )
+
+
+def _hold_state_lock(path, ready, release):
+    with state_module._state_lock(path):
+        ready.set()
+        release.wait(5)
 
 
 def _concurrent_save(path, goal, barrier, results):
@@ -211,6 +218,26 @@ def test_two_process_writers_accept_one_update_and_reject_one_stale_writer(tmp_p
     outcomes = sorted(results.get(timeout=2) for _ in processes)
     assert outcomes[0].startswith("error:state changed since it was loaded")
     assert outcomes[1] == "saved"
+
+
+def test_state_lock_has_bounded_wait(tmp_path, monkeypatch):
+    path = tmp_path / "coordination.json"
+    save_state(path, CoordinationState(goal="initial"))
+    context = multiprocessing.get_context("spawn")
+    ready = context.Event()
+    release = context.Event()
+    process = context.Process(target=_hold_state_lock, args=(path, ready, release))
+    process.start()
+    try:
+        assert ready.wait(2)
+        monkeypatch.setattr(state_module, "STATE_LOCK_TIMEOUT_SECONDS", 0.05)
+        with pytest.raises(StateError, match="state lock unavailable"):
+            with state_module._state_lock(path):
+                pass
+    finally:
+        release.set()
+        process.join(5)
+    assert process.exitcode == 0
 
 
 def test_task_without_objective_remains_backward_compatible():

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import json
+import errno
 import hashlib
+import json
 import os
 import tempfile
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -20,6 +22,8 @@ POLICY_EXCEPTION_KEYS = frozenset(
 )
 SIDE_EFFECT_POLICIES = frozenset({"ask", "allow", "deny"})
 STATE_VERSION = 1
+STATE_LOCK_TIMEOUT_SECONDS = 10.0
+STATE_LOCK_RETRY_SECONDS = 0.05
 
 
 class StateError(ValueError):
@@ -386,11 +390,28 @@ def _state_lock(destination: Path):
                 handle.write(b"\0")
                 handle.flush()
             handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            acquire = lambda: msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
         else:
             import fcntl
 
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            acquire = lambda: fcntl.flock(
+                handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB
+            )
+        deadline = time.monotonic() + STATE_LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                acquire()
+                break
+            except OSError as exc:
+                contention = isinstance(exc, BlockingIOError) or (
+                    os.name == "nt"
+                    and exc.errno in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}
+                )
+                if not contention:
+                    raise StateError(f"state lock failed: {lock_path}") from exc
+                if time.monotonic() >= deadline:
+                    raise StateError(f"state lock unavailable: {lock_path}") from exc
+                time.sleep(STATE_LOCK_RETRY_SECONDS)
         try:
             yield
         finally:

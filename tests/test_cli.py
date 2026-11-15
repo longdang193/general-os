@@ -35,7 +35,9 @@ def test_state_revalidate_demotes_contract_stale_completed_tasks(tmp_path, capsy
     )
     assert main(["state", "revalidate", "--state", str(state_path)]) == 0
 
-    assert json.loads(capsys.readouterr().out)["changed"] is True
+    output = json.loads(capsys.readouterr().out)
+    assert output["changed"] is True
+    assert output["demoted_task_ids"] == ["work"]
     assert load_state(state_path).tasks[0].state == "pending"
 
 
@@ -96,7 +98,9 @@ def test_state_revalidate_can_target_one_task_without_git_inspection(
         == 0
     )
 
-    assert json.loads(capsys.readouterr().out)["changed"] is True
+    output = json.loads(capsys.readouterr().out)
+    assert output["changed"] is True
+    assert output["demoted_task_ids"] == ["work"]
     restored = load_state(state_path)
     assert [item.state for item in restored.tasks] == ["pending", "completed"]
 

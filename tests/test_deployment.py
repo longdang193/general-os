@@ -1,3 +1,4 @@
+import errno
 import json
 import os
 from pathlib import Path
@@ -548,7 +549,11 @@ def test_deployment_lock_has_bounded_wait(tmp_path, monkeypatch):
     if os.name == "nt":
         import msvcrt
 
-        monkeypatch.setattr(msvcrt, "locking", lambda *_: (_ for _ in ()).throw(OSError("busy")))
+        monkeypatch.setattr(
+            msvcrt,
+            "locking",
+            lambda *_: (_ for _ in ()).throw(OSError(errno.EACCES, "busy")),
+        )
     else:
         import fcntl
 

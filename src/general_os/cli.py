@@ -34,12 +34,18 @@ def run_state_revalidate(args: argparse.Namespace) -> int:
     task_ids = (args.task_id,) if args.task_id else None
     updated_state = revalidate_completed_tasks(state, task_ids)
     changed = updated_state != state
+    demoted_task_ids = [
+        before.id
+        for before, after in zip(state.tasks, updated_state.tasks)
+        if before.state == "completed" and after.state == "pending"
+    ]
     if changed:
         save_state(args.state, updated_state)
     _print(
         {
             "status": "revalidated",
             "changed": changed,
+            "demoted_task_ids": demoted_task_ids,
             "goal": updated_state.goal,
             "task_count": len(updated_state.tasks),
         }
