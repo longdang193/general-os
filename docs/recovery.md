@@ -8,9 +8,10 @@ Git, not from Codex or Orca session history:
    files directly from Git.
 3. When a completed task is needed for continuation, acceptance, or
    publication, run `python -m general_os state revalidate --state
-   state/coordination.json --repo .` as a targeted check. It applies the
-   existing task-contract and dependency revalidation semantics; it is not a
-   required recovery ceremony for unrelated unfinished work.
+   state/coordination.json [--task-id TASK_ID]` as a targeted semantic check.
+   It applies the existing task-contract and dependency revalidation semantics;
+   it does not perform Git verification and is not a required recovery ceremony
+   for unrelated unfinished work.
 4. Determine unfinished dependency-ready semantic work, or redispatch the global
    goal when the task graph is empty. Goal-only state is intent-only and has no
    durable completion record; use a task graph when completion must be retained.

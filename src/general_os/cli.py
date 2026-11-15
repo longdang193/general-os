@@ -31,8 +31,8 @@ def run_state_validate(args: argparse.Namespace) -> int:
 
 def run_state_revalidate(args: argparse.Namespace) -> int:
     state = load_state(args.state)
-    snapshot = inspect_git(args.repo, include_identity=True)
-    updated_state = revalidate_completed_tasks(state, snapshot)
+    task_ids = (args.task_id,) if args.task_id else None
+    updated_state = revalidate_completed_tasks(state, task_ids)
     changed = updated_state != state
     if changed:
         save_state(args.state, updated_state)
@@ -120,7 +120,8 @@ def build_parser() -> argparse.ArgumentParser:
     validate.set_defaults(handler=run_state_validate)
     revalidate = state_commands.add_parser("revalidate")
     revalidate.add_argument("--state", required=True)
-    revalidate.add_argument("--repo", required=True)
+    revalidate.add_argument("--repo")
+    revalidate.add_argument("--task-id")
     revalidate.set_defaults(handler=run_state_revalidate)
 
     accept = commands.add_parser("accept")

@@ -233,12 +233,28 @@ def completed_tasks_requiring_reverification(
 
 def revalidate_completed_tasks(
     state: CoordinationState,
-    snapshot: GitSnapshot,
+    task_ids: tuple[str, ...] | None = None,
 ) -> CoordinationState:
-    """Revalidate durable task semantics after any needed fresh Git verification."""
+    """Revalidate task semantics without performing Git verification."""
+    tasks_by_id = {task.id: task for task in state.tasks}
+    if task_ids is None:
+        candidates = set(tasks_by_id)
+    else:
+        unknown = set(task_ids) - set(tasks_by_id)
+        if unknown:
+            raise ValueError(f"unknown task: {sorted(unknown)[0]}")
+        candidates = set(task_ids)
+        pending = list(candidates)
+        while pending:
+            task = tasks_by_id[pending.pop()]
+            for dependency in task.depends_on:
+                if dependency not in candidates:
+                    candidates.add(dependency)
+                    pending.append(dependency)
+
     stale: set[str] = set()
     for task in state.tasks:
-        if task.state == "completed" and (
+        if task.state == "completed" and task.id in candidates and (
             task.accepted_task_contract_identity != task.contract_identity()
         ):
             stale.add(task.id)

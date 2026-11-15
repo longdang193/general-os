@@ -295,7 +295,7 @@ def test_revalidate_completed_tasks_preserves_acceptance_after_later_git_change(
         ),
     )
 
-    updated = revalidate_completed_tasks(state, snapshot(identity="after-commit"))
+    updated = revalidate_completed_tasks(state)
 
     assert updated == state
 
@@ -355,7 +355,7 @@ def test_revalidate_completed_tasks_demotes_changed_task_and_dependents():
             state.tasks[1],
         ),
     )
-    updated = revalidate_completed_tasks(changed, snapshot(identity="later"))
+    updated = revalidate_completed_tasks(changed)
 
     assert [task.state for task in updated.tasks] == ["pending", "pending"]
     assert all(task.accepted_snapshot_identity is None for task in updated.tasks)
@@ -375,7 +375,7 @@ def test_revalidate_completed_tasks_keeps_matching_evidence():
         ),
     )
 
-    assert revalidate_completed_tasks(state, snapshot(identity="snapshot-id")) == state
+    assert revalidate_completed_tasks(state) == state
 
 
 def test_acceptance_rejects_stale_task_contract_evidence():
@@ -403,7 +403,7 @@ def test_revalidate_completed_tasks_demotes_changed_task_contract():
     )
     state = CoordinationState(goal="goal", tasks=(changed,))
 
-    updated = revalidate_completed_tasks(state, snapshot(identity="snapshot-id"))
+    updated = revalidate_completed_tasks(state)
 
     assert updated.tasks[0].state == "pending"
     assert updated.tasks[0].accepted_snapshot_identity is None

@@ -139,6 +139,40 @@ def test_legacy_completed_task_is_demoted_without_rewriting_bytes(tmp_path):
         load_state(path)
 
 
+def test_legacy_completion_demotes_completed_dependents_without_rewriting_bytes(tmp_path):
+    path = tmp_path / "coordination.json"
+    original = json.dumps(
+        {
+            "version": 1,
+            "goal": "goal",
+            "tasks": [
+                {"id": "dependency", "state": "completed"},
+                {
+                    "id": "work",
+                    "state": "completed",
+                    "depends_on": ["dependency"],
+                    "accepted_snapshot_identity": "snapshot",
+                    "accepted_task_contract_identity": "contract",
+                },
+                {
+                    "id": "final",
+                    "state": "completed",
+                    "depends_on": ["work"],
+                    "accepted_snapshot_identity": "snapshot",
+                    "accepted_task_contract_identity": "contract",
+                },
+            ],
+        }
+    ).encode("utf-8")
+    path.write_bytes(original)
+
+    state = load_state(path)
+
+    assert [task.state for task in state.tasks] == ["pending", "pending", "pending"]
+    assert all(task.accepted_snapshot_identity is None for task in state.tasks)
+    assert path.read_bytes() == original
+
+
 def test_stale_loaded_state_is_rejected(tmp_path):
     path = tmp_path / "coordination.json"
     save_state(path, CoordinationState(goal="initial"))

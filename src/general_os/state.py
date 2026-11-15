@@ -265,6 +265,7 @@ class CoordinationState:
         if version != STATE_VERSION:
             raise StateError(f"unsupported state version: {version}")
         tasks = []
+        demoted = set()
         for raw_task in raw_tasks:
             task = dict(raw_task)
             if task.get("state", "pending") == "completed" and (
@@ -276,7 +277,27 @@ class CoordinationState:
                 task["state"] = "pending"
                 task.pop("accepted_snapshot_identity", None)
                 task.pop("accepted_task_contract_identity", None)
+                demoted.add(task.get("id"))
             tasks.append(Task.from_dict(task))
+        changed = True
+        while changed:
+            changed = False
+            for index, task in enumerate(tasks):
+                if (
+                    task.state == "completed"
+                    and task.id not in demoted
+                    and any(dependency in demoted for dependency in task.depends_on)
+                ):
+                    demoted.add(task.id)
+                    tasks[index] = Task.from_dict(
+                        {
+                            **task.to_dict(),
+                            "state": "pending",
+                            "accepted_snapshot_identity": None,
+                            "accepted_task_contract_identity": None,
+                        }
+                    )
+                    changed = True
         return cls(
             goal=value.get("goal", ""),
             tasks=tuple(tasks),

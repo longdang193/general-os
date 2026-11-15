@@ -71,7 +71,7 @@ verification; general-os persists the resulting durable task state.
 
 When a runtime is lost, read durable state and current Git. If a completed task
 is needed for continuation, acceptance, or publication, run
-`python -m general_os state revalidate --state state/coordination.json --repo .`
+`python -m general_os state revalidate --state state/coordination.json [--task-id TASK_ID]`
 as a targeted check. It reuses task-contract and dependency revalidation only;
 legacy completed tasks without current acceptance identities load as pending and
 need fresh verification before completion. Determine unfinished work and start
