@@ -30,7 +30,8 @@ An unchanged centrally managed file may be updated. A locally modified or
 unowned file is preserved. A byte-identical unowned file may be adopted. The
 lock is written last; failed application restores all files changed by that
 attempt. Existing unrelated directories under `~/.agents/skills/` are not
-removed or overwritten.
+removed or overwritten. Concurrent deployment attempts wait briefly for the
+cooperating writer lock and fail with a clear error if it remains unavailable.
 
 An older `~/.agents/general-os/skills/` directory is legacy residue from the
 previous target contract. It is not read or updated by current deployment;

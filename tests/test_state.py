@@ -6,7 +6,6 @@ import pytest
 
 from general_os.state import (
     CoordinationState,
-    StateCompatibilityError,
     StateError,
     Task,
     load_state,
@@ -123,14 +122,16 @@ def test_legacy_state_reads_and_future_versions_fail(tmp_path):
         load_state(path)
 
 
-def test_legacy_completed_task_requires_migration_without_rewriting_bytes(tmp_path):
+def test_legacy_completed_task_is_demoted_without_rewriting_bytes(tmp_path):
     path = tmp_path / "coordination.json"
     original = b'{"version": 1, "goal": "goal", "tasks": [{"id": "work", "state": "completed"}]}\n'
     path.write_bytes(original)
 
-    with pytest.raises(StateCompatibilityError, match="explicit migration"):
-        load_state(path)
+    state = load_state(path)
 
+    assert state.tasks[0].state == "pending"
+    assert state.tasks[0].accepted_snapshot_identity is None
+    assert state.tasks[0].accepted_task_contract_identity is None
     assert path.read_bytes() == original
 
     path.write_text(json.dumps({"version": True, "goal": "bool", "tasks": []}), encoding="utf-8")

@@ -6,16 +6,18 @@ Git, not from Codex or Orca session history:
 1. Read `state/coordination.json`.
 2. Inspect the current branch, revision, worktree, conflicts, and changed
    files directly from Git.
-3. Run `python -m general_os state revalidate --state state/coordination.json
-   --repo .` before relying on completed-task state. This only applies the
-   existing task-contract and dependency revalidation semantics; compatibility
-   failures stop without rewriting historical bytes and require explicit
-   migration.
+3. When a completed task is needed for continuation, acceptance, or
+   publication, run `python -m general_os state revalidate --state
+   state/coordination.json --repo .` as a targeted check. It applies the
+   existing task-contract and dependency revalidation semantics; it is not a
+   required recovery ceremony for unrelated unfinished work.
 4. Determine unfinished dependency-ready semantic work, or redispatch the global
    goal when the task graph is empty. Goal-only state is intent-only and has no
    durable completion record; use a task graph when completion must be retained.
-5. Revalidate every completed task's accepted task-contract fingerprint and
-   dependency closure. The accepted `GitSnapshot.identity` remains historical
+5. Treat legacy completed tasks without current acceptance identities as
+   pending until fresh verification establishes completion again. For current
+   completed tasks, revalidate the accepted task-contract fingerprint and
+   dependency closure only when that result is being relied upon. The accepted `GitSnapshot.identity` remains historical
    evidence of where acceptance occurred; later commits or unrelated Git changes
    do not automatically demote completed tasks. A fresh current Git snapshot is
    still required before relying on the result for new acceptance or publication.

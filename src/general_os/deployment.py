@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,8 @@ from typing import Iterable
 
 SCHEMA_VERSION = 1
 SUPPORTED_ADAPTERS = frozenset({"codex"})
+DEPLOYMENT_LOCK_TIMEOUT_SECONDS = 10.0
+DEPLOYMENT_LOCK_RETRY_SECONDS = 0.05
 CENTRAL_DIRNAME = "general-os"
 PACKAGE_ASSETS = Path(__file__).resolve().parent / "assets"
 SKILL_SOURCE = Path(".agents") / "skills"
@@ -339,11 +342,20 @@ def _deployment_lock(central_root: Path):
                 handle.write(b"\0")
                 handle.flush()
             handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            lock = lambda: msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
         else:
             import fcntl
 
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            lock = lambda: fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        deadline = time.monotonic() + DEPLOYMENT_LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                lock()
+                break
+            except (BlockingIOError, OSError) as exc:
+                if time.monotonic() >= deadline:
+                    raise DeploymentError(f"deployment lock unavailable: {lock_path}") from exc
+                time.sleep(DEPLOYMENT_LOCK_RETRY_SECONDS)
         try:
             yield
         finally:

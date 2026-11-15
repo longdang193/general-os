@@ -264,9 +264,22 @@ class CoordinationState:
             raise StateError(f"unsupported state version: {version}")
         if version != STATE_VERSION:
             raise StateError(f"unsupported state version: {version}")
+        tasks = []
+        for raw_task in raw_tasks:
+            task = dict(raw_task)
+            if task.get("state", "pending") == "completed" and (
+                not isinstance(task.get("accepted_snapshot_identity"), str)
+                or not task.get("accepted_snapshot_identity", "").strip()
+                or not isinstance(task.get("accepted_task_contract_identity"), str)
+                or not task.get("accepted_task_contract_identity", "").strip()
+            ):
+                task["state"] = "pending"
+                task.pop("accepted_snapshot_identity", None)
+                task.pop("accepted_task_contract_identity", None)
+            tasks.append(Task.from_dict(task))
         return cls(
             goal=value.get("goal", ""),
-            tasks=tuple(Task.from_dict(task) for task in raw_tasks),
+            tasks=tuple(tasks),
             policy_exceptions=dict(exceptions),
             version=version,
         )
@@ -330,24 +343,6 @@ def load_state(path: str | os.PathLike[str]) -> CoordinationState:
         raise StateError(f"invalid JSON state: {state_path}") from exc
     if not isinstance(raw, Mapping):
         raise StateError("state root must be an object")
-    raw_tasks = raw.get("tasks", ())
-    if isinstance(raw_tasks, list):
-        for raw_task in raw_tasks:
-            if (
-                isinstance(raw_task, Mapping)
-                and raw_task.get("state", "pending") == "completed"
-                and (
-                    not isinstance(raw_task.get("accepted_snapshot_identity"), str)
-                    or not raw_task.get("accepted_snapshot_identity", "").strip()
-                    or not isinstance(raw_task.get("accepted_task_contract_identity"), str)
-                    or not raw_task.get("accepted_task_contract_identity", "").strip()
-                )
-            ):
-                task_id = raw_task.get("id", "<unknown>")
-                raise StateCompatibilityError(
-                    "completed task requires explicit migration: "
-                    f"missing acceptance identities for {task_id}"
-                )
     state = CoordinationState.from_dict(raw)
     object.__setattr__(state, "_source_digest", _digest(source))
     return state

@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -541,3 +542,19 @@ def test_invalid_central_lock_fails_closed(tmp_path):
 
     with pytest.raises(DeploymentError, match="unsupported central lock schema"):
         run_apply(source, project, home, dry_run=True)
+
+
+def test_deployment_lock_has_bounded_wait(tmp_path, monkeypatch):
+    if os.name == "nt":
+        import msvcrt
+
+        monkeypatch.setattr(msvcrt, "locking", lambda *_: (_ for _ in ()).throw(OSError("busy")))
+    else:
+        import fcntl
+
+        monkeypatch.setattr(fcntl, "flock", lambda *_: (_ for _ in ()).throw(BlockingIOError("busy")))
+    monkeypatch.setattr(deployment, "DEPLOYMENT_LOCK_TIMEOUT_SECONDS", 0.0)
+
+    with pytest.raises(DeploymentError, match="deployment lock unavailable"):
+        with deployment._deployment_lock(tmp_path):
+            pass

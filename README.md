@@ -40,11 +40,14 @@ Reusable skills live under `.agents/skills/`; active shared rules live under
 predecessor skills and 11 predecessor rules without importing generated adapter
 trees or a second orchestration authority.
 
-Before acceptance, run `pytest -q` and
-`python -m general_os state validate state/coordination.json`. During
+Before acceptance, run the focused tests affected by the change and
+`python -m general_os state validate state/coordination.json`. For shared/core
+or package-wide changes, and before release, run `pytest -q`. During
 documentation or governance changes, use
-`pytest -q tests/test_documentation_contracts.py` as the focused check before
-the broader suite.
+`pytest -q tests/test_documentation_contracts.py` as the focused check. Run the
+historical migration audit explicitly with
+`pytest -q tests/migration_audit.py` when migration or cutover evidence is
+needed.
 
 ## Central deployment
 
