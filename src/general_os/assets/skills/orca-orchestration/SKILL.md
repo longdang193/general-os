@@ -29,6 +29,27 @@ Use the installed guidance for all worker lifecycle, inspection, wait, retry,
 messaging, release, and cleanup operations. Do not recreate those commands in
 `general-os` code or this skill.
 
+## Repository-bound preflight
+
+Before the first native worker dispatch for repository-bound work:
+
+1. Resolve the intended repository from the task boundary and current Git as an
+   absolute, normalized path.
+2. Load the installed, version-matched native Orca guidance.
+3. Query Orca's registered worktrees through that native guidance and require an
+   exact normalized path match.
+4. Use the registered `path:<absolute-path>` or exact worktree ID selector.
+   Never assume `--worktree current` means the caller's shell directory; it means
+   Orca's active coordinator worktree.
+5. If no registered worktree matches, stop before dispatch and report that the
+   target repository is not registered. Register/open it only with explicit
+   authority.
+6. Observe `orca status --json` and require the runtime to be reachable before
+   dispatch. Treat state and version fields as diagnostics unless the installed
+   native contract declares them incompatible.
+7. Re-resolve the worktree if the target repository, Orca runtime, or session
+   context changes before dispatch.
+
 ## Handoff
 
 Project-level CoS chooses this boundary for one independently owned semantic

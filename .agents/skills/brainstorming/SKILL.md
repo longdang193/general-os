@@ -5,9 +5,13 @@ description: Use when unresolved problem framing or design options need structur
 # Brainstorming Ideas Into Designs
 
 <HARD-GATE>
-Do NOT write code or implement anything before:
-1. design is presented
-2. user explicitly approves
+Do not promote production implementation before:
+1. the design is presented
+2. the user or owning controller approves it
+
+Bounded disposable probes or prototypes are allowed when they directly answer
+an unresolved design question. Label them as exploratory evidence, keep them
+outside the approved implementation, and discard them when no longer needed.
 </HARD-GATE>
 
 ## Role

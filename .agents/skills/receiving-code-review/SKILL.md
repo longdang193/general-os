@@ -41,11 +41,13 @@ WHEN receiving code review feedback:
 ## Handling Unclear Feedback
 
 ```
-IF any item is unclear:
-  STOP - do not implement anything yet
-  ASK for clarification on unclear items
+IF an item is unclear:
+  isolate that item and any dependent work
+  ASK for clarification on the isolated item
+  continue independent, well-understood corrections when safe
 
-WHY: Items may be related. Partial understanding = wrong implementation.
+WHY: Partial understanding is unsafe only for the unclear item and its
+dependents; it should not block unrelated verified fixes.
 ```
 
 **Example:**
@@ -102,8 +104,8 @@ IF reviewer suggests "implementing properly":
 
 ```
 FOR multi-item feedback:
-  1. Clarify anything unclear FIRST
-  2. Then implement in this order:
+  1. Isolate unclear items and their dependents
+  2. Implement independent, well-understood items in this order:
      - Blocking issues (breaks, security)
      - Simple fixes (typos, imports)
      - Complex fixes (refactoring, logic)

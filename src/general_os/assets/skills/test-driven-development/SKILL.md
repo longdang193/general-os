@@ -32,22 +32,17 @@ Write the test first. Watch it fail. Write minimal code to pass.
 
 Thinking "skip TDD just this once"? Stop. That's rationalization.
 
-## The Iron Law
+## Regression-proof invariant
 
 ```
-NO NEW OR CHANGED BEHAVIOR WITHOUT A FAILING TEST FIRST
+NO NEW OR CHANGED BEHAVIOR IS COMPLETE WITHOUT REGRESSION EVIDENCE
 ```
 
-For new or changed behavior, write code before the test? Delete it. Start over.
-Pure refactoring may begin from green characterization coverage.
-
-**No exceptions:**
-- Don't keep it as "reference"
-- Don't "adapt" it while writing tests
-- Don't look at it
-- Delete means delete
-
-Implement fresh from tests. Period.
+Test-first is the preferred technique for non-trivial behavior when it clarifies
+the contract. Characterization tests are appropriate before behavior-preserving
+refactors. For a small, well-understood change, focused regression proof may be
+written alongside or after the implementation, but it must exercise the
+failure or behavior and fail if the correction is reverted.
 
 ## Red-Green-Refactor
 
@@ -371,8 +366,6 @@ When adding mocks or test utilities, read @testing-anti-patterns.md to avoid com
 ## Final Rule
 
 ```
-Production code → test exists and failed first
-Otherwise → not TDD
+Production code → regression evidence exists and passes
+Test-first → preferred when it reduces uncertainty or clarifies the contract
 ```
-
-No exceptions without your human partner's permission.

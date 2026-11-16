@@ -32,13 +32,13 @@ read-only and does not infer runtime model or effort values.
 The predecessor repository is a read-only migration reference, not a runtime
 or schema dependency. It remains unmodified.
 
-## Maintained SSOT
+## Maintained SSOT and migration evidence
 
 Reusable skills live under `.agents/skills/`; active shared rules live under
-`docs/rules/`; and the source-pinned migration manifest is
-`docs/migration/project-os-starter.md`. The migration accounts for all 33
-predecessor skills and 11 predecessor rules without importing generated adapter
-trees or a second orchestration authority.
+`docs/rules/`. The source-pinned migration manifest at
+`docs/migration/project-os-starter.md` is historical cutover evidence, not a
+runtime SSOT or schema dependency. It records the predecessor inventory without
+importing generated adapter trees or a second orchestration authority.
 
 Before acceptance, run the focused tests affected by the change and
 `python -m general_os state validate state/coordination.json`. For shared/core

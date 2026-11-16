@@ -140,6 +140,11 @@ def test_review_and_wayfinding_guidance_keep_topology_and_state_native():
     assert "controller-selected discovered-profile reviewer" not in review
     assert "Reviewer:" in reviewer
     assert "controller-selected profile" not in reviewer
+    orca = (root / ".agents" / "skills" / "orca-orchestration" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "--worktree current` means the caller's shell directory" in orca
+    assert "exact normalized path match" in orca
     assert "docs/wayfinding/" in wayfinding
     assert "remains the only durable" in " ".join(wayfinding.split())
     assert "workflow state" in wayfinding

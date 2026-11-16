@@ -68,12 +68,13 @@ or encode workflow transitions in it.
 
 ## Code Pressure
 
-If the user asks for code while the decision frontier is unresolved, refuse the
-code request and record it as out of scope. Do not skip the map, author control,
-decision questions, promotion checks, or links to the owning planning flow.
-Continue only with
-decision discovery; implementation begins later through the approved durable
-scope or specification and the planning tier selected by `defining-work`.
+If the user asks for production code while the decision frontier is unresolved,
+do not promote implementation or bypass the map, author control, decision
+questions, promotion checks, or links to the owning planning flow. Bounded
+diagnostic or prototype work is allowed when it directly resolves a frontier
+question and remains clearly non-production. Implementation begins through the
+approved durable scope or specification and the planning tier selected by
+`defining-work`.
 
 ## Completion And Promotion
 

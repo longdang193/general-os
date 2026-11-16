@@ -27,14 +27,18 @@ Containment is allowed when necessary to limit active impact.
 
 ## When to Use
 
-Use for ANY technical issue:
+Use when the root cause is uncertain, the failure is recurrent or
+multi-component, or the risk warrants a structured investigation:
 
-- Test failures
-- Bugs in production
-- Unexpected behavior
-- Performance problems
-- Build failures
-- Integration issues
+- uncertain test failures or bugs
+- recurrent or production failures
+- unexpected behavior with competing explanations
+- performance, build, or integration failures that need evidence across boundaries
+
+For a known, local, low-risk issue where the source and reproduction already
+establish the root cause, a direct corrective fix is acceptable with focused
+regression proof. Preserve the root-cause evidence requirement for permanent
+fixes; do not turn the full phased workflow into a ceremony gate.
 
 **Use this ESPECIALLY when:**
 

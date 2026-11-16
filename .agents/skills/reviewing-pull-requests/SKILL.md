@@ -14,15 +14,17 @@ task acceptance.
 
 ## Inputs
 
-Require repository, PR number, base ref, head ref, expected head SHA, approved
-scope, preserved invariants, and required checks. If base or head identity is
+Require repository, PR number, approved scope, preserved invariants, and
+required checks. Read the PR base, head, and SHA from GitHub; a caller-supplied
+expected SHA may additionally pin the review. If GitHub identity or access is
 missing or ambiguous, return `BLOCKED`.
 
 ## Review Contract
 
 Before inspection, verify repository identity, PR number, base ref and SHA when
-material, head ref and SHA, and current PR head. If current head differs from
-expected head, reject stale evidence and return `BLOCKED` until review reruns.
+material, head ref and SHA, and current PR head. If a supplied expected head
+differs from the observed head, or the head moves during review, return `FAIL`
+with a rerun condition; do not treat a retryable stale head as `BLOCKED`.
 
 Inspect the exact diff, changed-file scope, tests, required checks, security or
 data-loss risks, and approved deviations. Do not infer approval from CI alone.
