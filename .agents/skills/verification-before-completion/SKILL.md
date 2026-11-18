@@ -14,7 +14,7 @@ and does not require this skill merely to produce a General OS result.
 
 ## Procedure
 
-For task-bound work:
+For repository-bound task-bound work:
 
 1. Read the task objective and acceptance criteria from durable state.
 2. Inspect current branch, revision, conflicts, changed files, and worktree
@@ -23,6 +23,15 @@ For task-bound work:
 4. Compare evidence revision with the current Git revision.
 5. Report one result with the exact checks, results, revision, and remaining
    work.
+
+For an external-only commitment:
+
+1. Read the objective, acceptance criteria, and designated project decision
+   record from the approved scope.
+2. Collect fresh source-specific evidence and verify its authority, scope, and
+   freshness.
+3. Report the source identifiers, evidence, and remaining work; do not invent
+   a Git snapshot when repository state is not part of the scope.
 
 For ordinary direct execution or Level 1 work without a durable acceptance
 boundary, use the owning project's native verification and current Git facts.
@@ -36,18 +45,20 @@ bookkeeping when current source and tests establish the result.
 
 Source-specific review of strategic or external findings is separate from
 repository-bound durable task acceptance. Do not record an external-only review
-as a durable `PASS` unless its evidence satisfies a supported acceptance
-contract; the existing Git-bound acceptance path remains authoritative for
-repository tasks.
+as a durable `PASS` unless its evidence satisfies a supported project-specific
+acceptance contract; the existing Git-bound acceptance path remains authoritative
+for repository tasks.
 
 ## Result Contract
 
 ### `PASS`
 
 Use only when required checks pass, evidence is current, the durable commitment
-criteria are satisfied, and no material Git conflict remains. CoS may persist a
-task as `completed` only for task-bound work. Native verification remains
-authoritative for ordinary direct and Level 1 work.
+criteria are satisfied, and no material conflict remains. Repository-bound
+work also requires a current Git snapshot; external-only work requires the
+supported project-specific source evidence instead. CoS may persist a task as
+`completed` only for task-bound work. Native verification remains authoritative
+for ordinary direct and Level 1 work.
 
 ### `FAIL`
 
@@ -77,9 +88,11 @@ unavailable. Record the concrete reason.
 
 ## Evidence Shape
 
-Return the status, exact commands or checks, observed Git revision, important
-failures, durable-state consequence, and remaining work. Preserve failed
-evidence for the current controller; do not create a second ledger.
+Return the status, exact commands or checks, the observed Git revision when the
+scope is repository-bound, source identifiers and freshness when it is
+external-only, important failures, durable-state consequence, and remaining
+work. Preserve failed evidence for the current controller; do not create a
+second ledger.
 
 ## Common Mistakes
 

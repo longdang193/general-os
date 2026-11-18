@@ -65,11 +65,11 @@ executed.
   "goal": "Preserve the approved admission-policy decision across the rollout",
   "tasks": [
     {
-      "id": "implementation",
-      "objective": "Implement the bounded change",
+      "id": "policy-preservation",
+      "objective": "Maintain the approved admission policy through each rollout phase",
       "state": "pending",
       "depends_on": [],
-      "acceptance": ["focused tests pass"]
+      "acceptance": ["Each phase records the approved policy state and its authorized transition evidence"]
     }
   ]
 }

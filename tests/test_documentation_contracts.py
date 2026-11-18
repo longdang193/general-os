@@ -59,6 +59,69 @@ def test_external_review_does_not_bypass_git_bound_acceptance():
     assert "supported acceptance contract" in contents
 
 
+def test_reviewed_guidance_handles_scope_specific_acceptance_and_native_ownership():
+    root = Path(__file__).parents[1]
+    brainstorming = (root / ".agents" / "skills" / "brainstorming" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    spec = (root / ".agents" / "skills" / "spec-drafting" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    defining = (root / ".agents" / "skills" / "defining-work" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    contracts = (root / "docs" / "contracts.md").read_text(encoding="utf-8")
+    plan = (root / "docs" / "templates" / "detailed-plan.md").read_text(
+        encoding="utf-8"
+    )
+    verification = (
+        root / ".agents" / "skills" / "verification-before-completion" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    finishing = (
+        root / ".agents" / "skills" / "finishing-development-work" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    review = (root / ".agents" / "skills" / "requesting-code-review" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    tdd = (root / ".agents" / "skills" / "test-driven-development" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+
+    normalized_brainstorming = " ".join(brainstorming.split())
+    assert "Source and tests establish observed behavior" in brainstorming
+    assert "Investigate and reconcile conflicts rather than automatically favoring either" in normalized_brainstorming
+    assert "After approval, return to the designated project workflow" in spec
+    assert "Native OpenSpec route" in spec
+    assert '"id": "policy-preservation"' in defining
+    assert '"objective": "Maintain the approved admission policy' in defining
+    assert "External-only acceptance uses the current task" in contracts
+    assert "designated project decision record" in contracts
+    assert "For external-only goals" in plan
+    assert "external-only commitment" in verification
+    assert "do not invent a Git snapshot" in " ".join(verification.split())
+    normalized_finishing = " ".join(finishing.split())
+    assert "already selected an eligible closure action" in normalized_finishing
+    assert "Present options only when no closure choice" in normalized_finishing
+    assert "uncommitted review possible" in review
+    assert "staged, unstaged, and untracked inventory" in review
+    assert "known baseline/unrelated failures" in tdd
+    assert "No introduced unexpected errors or warnings" in tdd
+
+
+def test_reviewed_skill_mirrors_match_canonical_sources():
+    root = Path(__file__).parents[1]
+    for name in (
+        "chief-of-staff",
+        "verification-before-completion",
+        "finishing-development-work",
+        "requesting-code-review",
+        "test-driven-development",
+    ):
+        canonical = root / ".agents" / "skills" / name / "SKILL.md"
+        packaged = root / "src" / "general_os" / "assets" / "skills" / name / "SKILL.md"
+        assert canonical.read_bytes() == packaged.read_bytes(), name
+
+
 def test_native_workflows_and_strategic_decisions_keep_single_owners():
     root = Path(__file__).parents[1]
     spec = (root / ".agents" / "skills" / "spec-drafting" / "SKILL.md").read_text(

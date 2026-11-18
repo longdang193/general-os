@@ -55,8 +55,8 @@ dependents; it should not block unrelated verified fixes.
 your human partner: "Fix 1-6"
 You understand 1,2,3,6. Unclear on 4,5.
 
-❌ WRONG: Implement 1,2,3,6 now, ask about 4,5 later
-✅ RIGHT: "I understand items 1,2,3,6. Need clarification on 4 and 5 before proceeding."
+✅ RIGHT: Implement independent items 1,2,3,6 when they are safe, isolate any
+dependent work, and ask for clarification on 4 and 5 before proceeding there.
 ```
 
 ## Source-Specific Handling

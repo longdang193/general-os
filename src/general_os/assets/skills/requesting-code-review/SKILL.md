@@ -32,7 +32,7 @@ natural checkpoint provide sufficient evidence.
 
 ## How to Request
 
-**1. Get git SHAs:**
+**1. Establish review scope:**
 ```bash
 BASE_SHA=$(git rev-parse "$APPROVED_BASE")
 HEAD_SHA=$(git rev-parse HEAD)
@@ -40,7 +40,12 @@ HEAD_SHA=$(git rev-parse HEAD)
 
 `APPROVED_BASE` must come from the caller, approved scope, or recorded merge
 base.
-Do not infer a base from commit count; `HEAD~1` can omit multi-commit changes.
+Use this immutable SHA range when the approved review requires commit-pinned
+Git evidence. For a local review before commit, provide the approved base when
+available plus the scoped staged, unstaged, and untracked inventory; the
+reviewer may inspect the current workspace or a frozen review package. Do not
+force a commit solely to make an uncommitted review possible. Never infer a
+base from commit count; `HEAD~1` can omit multi-commit changes.
 
 **2. Select review topology:**
 
@@ -69,8 +74,10 @@ class plus approved deviations.
 - `[PROTOTYPE_REFERENCE]` - Prototype and validation findings when material, otherwise `Not applicable: <reason>`
 - `[EVIDENCE_CONTEXT]` - Each applicable frontend, backend, and E2E evidence class with result or approved gap
 - `[APPROVED_DEVIATIONS]` - Explicit deviations from plan or specification, or `none`
-- `[BASE_SHA]` - Starting commit
-- `[HEAD_SHA]` - Ending commit
+- `[BASE_SHA]` - Starting commit when an immutable Git range is required;
+  otherwise the approved base or `Not applicable: local worktree review`
+- `[HEAD_SHA]` - Ending commit when an immutable Git range is required;
+  otherwise `Not applicable: local worktree review`
 
 **4. Act on feedback:**
 - Fix Critical issues immediately

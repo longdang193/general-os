@@ -178,8 +178,8 @@ npm test path/to/test.test.ts
 
 Confirm:
 - Test passes
-- Other tests still pass
-- Output pristine (no errors, warnings)
+- Other relevant tests pass, or known baseline/unrelated failures are recorded
+- No new unexpected errors or warnings are introduced
 
 **Test fails?** Fix code, not test.
 
@@ -314,8 +314,8 @@ Before marking work complete:
 - [ ] Test-first was used when the contract was non-trivial, unclear, or its discovery benefit was material
 - [ ] When test-first was selected, each test failed for the expected reason before implementation
 - [ ] Wrote the smallest code that satisfies the evidence
-- [ ] All tests pass
-- [ ] Output pristine (no errors, warnings)
+- [ ] Required tests pass; known baseline or unrelated failures are recorded
+- [ ] No introduced unexpected errors or warnings remain
 - [ ] Tests use real code (mocks only if unavoidable)
 - [ ] Edge cases and errors covered
 

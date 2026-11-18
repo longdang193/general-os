@@ -56,8 +56,11 @@ second runtime scheduler.
    Orca when its native orchestration offers material benefit.
 7. If the required independent boundary is unavailable, return a real
    blocker. Do not mutate permission because runtime health changed.
-8. Reconcile runtime evidence with current Git and fresh verification before
-   accepting durable task state.
+8. Reconcile repository-bound runtime evidence with current Git and fresh
+   verification before accepting durable task state. For an external-only
+   commitment, use the designated project decision record and fresh
+   source-specific evidence instead; do not invent a Git requirement when no
+   repository state is in scope.
 
 ## Acceptance
 
@@ -70,6 +73,11 @@ second runtime scheduler.
 
 Runtime completion is evidence, not acceptance. CoS decides acceptance after
 verification; general-os persists the resulting durable task state.
+
+Repository-bound `PASS` requires current Git-bound evidence. External-only
+`PASS` requires a supported project-specific acceptance contract identifying the
+designated decision record and fresh source-specific evidence; it must not be
+represented as repository acceptance without that contract.
 
 ## Recovery
 

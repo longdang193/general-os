@@ -22,9 +22,12 @@ This skill produces design artifacts only.
 ## Conditional References
 
 - For unresolved material visual direction, interaction design, responsive behavior, or accessibility behavior, follow `docs/rules/frontend-ui.md`. `impeccable` and `ui-ux-pro-max` are optional external capabilities, not required dependencies; use one only when explicitly selected and available. Skip design-skill invocation for text-only design questions.
-- Use `defining-work` to choose the smallest truthful planning tier.
+- Use `defining-work` only when a durable General OS coordination boundary is
+  actually needed; otherwise return to the owning native workflow.
 - Use `AGENTS.md` when ownership or publication boundaries are in scope.
-- If guidance conflicts with current source or tests, current executable truth wins.
+- Source and tests establish observed behavior; the designated project
+  specification establishes intended behavior. Investigate and reconcile
+  conflicts rather than automatically favoring either.
 
 ## Artifact Boundaries
 

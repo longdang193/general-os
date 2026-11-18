@@ -58,6 +58,12 @@ Verification makes closure actions eligible. Closure actions still require
 explicit user authorization or an applicable repository policy; an
 implementation plan does not grant Git or publication authority.
 
+If the user or applicable repository policy has already selected an eligible
+closure action, proceed with that action after fresh verification instead of
+asking for the same closure choice again. Present options only when no closure
+choice is already authorized. Destructive or otherwise separately restricted
+actions still require their applicable explicit authority.
+
 Routine reversible local Git work—inspection, local branch creation, verified
 commits, and read-only fetch—may proceed within the approved scope and
 repository workflow; it is not publication authority. Require explicit
@@ -156,7 +162,7 @@ Do not use broad staging when unrelated changes exist.
 
 ## 5. Present Closure Options
 
-Present only eligible options:
+When no closure choice is already authorized, present only eligible options:
 
 1. **Push branch and create or update pull request**
 2. **Merge locally with fast-forward only**
@@ -164,7 +170,7 @@ Present only eligible options:
 4. **Discard branch or worktree** with explicit destructive confirmation
 5. **Direct push to base branch** only when user explicitly requests it and repository policy permits
 
-State exact branch, base, remote, worktree, commits, required network actions, and cleanup consequence for each option.
+State exact branch, base, remote, worktree, commits, required network actions, and cleanup consequence for each option. When a closure choice is already authorized, state the selected action and its consequences instead.
 
 Do not choose option for user.
 

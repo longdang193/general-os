@@ -66,6 +66,8 @@ than starting fresh.
 
 Block only for material authority, dependency, Git, or external-state risks.
 Missing optional runtime evidence lowers confidence; it does not by itself
-stop ordinary work. Acceptance requires fresh verification against current
-Git. Failed or stale evidence remains retryable; `BLOCKED` means progress
-cannot safely continue.
+stop ordinary work. Repository-bound acceptance requires fresh verification
+against current Git. External-only commitments use the designated project
+decision record and fresh source-specific evidence; they do not require a Git
+snapshot unless repository state is part of the approved scope. Failed or stale
+evidence remains retryable; `BLOCKED` means progress cannot safely continue.

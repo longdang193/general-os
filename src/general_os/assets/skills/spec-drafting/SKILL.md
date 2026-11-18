@@ -48,11 +48,12 @@ Specification owns:
 - design decisions and ownership boundaries
 - invariants, edge cases, acceptance criteria, and validation intent
 
-`defining-work` chooses the smallest durable coordination representation after
-the specification is approved: direct execution, a goal-only intent, a small
-task graph, or a detailed plan. An implementation handoff may retain concrete
-files, symbols, commands, and execution steps only when they are non-derivable
-durable boundaries or an explicitly requested handoff contract.
+After approval, return to the designated project workflow. Consider
+`defining-work` only when an independent durable General OS coordination
+boundary is required; it may then choose the smallest truthful representation.
+An implementation handoff may retain concrete files, symbols, commands, and
+execution steps only when they are non-derivable durable boundaries or an
+explicitly requested handoff contract.
 Ordinary implementation planning remains native-runtime work. It does not
 replace `state/coordination.json`, grant runtime authority, or replace native
 runtime planning.
@@ -73,7 +74,10 @@ workflow as the specification lifecycle. Do not require this skill's separate
 approval or `defining-work` handoff for that change. Use `defining-work` only
 when a genuinely independent durable General OS coordination boundary is also
 needed. This skill remains the route for projects without OpenSpec or for
-changes that are not suitable for the native OpenSpec workflow.
+  changes that are not suitable for the native OpenSpec workflow. Projects
+  without OpenSpec use their existing native specification workflow; use this
+  skill only when no stronger project owner exists and a precise contract adds
+  value.
 
 - Keep draft or approved specification content in the current task or an
   existing repository-owned document path. Do not invent a specification
