@@ -247,6 +247,7 @@ def _rewrite_skill_references(data: bytes, central_root: Path) -> bytes:
     for old, new in (
         ("docs/runtime-adapters.md", f"{docs_root}/runtime-adapters.md"),
         ("docs/rules/", f"{docs_root}/rules/"),
+        ("docs/templates/", f"{docs_root}/templates/"),
     ):
         text = text.replace(old, new)
     return text.encode("utf-8")

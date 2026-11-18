@@ -32,6 +32,11 @@ This skill produces design artifacts only.
 ## Artifact Boundaries
 
 - Brainstorming owns problem exploration, options, trade-offs, recommendations, assumptions, and unresolved questions.
+- When the user explicitly requests a persistent concept artifact, use
+  `docs/templates/concept-brief.md`. A Concept Brief is a lightweight,
+  project-owned record of problem, value, concept, uncertainty, and decision;
+  do not create it automatically or expand it into requirements or an
+  implementation plan.
 - When approved direction still needs prototype validation, contribute the
   exploratory evidence to the owning project specification or active OpenSpec
   change. Use `spec-drafting` when the destination project has no stronger

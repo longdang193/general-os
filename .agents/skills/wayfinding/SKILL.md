@@ -26,6 +26,9 @@ Before opening a map, record evidence for all conditions:
 - expected work beyond one focused session.
 
 If destination or problem framing is unknown, use `brainstorming`.
+When a project-owned Concept Brief is supplied or explicitly requested, it may
+provide or receive settled concept-level context. Keep the wayfinding map
+provisional and do not copy the Concept Brief's canonical content into it.
 If behavior and design are settled, promote them through the target project's
 authoritative specification workflow. Prefer native OpenSpec when adopted;
 otherwise use the project's existing specification approach. Use

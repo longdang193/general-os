@@ -49,6 +49,16 @@ existing native specification route. Figma, OpenDesign, and project code remain
 authoritative for their own design and implementation concerns; link those
 sources instead of duplicating them.
 
+## Concept discovery
+
+When a persistent Concept Brief is explicitly requested, projects may use
+`docs/templates/concept-brief.md`. The project owns this lightweight brief for
+problem, value, concept, uncertainty, and decision
+context; it is not a requirements or implementation specification. OpenSpec
+owns subsequent requirements, designs, specifications, and change-local tasks,
+while General OS and CoS handle exceptional durable strategic coordination
+rather than routine concept-document management.
+
 ## Maintained SSOT and migration evidence
 
 Reusable skills live under `.agents/skills/`; active shared rules live under

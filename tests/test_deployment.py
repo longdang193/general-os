@@ -11,7 +11,7 @@ from general_os.deployment import DeploymentError, deploy
 
 def make_source(root: Path) -> None:
     files = {
-        ".agents/skills/demo/SKILL.md": "---\nname: demo\ndescription: Use when testing.\n---\nSee `docs/rules/example.md` and `docs/runtime-adapters.md`.\n",
+        ".agents/skills/demo/SKILL.md": "---\nname: demo\ndescription: Use when testing.\n---\nSee `docs/rules/example.md`, `docs/templates/example.md`, and `docs/runtime-adapters.md`.\n",
         ".agents/skills/demo/scripts/helper.txt": "complete skill directory\n",
         "docs/rules/example.md": "shared rule\n",
         "docs/templates/example.md": "shared template\n",
@@ -52,8 +52,10 @@ def test_first_install_copies_complete_skills_and_seeds_only_absent_project_file
     skills = home / ".agents" / "skills"
     installed = (skills / "demo/SKILL.md").read_text(encoding="utf-8")
     assert "See `docs/rules/example.md`" not in installed
+    assert "See `docs/templates/example.md`" not in installed
     assert (skills / "demo/scripts/helper.txt").exists()
     assert str(central / "docs" / "rules" / "example.md").replace("\\", "/") in installed
+    assert str(central / "docs" / "templates" / "example.md").replace("\\", "/") in installed
     assert (project / "AGENTS.md").read_text(encoding="utf-8") == "project guidance\n"
     assert (project / "agents/review.toml").exists()
     assert (project / "agents/ui.toml").exists()

@@ -37,7 +37,9 @@ substantive strategic rationale, alternatives, and reconsideration triggers
 when that rationale genuinely needs persistence. Use `state/coordination.json`
 only when the decision also requires durable coordination or an exceptional
 authority boundary. No mandatory decision template or decision database is
-created.
+created. When explicitly requested, a project-owned Concept Brief may preserve
+concise problem, value, concept, uncertainty, and decision discovery context;
+it is not an implementation specification or a General OS task record.
 
 `agents/*.toml` is the only profile registry. A profile name is semantic
 selection, not a guessed model or effort setting. General-os may project
@@ -70,6 +72,7 @@ Codex, or Orca at the point of use, derive it instead of persisting a copy.
 | Implementation reality | current code and runtime evidence |
 | Approved visual design | selected design authority |
 | Strategic decision rationale | project-owned General OS decision context |
+| Project-owned concept discovery context | project-owned Concept Brief |
 
 The durable invariant is that coordinated work has one semantic owner and the
 selected native runtime chooses execution topology. General-os must not become

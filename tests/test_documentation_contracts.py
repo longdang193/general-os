@@ -260,6 +260,31 @@ def test_frontend_ui_rule_matches_packaged_asset():
     assert canonical == packaged
 
 
+def test_concept_brief_is_available_and_documents_native_boundaries():
+    root = Path(__file__).parents[1]
+    template = root / "docs" / "templates" / "concept-brief.md"
+    packaged = root / "src" / "general_os" / "assets" / "docs" / "templates" / "concept-brief.md"
+    brainstorming = (root / ".agents" / "skills" / "brainstorming" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    wayfinding = (root / ".agents" / "skills" / "wayfinding" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    architecture = (root / "docs" / "architecture.md").read_text(encoding="utf-8")
+
+    assert template.is_file()
+    assert template.read_bytes() == packaged.read_bytes()
+    template_text = template.read_text(encoding="utf-8")
+    for section in ("## 1. Problem", "## 2. Value", "## 3. Concept", "## 4. Uncertainty", "## 5. Decision"):
+        assert section in template_text
+    assert "docs/templates/concept-brief.md" in brainstorming
+    assert "project-owned Concept Brief" in wayfinding
+    assert "wayfinding map\nprovisional" in wayfinding
+    assert "Concept Brief" in readme and "OpenSpec" in readme
+    assert "Concept Brief" in architecture and "General OS task record" in architecture
+
+
 def test_centrally_deployed_docs_match_canonical_sources():
     root = Path(__file__).parents[1]
     canonical_root = root / "docs"
