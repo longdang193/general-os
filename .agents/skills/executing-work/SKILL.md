@@ -36,19 +36,20 @@ Goal Mode versus direct work, plan shape, or native subagent count.
 For an OpenSpec-enabled project, execute against the project's native change
 artifacts and reconcile its maintained specs through the native project
 workflow. The active change owner owns the native OpenSpec `apply` path and is
-the single authoritative writer for shared change artifacts; that owner may be
-the current Codex controller, one independent Orca worker, or the native
-coordinator selected for supervised work. Bounded workers may implement
-assigned code but must not independently run the full apply workflow or edit
-shared change checklists concurrently. Use the project's available native
-change-update workflow before continuing when requirements or design need a
-material change; keep same-intent refinements in the active change and use a
-new change when the underlying intent materially differs. Native OpenSpec
-checklist completion is task evidence only. Implementation verification uses
-project tests, current code, Git, and relevant inspection; use native OpenSpec
-verification when available and useful. Ordinary OpenSpec changes do not
-require durable General OS acceptance. Do not create a duplicate general-os
-specification or task ledger.
+accountable for reconciling shared change artifacts and the checklist. Native
+Codex or Orca workers may use `apply` within authorized, non-overlapping
+boundaries. Avoid conflicting concurrent writes; independently owned,
+non-overlapping edits need not be serialized. When overlap exists, the active
+change owner coordinates and reconciles the integrated state. Revise
+requirements or design through the project's available native change-update
+workflow or project-owned edit procedure when needed; pause only work that
+depends on unresolved decisions. Keep same-intent refinements in the active
+change and use a separate change when it improves scope clarity, ownership, or
+independent acceptance. Native OpenSpec checklist completion is task evidence
+only. Implementation verification uses project tests, current code, Git, and
+relevant inspection; use native OpenSpec verification when available and
+useful. Ordinary OpenSpec changes do not require durable General OS
+acceptance. Do not create a duplicate general-os specification or task ledger.
 
 ## Native Subagents
 

@@ -141,7 +141,7 @@ def test_reviewed_skill_mirrors_match_canonical_sources():
     assert reviewer.read_bytes() == packaged_reviewer.read_bytes()
 
 
-def test_openspec_execution_and_recovery_keep_shared_artifacts_single_owned():
+def test_openspec_execution_and_recovery_keep_shared_artifacts_accountable():
     root = Path(__file__).parents[1]
     executing = (root / ".agents" / "skills" / "executing-work" / "SKILL.md").read_text(
         encoding="utf-8"
@@ -159,12 +159,14 @@ def test_openspec_execution_and_recovery_keep_shared_artifacts_single_owned():
     normalized_recovery = " ".join(recovery.split())
 
     assert "active change owner" in normalized_executing
-    assert "single authoritative writer for shared change artifacts" in normalized_orca
-    assert "shared checklist entries concurrently" in normalized_orca
+    assert "reconciling shared change artifacts" in normalized_orca
+    assert "conflicting concurrent writes" in normalized_orca
+    assert "non-overlapping edits need not be serialized" in normalized_executing
     assert "available and useful" in normalized_verification
     assert "project checks or a Git snapshot" in normalized_verification
     assert "current code, tests, and Git" in normalized_recovery
     assert "available native change-update workflow" in normalized_recovery
+    assert "project-owned edit procedure" in normalized_recovery
 
 
 def test_native_workflows_and_strategic_decisions_keep_single_owners():

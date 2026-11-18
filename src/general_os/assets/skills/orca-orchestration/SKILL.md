@@ -75,16 +75,16 @@ guidance choose the smallest useful path—lightweight handoff, independent
 workspace, or supervised orchestration. Do not add that topology choice to
 durable general-os state.
 
-For an OpenSpec-enabled repository, the active change owner is the single
-authoritative writer for shared change artifacts, including the active change
-checklist. A single-worker handoff may assign that ownership to the worker;
-supervised parallel work may retain it with the native coordinator. Other
-workers receive bounded implementation ownership and return Git/evidence
-results; they must not independently run OpenSpec `apply` against the same
-change or edit shared checklist entries concurrently. After integration, the
-active change owner reconciles checklist state and verifies with current code,
-tests, Git, and relevant inspection, using native OpenSpec verification when
-available and useful.
+For an OpenSpec-enabled repository, the active change owner is accountable for
+reconciling shared change artifacts, including the active change checklist. A
+single-worker handoff may assign that ownership to the worker; supervised
+parallel work may retain it with the native coordinator. Workers may use
+OpenSpec `apply` within authorized, non-overlapping boundaries and return
+Git/evidence results. Avoid conflicting concurrent writes; independently owned,
+non-overlapping edits need not be serialized. When overlap exists, the active
+change owner coordinates and reconciles the integrated state, then verifies
+with current code, tests, Git, and relevant inspection, using native OpenSpec
+verification when available and useful.
 
 `build_orca_launch(project_profile(profile), assignment)` remains a low-level
 leaf/compatibility projection for simple native CLI launch paths. It maps only

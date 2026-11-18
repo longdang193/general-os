@@ -53,11 +53,10 @@ coordination starts a fresh native assignment from the current Git state:
    the configured boundary is available.
 
 When requirements or design must materially change during recovery, use the
-project's available native change-update workflow before continuing
-implementation. Keep same-intent refinements in the active change and use a
-new change when the underlying intent materially differs. Keep the active
-change owner responsible for reconciling shared OpenSpec artifacts after any
-delegated work.
+project's available native change-update workflow or project-owned edit
+procedure. Pause only work that depends on unresolved decisions. Keep
+same-intent refinements in the active change and use a separate change when it
+improves scope clarity, ownership, or independent acceptance.
 
 If repository-bound work has a material Git conflict, a required dependency is
 unfinished, authority is insufficient, or a required independent boundary is
