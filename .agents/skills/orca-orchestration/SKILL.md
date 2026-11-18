@@ -75,6 +75,14 @@ guidance choose the smallest useful path—lightweight handoff, independent
 workspace, or supervised orchestration. Do not add that topology choice to
 durable general-os state.
 
+For an OpenSpec-enabled repository, the controlling native coordinator is the
+single authoritative writer for shared change artifacts, including the active
+change checklist. Workers receive bounded implementation ownership and return
+Git/evidence results; they must not independently run OpenSpec `apply` against
+the same change or edit shared checklist entries concurrently. After worker
+integration, the coordinator reconciles checklist state and invokes the native
+OpenSpec verification workflow against the current Git and change artifacts.
+
 `build_orca_launch(project_profile(profile), assignment)` remains a low-level
 leaf/compatibility projection for simple native CLI launch paths. It maps only
 explicit `harness`, `model`, `effort`, and `instructions` values plus the

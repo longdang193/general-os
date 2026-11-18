@@ -49,6 +49,12 @@ designated project decision record and does not produce a General OS task
 `PASS`; the existing Git-bound acceptance path remains authoritative for
 repository tasks.
 
+For an OpenSpec-enabled repository, a completed `tasks.md` checkbox records
+native task tracking only. Run the project's native OpenSpec `verify` workflow
+against the current change artifacts and Git, then evaluate that evidence under
+this skill's acceptance contract; neither checklist completion nor native
+verification output alone is durable CoS acceptance.
+
 ## Result Contract
 
 ### `PASS`

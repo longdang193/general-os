@@ -12,8 +12,10 @@ coordination starts a fresh native assignment from the current Git state:
    conflicts, and changed files directly from Git. For an OpenSpec-enabled
    change, also inspect its active change artifacts and maintained
    specifications; use those artifacts for proposed and intended behavior,
-   while Git remains authoritative for implementation reality. For external-only
-   work, inspect the designated decision record and authoritative source instead.
+   while Git remains authoritative for implementation reality. Resume from
+   existing OpenSpec artifacts and pending checklist entries; do not recreate
+   tasks already represented by the active change. For external-only work,
+   inspect the designated decision record and authoritative source instead.
 3. When a repository-bound completed task is needed for continuation,
    acceptance, or publication, run `python -m general_os state revalidate
    --state state/coordination.json [--task-id TASK_ID]` as a targeted semantic
@@ -47,6 +49,11 @@ coordination starts a fresh native assignment from the current Git state:
 7. Start a fresh native assignment. Use the current Codex runtime by default;
    use Orca only when the unfinished work needs an independent workstream and
    the configured boundary is available.
+
+When requirements or design must materially change during recovery, use the
+project's native `openspec-update-change` workflow before continuing
+implementation. Keep one controller responsible for reconciling shared
+OpenSpec change artifacts after any delegated work.
 
 If repository-bound work has a material Git conflict, a required dependency is
 unfinished, authority is insufficient, or a required independent boundary is

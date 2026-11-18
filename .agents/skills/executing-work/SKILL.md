@@ -35,7 +35,14 @@ Goal Mode versus direct work, plan shape, or native subagent count.
 
 For an OpenSpec-enabled project, execute against the project's native change
 artifacts and reconcile its maintained specs through the native project
-workflow. Do not create a duplicate general-os specification or task ledger.
+workflow. The controlling Codex agent owns the native OpenSpec `apply` path for
+the active change; bounded Codex subagents may implement assigned code but must
+not independently run the full apply workflow or edit shared change checklists
+concurrently. Use the project's native `openspec-update-change` workflow before
+continuing when requirements or design need a material change. Native
+OpenSpec checklist completion is task evidence, not implementation verification
+or durable General OS acceptance. Do not create a duplicate general-os
+specification or task ledger.
 
 ## Native Subagents
 
@@ -60,9 +67,11 @@ look durable. Do not copy Orca IDs, worker progress, or lifecycle state into
 - A material repository Git, authority, dependency, credential, user-decision, or
   required-runtime failure is reported as `BLOCKED`.
 - Repository-bound runtime loss is recovered by rereading durable state and Git
-  and starting a fresh assignment. External-only work is recovered from its
-  owning project record and authoritative source. Runtime history is not the
-  recovery source of truth.
+  and starting a fresh assignment. For OpenSpec-enabled work, resume from the
+  existing active change artifacts and pending checklist entries; do not
+  recreate tasks already represented there. External-only work is recovered
+  from its owning project record and authoritative source. Runtime history is
+  not the recovery source of truth.
 
 ## Common Mistakes
 
