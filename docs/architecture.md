@@ -118,11 +118,14 @@ General-os does not silently merge runtime worktrees, publish, or push. Git
 integration and any later repository disposition remain explicit operations
 outside the native runtime outcome.
 
-Repository-bound runtime loss is recovered from durable general-os semantics and
-current Git. External-only work is recovered from its designated project
-decision record and authoritative source evidence. Useful independent outcomes
-may be accepted separately, while remaining work is derived again and a fresh
-native runtime is started. The previous Orca episode is not reconstructed.
+Repository-bound coordinated runtime loss is recovered from applicable durable
+general-os semantics and current Git. Direct authorized work without durable
+coordination starts from current project artifacts and Git without creating
+coordination state. External-only work is recovered from its designated project
+decision record when one exists and is relevant; otherwise use authoritative
+source evidence. Useful independent outcomes may be accepted separately, while
+remaining work is derived again and a fresh native runtime is started. The
+previous Orca episode is not reconstructed.
 
 ## Shallow routing
 

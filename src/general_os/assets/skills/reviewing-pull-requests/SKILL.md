@@ -47,8 +47,7 @@ it. Preserve caller-owned Git inventory and apply repository content policy
 before OCR; protected content is never review input, including both old and new
 rename/copy paths. Treat OCR findings as advisory and reconcile them with
 requirements, source, tests, and inspection. For committed review, use exact
-base/head identity. For working-tree review, use scoped native
-`review-package` with package SHA-256 and Git-inventory digest.
+base/head identity. Working-tree review belongs to `requesting-code-review`.
 
 ## GitHub Review State
 

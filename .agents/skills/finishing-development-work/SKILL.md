@@ -231,10 +231,11 @@ When fast-forward is impossible or conflicts exist, report:
 
 Use the smallest evidence procedure that matches the risk. Safe local commits,
 read-only fetches, clean fast-forwards, and bounded integrations without
-overlap need current Git facts and focused checks only. When state is ambiguous
-or a destructive/reconciling action is proposed—such as rebase, merge, conflict
-resolution, stash apply or pop, reset, checkout restore, worktree cleanup, or
-deletion—collect and show evidence for every overlapping file, including
+overlap need current Git facts and focused checks only. When state is ambiguous,
+content or ownership overlaps, or a destructive/reconciling action is proposed—
+such as conflict resolution, stash apply or pop, reset, checkout restore,
+worktree cleanup, deletion, or a rebase/merge that is not clean and bounded—
+collect and show evidence for every overlapping file, including
 tracked, untracked, ignored, conflict, and stash-only files:
 
 - path and source state: base, workstream, current worktree, index, untracked, or stash ID
