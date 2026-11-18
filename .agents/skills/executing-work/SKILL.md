@@ -35,13 +35,19 @@ Goal Mode versus direct work, plan shape, or native subagent count.
 
 For an OpenSpec-enabled project, execute against the project's native change
 artifacts and reconcile its maintained specs through the native project
-workflow. The controlling Codex agent owns the native OpenSpec `apply` path for
-the active change; bounded Codex subagents may implement assigned code but must
-not independently run the full apply workflow or edit shared change checklists
-concurrently. Use the project's native `openspec-update-change` workflow before
-continuing when requirements or design need a material change. Native
-OpenSpec checklist completion is task evidence, not implementation verification
-or durable General OS acceptance. Do not create a duplicate general-os
+workflow. The active change owner owns the native OpenSpec `apply` path and is
+the single authoritative writer for shared change artifacts; that owner may be
+the current Codex controller, one independent Orca worker, or the native
+coordinator selected for supervised work. Bounded workers may implement
+assigned code but must not independently run the full apply workflow or edit
+shared change checklists concurrently. Use the project's available native
+change-update workflow before continuing when requirements or design need a
+material change; keep same-intent refinements in the active change and use a
+new change when the underlying intent materially differs. Native OpenSpec
+checklist completion is task evidence only. Implementation verification uses
+project tests, current code, Git, and relevant inspection; use native OpenSpec
+verification when available and useful. Ordinary OpenSpec changes do not
+require durable General OS acceptance. Do not create a duplicate general-os
 specification or task ledger.
 
 ## Native Subagents
@@ -68,8 +74,10 @@ look durable. Do not copy Orca IDs, worker progress, or lifecycle state into
   required-runtime failure is reported as `BLOCKED`.
 - Repository-bound runtime loss is recovered by rereading durable state and Git
   and starting a fresh assignment. For OpenSpec-enabled work, resume from the
-  existing active change artifacts and pending checklist entries; do not
-  recreate tasks already represented there. External-only work is recovered
+  existing active change artifacts and compare pending checklist entries with
+  current code, tests, and Git; reconcile discrepancies instead of blindly
+  repeating unchecked work or recreating tasks already represented there.
+  External-only work is recovered
   from its owning project record and authoritative source. Runtime history is
   not the recovery source of truth.
 

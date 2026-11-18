@@ -50,10 +50,13 @@ designated project decision record and does not produce a General OS task
 repository tasks.
 
 For an OpenSpec-enabled repository, a completed `tasks.md` checkbox records
-native task tracking only. Run the project's native OpenSpec `verify` workflow
-against the current change artifacts and Git, then evaluate that evidence under
-this skill's acceptance contract; neither checklist completion nor native
-verification output alone is durable CoS acceptance.
+native task tracking only. Implementation verification remains project-owned:
+use relevant tests, current code, Git, and inspection, and use the native
+OpenSpec `verify` workflow when it is available and useful. Treat its output as
+advisory evidence, not a substitute for project checks or a Git snapshot;
+neither checklist completion nor native verification output alone is durable
+CoS acceptance. Ordinary OpenSpec changes use their project-native acceptance
+path and do not require General OS acceptance.
 
 ## Result Contract
 

@@ -22,8 +22,11 @@ selects that boundary.
 
 Projects that adopt OpenSpec keep change-local requirements, proposals, design
 notes, changed specs, and task checklists in OpenSpec. Those artifacts are not
-copied into general-os state. Projects without OpenSpec and small or reversible
-changes retain their existing native specification route.
+copied into general-os state. The active change owner is the single
+authoritative writer for shared OpenSpec artifacts; native verification is used
+when available and useful, while project tests, current code, Git, and relevant
+inspection remain the implementation evidence. Projects without OpenSpec and
+small or reversible changes retain their existing native specification route.
 
 The specification SSOT is explicit: maintained OpenSpec specifications define
 accepted intended behavior when OpenSpec is adopted; an authorized active
@@ -69,6 +72,7 @@ Codex, or Orca at the point of use, derive it instead of persisting a copy.
 | Durable completion after fresh verification for coordinated work | project-level CoS over general-os state |
 | Accepted intended behavior when OpenSpec is adopted | maintained OpenSpec specifications |
 | Authorized scoped implementation target before OpenSpec reconciliation | active OpenSpec change |
+| Shared OpenSpec change artifacts and checklist | active OpenSpec change owner using the project's native workflow |
 | Implementation reality | current code and runtime evidence |
 | Approved visual design | selected design authority |
 | Strategic decision rationale | project-owned General OS decision context |

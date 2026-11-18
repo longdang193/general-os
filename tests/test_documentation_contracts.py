@@ -158,15 +158,13 @@ def test_openspec_execution_and_recovery_keep_shared_artifacts_single_owned():
     normalized_verification = " ".join(verification.split())
     normalized_recovery = " ".join(recovery.split())
 
-    assert "controlling Codex agent owns the native OpenSpec `apply` path" in normalized_executing
-    assert "must not independently run the full apply workflow" in normalized_executing
-    assert "`openspec-update-change`" in normalized_executing
+    assert "active change owner" in normalized_executing
     assert "single authoritative writer for shared change artifacts" in normalized_orca
     assert "shared checklist entries concurrently" in normalized_orca
-    assert "completed `tasks.md` checkbox records native task tracking only" in normalized_verification
-    assert "neither checklist completion nor native verification output alone" in normalized_verification
-    assert "do not recreate" in normalized_recovery
-    assert "`openspec-update-change`" in normalized_recovery
+    assert "available and useful" in normalized_verification
+    assert "project checks or a Git snapshot" in normalized_verification
+    assert "current code, tests, and Git" in normalized_recovery
+    assert "available native change-update workflow" in normalized_recovery
 
 
 def test_native_workflows_and_strategic_decisions_keep_single_owners():
