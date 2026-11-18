@@ -1,7 +1,7 @@
 # Code Reviewer Prompt Template
 
-Use this template when dispatching a code reviewer through the selected native
-runtime.
+Use this reusable fallback template when the selected native runtime needs a
+structured code-review prompt.
 
 **Purpose:** Review completed work against requirements and code quality standards before it cascades into more work.
 
@@ -28,25 +28,38 @@ Reviewer:
     **Applicable evidence:** [EVIDENCE_CONTEXT]
     **Approved deviations:** [APPROVED_DEVIATIONS]
 
-    ## Git Range to Review
+    ## Review Scope
 
+    **Review mode:** [COMMITTED_RANGE | WORKING_TREE]
     **Base:** [BASE_SHA]
     **Head:** [HEAD_SHA]
+
+    For `COMMITTED_RANGE`, inspect the approved immutable range:
 
     ```bash
     git diff --stat [BASE_SHA]..[HEAD_SHA]
     git diff [BASE_SHA]..[HEAD_SHA]
     ```
 
+    For `WORKING_TREE`, inspect the scoped current checkout instead:
+
+    ```bash
+    git status --short
+    git diff --cached
+    git diff
+    ```
+
+    Inspect relevant untracked files directly. Do not substitute
+    `Not applicable: local worktree review` into a Git range command.
+
     ## Review Evidence Identity
 
-    For committed implementation changes, bind review evidence to the supplied
-    `[BASE_SHA]` and `[HEAD_SHA]` commit identities and the caller-owned Git
-    inventory. If `HEAD` does not identify implementation changes, bind evidence to
-    the frozen review package produced by the active execution workflow
-    artifact and record its SHA-256 plus the
-    Git-inventory digest. Re-run review when either digest changes; `HEAD` alone is
-    not sufficient for working-tree, staged, unstaged, or untracked changes.
+    For `COMMITTED_RANGE`, bind review evidence to the supplied `[BASE_SHA]` and
+    `[HEAD_SHA]` commit identities and the caller-owned Git inventory. For
+    `WORKING_TREE`, bind evidence to the scoped staged, unstaged, and untracked
+    inventory. A frozen review package and its SHA-256 plus Git-inventory digest
+    are optional, used only when delegation or reproducibility requires them.
+    Re-run review when the selected scope or any recorded package digest changes.
 
     Optional OCR preparation is advisory only. Consume exactly one
     `[REVIEW_PREPARATION_FILE]` after verifying `scope_identity.base_sha`,
@@ -157,7 +170,9 @@ Reviewer:
 **Placeholders:**
 - `[DESCRIPTION]` — brief summary of what was built
 - `[PLAN_OR_REQUIREMENTS]` — what it should do (plan file path, task text, or requirements)
-- `[BASE_SHA]` — starting commit
-- `[HEAD_SHA]` — ending commit
+- `[BASE_SHA]` — starting commit for `COMMITTED_RANGE`; otherwise the approved
+  base or `Not applicable: local worktree review`
+- `[HEAD_SHA]` — ending commit for `COMMITTED_RANGE`; otherwise `Not applicable:
+  local worktree review`
 
 **Reviewer returns:** Strengths, Issues (Critical / Important / Minor), Recommendations, Assessment

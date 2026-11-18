@@ -56,7 +56,8 @@ def test_external_review_does_not_bypass_git_bound_acceptance():
     contents = f"{contracts}\n{verification}"
     assert "Source-specific review" in contents
     assert "external-only" in contents
-    assert "supported acceptance contract" in contents
+    assert "does not produce the machine-readable" in contents
+    assert "existing Git-bound acceptance path" in contents
 
 
 def test_reviewed_guidance_handles_scope_specific_acceptance_and_native_ownership():
@@ -94,11 +95,11 @@ def test_reviewed_guidance_handles_scope_specific_acceptance_and_native_ownershi
     assert "Native OpenSpec route" in spec
     assert '"id": "policy-preservation"' in defining
     assert '"objective": "Maintain the approved admission policy' in defining
-    assert "External-only acceptance uses the current task" in contracts
+    assert "External-only strategic acceptance uses the designated" in contracts
     assert "designated project decision record" in contracts
     assert "For external-only goals" in plan
-    assert "external-only commitment" in verification
-    assert "do not invent a Git snapshot" in " ".join(verification.split())
+    assert "external-only review" in verification
+    assert "do not turn an external-only review into a General OS task `PASS`" in verification
     normalized_finishing = " ".join(finishing.split())
     assert "already selected an eligible closure action" in normalized_finishing
     assert "Present options only when no closure choice" in normalized_finishing
@@ -106,6 +107,7 @@ def test_reviewed_guidance_handles_scope_specific_acceptance_and_native_ownershi
     assert "staged, unstaged, and untracked inventory" in review
     assert "known baseline/unrelated failures" in tdd
     assert "No introduced unexpected errors or warnings" in tdd
+    assert "proportional evidence" in " ".join(tdd.split())
 
 
 def test_reviewed_skill_mirrors_match_canonical_sources():
@@ -349,6 +351,10 @@ def test_review_and_wayfinding_guidance_keep_topology_and_state_native():
     assert "Native Orca" in review
     assert "controller-selected discovered-profile reviewer" not in review
     assert "Reviewer:" in reviewer
+    assert "COMMITTED_RANGE | WORKING_TREE" in reviewer
+    assert "git diff --cached" in reviewer
+    assert "frozen review package" in reviewer
+    assert "optional" in reviewer
     assert "controller-selected profile" not in reviewer
     orca = (root / ".agents" / "skills" / "orca-orchestration" / "SKILL.md").read_text(
         encoding="utf-8"
@@ -528,7 +534,31 @@ def test_native_first_architecture_rejects_routine_general_os_gates():
         assert forbidden not in normalized
     assert "native project verification" in normalized
     assert "Persistence alone is insufficient" in normalized
-    assert "test-first is a preferred technique, not a universal phase gate" in normalized
+    assert "Changed behavior requires proportional evidence" in normalized
+
+
+def test_repository_bound_acceptance_and_recovery_are_scoped():
+    root = Path(__file__).parents[1]
+    architecture = (root / "docs" / "architecture.md").read_text(encoding="utf-8")
+    recovery = (root / "docs" / "recovery.md").read_text(encoding="utf-8")
+    chief = (root / ".agents" / "skills" / "chief-of-staff" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    defining = (root / ".agents" / "skills" / "defining-work" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    normalized_architecture = " ".join(architecture.split())
+    normalized_recovery = " ".join(recovery.split())
+    normalized_chief = " ".join(chief.split())
+
+    assert "repository-bound coordinated work" in normalized_architecture
+    assert "does not produce a General OS task-state transition" in normalized_architecture
+    assert "Machine-readable General OS task acceptance uses the current Git snapshot" in normalized_architecture
+    assert "External-only work recovers from its designated project decision record" in normalized_recovery
+    assert "repository-bound completed task" in normalized_recovery
+    assert "external-only work, inspect the designated project decision record" in normalized_chief
+    assert "owning rollout records" in defining
+    assert "Each phase records" not in defining
 
 
 def test_native_cos_keeps_orca_optional_but_allows_material_independence():
@@ -602,8 +632,9 @@ def test_coordination_guidance_does_not_force_native_topology():
         assert "execution topology" in text
         assert "worker lifecycle" not in text
     for text in (architecture, recovery, chief):
-        assert "first dependency-ready" not in text
-        assert "dependency-ready semantic work" in text
+        normalized_text = " ".join(text.split())
+        assert "first dependency-ready" not in normalized_text
+        assert "dependency-ready semantic work" in normalized_text
     assert "isolation is mandatory" not in isolation
     assert "require isolation" in isolation
     assert "Always use subagents" not in writing

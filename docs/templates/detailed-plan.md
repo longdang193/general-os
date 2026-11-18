@@ -66,8 +66,9 @@ Repeat the fields above for the next bounded semantic assignment when needed.
 - For repository-bound goals, list the fresh end-to-end evidence needed to prove
   the complete goal against current Git and relevant external state.
 - For external-only goals, identify the designated project decision record and
-  fresh source-specific evidence; do not require a Git snapshot unless
-  repository state is part of the approved scope.
+  fresh source-specific evidence. Record that outcome in the owning project
+  workflow; it is not a General OS task `PASS` unless repository state is part
+  of the approved scope.
 
 This template describes durable coordination. Concrete files, symbols, commands,
 and implementation steps belong to native runtime planning; include them here

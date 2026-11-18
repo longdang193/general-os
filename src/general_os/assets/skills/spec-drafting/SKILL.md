@@ -73,11 +73,10 @@ the project's native OpenSpec proposal, design, maintained-spec, and task
 workflow as the specification lifecycle. Do not require this skill's separate
 approval or `defining-work` handoff for that change. Use `defining-work` only
 when a genuinely independent durable General OS coordination boundary is also
-needed. This skill remains the route for projects without OpenSpec or for
-  changes that are not suitable for the native OpenSpec workflow. Projects
-  without OpenSpec use their existing native specification workflow; use this
-  skill only when no stronger project owner exists and a precise contract adds
-  value.
+needed. For projects without OpenSpec, use the existing native specification
+workflow. Use this skill only when no stronger project owner exists and a
+precise contract adds value; changes that are not suitable for the native
+OpenSpec workflow stay in their owning native workflow.
 
 - Keep draft or approved specification content in the current task or an
   existing repository-owned document path. Do not invent a specification
@@ -119,7 +118,11 @@ Non-blocking deferrals require approval evidence, rationale, and a trigger.
 - Prefer native tools for direct file inspection, local search, configuration, tests, and repository state.
 - Resolve unmet code, external-service, database, model, report, or platform capabilities through currently configured native tooling; do not invent a fallback authority.
 - Under external worker runtime, Codex supplies validated handoff facts within the existing permission boundary.
-- Do not query every tool by default. Source and tests remain authoritative; unavailable optional tools never replace mandatory evidence.
+- Do not query every tool by default. Source and tests establish observed
+  implementation behavior; the designated project specification establishes
+  intended behavior. Investigate and reconcile conflicts rather than
+  automatically favoring either. Unavailable optional tools never replace
+  mandatory evidence.
 
 ### Evidence Discipline
 

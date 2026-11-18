@@ -9,9 +9,12 @@ description: Use when implementing non-trivial behavior or bug fixes with regres
 Prefer writing the test first, watching it fail, and writing minimal code to
 pass when that sequence is proportional and clarifies the contract.
 
-**Core principle:** Regression evidence must exercise the changed behavior and
-fail if the correction is reverted; test-first is a preferred technique, not a
-universal phase gate.
+**Core principle:** Changed behavior requires proportional evidence that
+exercises the claim. For deterministic software behavior, prefer regression
+evidence that fails if the correction is reverted; source-specific or
+representative evidence may be appropriate for external systems, exploratory
+work, or claims without a deterministic reproducer. Test-first is a preferred
+technique, not a universal phase gate.
 
 ## When to Use
 
@@ -29,23 +32,25 @@ Use this skill for:
 Small, well-understood, configuration, generated, or disposable changes may
 use proportional focused proof without a separate failing-test phase.
 
-## Regression-proof invariant
+## Proportional evidence invariant
 
 ```
-NO NEW OR CHANGED BEHAVIOR IS COMPLETE WITHOUT REGRESSION EVIDENCE
+NO NEW OR CHANGED BEHAVIOR IS COMPLETE WITHOUT PROPORTIONAL EVIDENCE
 ```
 
 Test-first is the preferred technique for non-trivial behavior when it clarifies
 the contract. Characterization tests are appropriate before behavior-preserving
-refactors. For a small, well-understood change, focused regression proof may be
-written alongside or after the implementation, but it must exercise the
-failure or behavior and fail if the correction is reverted.
+refactors. For deterministic software behavior, focused regression proof should
+exercise the failure or behavior and fail if the correction is reverted. For
+external, exploratory, or non-deterministic claims, use the smallest repeatable
+source-specific, contract, or representative-operation evidence that proves the
+claim, and record why a reversion test is impractical.
 
 ## Preferred Red-Green-Refactor
 
 Use this cycle when the behavior is non-trivial or the contract is unclear.
-For smaller changes, retain the regression-proof invariant with the smallest
-direct evidence that proves it.
+For smaller changes, retain the proportional-evidence invariant with the
+smallest direct evidence that proves the claim.
 
 ```dot
 digraph tdd_cycle {
@@ -244,8 +249,9 @@ generated, or disposable changes.
 
 **"Tests after achieve the same goals - it's spirit not ritual"**
 
-Tests-after can establish the regression-proof invariant when the test exercises
-the changed behavior and fails if the correction is reverted. Test-first still
+Tests-after can establish the proportional-evidence invariant when the test
+exercises the changed behavior and fails if the correction is reverted for
+deterministic software behavior. Test-first still
 helps discover the contract before implementation, so prefer it when that
 benefit is material.
 
@@ -256,14 +262,14 @@ benefit is material.
 | "Too simple to test" | Use the smallest focused proof that catches reversion when the change affects behavior. |
 | "I'll test after" | Acceptable only when the resulting proof exercises changed behavior and fails on reversion. |
 | "Tests after achieve same goals" | Test-first is preferred for contract discovery; tests-after can still provide regression evidence. |
-| "Already manually tested" | Manual evidence may supplement but does not replace repeatable regression proof for changed behavior. |
+| "Already manually tested" | Manual evidence may supplement deterministic regression proof; for external or non-deterministic claims, repeatable source-specific evidence may be the appropriate proof. |
 | "Need to explore first" | Explore when useful, then preserve the smallest evidence that proves the final behavior. |
 | "Test hard = design unclear" | Simplify the design when useful, but do not impose test-first ceremony on trivial work. |
 | "Existing code has no tests" | Add focused coverage for the changed behavior when the change is material. |
 
 ## Red Flags
 
-- No repeatable evidence for changed behavior
+- No proportional, repeatable evidence for the changed claim
 - Evidence does not exercise the changed boundary
 - Evidence passes even when the correction is reverted
 - Test-first was selected but its failure was never checked
@@ -319,8 +325,8 @@ Before marking work complete:
 - [ ] Tests use real code (mocks only if unavoidable)
 - [ ] Edge cases and errors covered
 
-If the chosen proof does not establish the regression-proof invariant, add the
-smallest missing evidence before claiming completion.
+If the chosen proof does not establish the proportional-evidence invariant, add
+the smallest missing evidence before claiming completion.
 
 ## When Stuck
 

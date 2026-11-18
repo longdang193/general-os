@@ -29,7 +29,9 @@ second runtime scheduler.
 
 ## Decision Flow
 
-1. Read `state/coordination.json` and inspect current Git directly.
+1. Read `state/coordination.json` and inspect current Git directly for
+   repository-bound work; for external-only work, inspect the designated
+   project decision record and authoritative source evidence instead.
 2. Determine unfinished dependency-ready semantic work and choose the smallest
    useful assignment boundary. An empty task graph is a valid goal-only intent
    assignment with no durable completion record; use a task graph when
@@ -58,9 +60,10 @@ second runtime scheduler.
    blocker. Do not mutate permission because runtime health changed.
 8. Reconcile repository-bound runtime evidence with current Git and fresh
    verification before accepting durable task state. For an external-only
-   commitment, use the designated project decision record and fresh
-   source-specific evidence instead; do not invent a Git requirement when no
-   repository state is in scope.
+   commitment, review the designated project decision record and fresh
+   source-specific evidence through the owning project workflow; do not turn
+   that evidence into a General OS task `PASS` when no repository state is in
+   scope.
 
 ## Acceptance
 
@@ -75,20 +78,22 @@ Runtime completion is evidence, not acceptance. CoS decides acceptance after
 verification; general-os persists the resulting durable task state.
 
 Repository-bound `PASS` requires current Git-bound evidence. External-only
-`PASS` requires a supported project-specific acceptance contract identifying the
-designated decision record and fresh source-specific evidence; it must not be
-represented as repository acceptance without that contract.
+source evidence informs the designated project decision record, but does not
+produce a General OS task `PASS` or completed task without the existing
+repository-bound acceptance evidence.
 
 ## Recovery
 
-When a runtime is lost, read durable state and current Git. If a completed task
-is needed for continuation, acceptance, or publication, run
-`python -m general_os state revalidate --state state/coordination.json [--task-id TASK_ID]`
-as a targeted check. It reuses task-contract and dependency revalidation only;
-legacy completed tasks without current acceptance identities load as pending and
-need fresh verification before completion. Determine unfinished work and start
-a fresh native assignment. Do not reconstruct runtime sessions or persist
-runtime IDs, heartbeats, progress, or worker registries.
+When a runtime is lost, read durable state and current Git for repository-bound
+work, or the designated project decision record and authoritative source for
+external-only work. If a repository-bound completed task is needed for
+continuation, acceptance, or publication, run `python -m general_os state
+revalidate --state state/coordination.json [--task-id TASK_ID]` as a targeted
+check. It reuses task-contract and dependency revalidation only; legacy
+completed tasks without current acceptance identities load as pending and need
+fresh verification before completion. Determine unfinished work and start a
+fresh native assignment. Do not reconstruct runtime sessions or persist runtime
+IDs, heartbeats, progress, or worker registries.
 
 ## Common Mistakes
 

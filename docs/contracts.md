@@ -96,10 +96,10 @@ evidence satisfies a supported acceptance contract. The existing Git-bound
 acceptance subsystem remains authoritative for repository tasks.
 
 Repository-bound acceptance uses the current task, current Git snapshot, and
-fresh verification. External-only acceptance uses the current task, the
-designated project decision record, and fresh source-specific verification; it
-does not require a Git snapshot unless repository state is part of the approved
-scope:
+fresh verification. External-only strategic acceptance uses the designated
+project decision record and fresh source-specific verification, but it is not a
+General OS task-state transition and does not produce the machine-readable
+durable `PASS` supported by this acceptance subsystem:
 
 - `PASS` completes the task;
 - `FAIL` leaves the task unfinished so the work can continue or be reverified;
@@ -138,10 +138,9 @@ evidence containing the task ID, supported `orca` boundary kind, matching
 snapshot identity, and non-empty evidence. These values are not persisted as
 worker lifecycle state, and the CLI cannot forge them from free-form input.
 
-An external-only `PASS` must identify the designated project decision record and
-fresh source-specific evidence through an existing project acceptance contract;
+External-only source evidence remains in the designated project decision record;
 this documentation does not create a second acceptance schema or bypass the
-repository-bound path for repository tasks.
+repository-bound path for General OS task acceptance.
 
 The result boundary is explicit: general-os may inspect the returned evidence
 and current Git, but it does not silently merge runtime worktrees, publish,

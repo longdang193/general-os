@@ -66,7 +66,9 @@ Use native tools for direct evidence and local search. Resolve symbol,
 discovery, flow, or impact needs through the active runtime's configured/native
 capabilities only when the question requires them. Read
 `docs/runtime-adapters.md` only for runtime-boundary questions. Source and
-tests remain authoritative.
+tests establish observed implementation behavior; the designated project
+specification establishes intended behavior. Investigate and reconcile
+conflicts rather than automatically favoring either.
 
 ## Review Process
 

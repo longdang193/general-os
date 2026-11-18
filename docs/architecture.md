@@ -92,29 +92,34 @@ cleanup when those capabilities are used. A supervised path may return a
 semantic outcome/evidence bundle representing success, partial progress,
 failure, or a material blocker. A lightweight ownership handoff may return
 only a transfer acknowledgement, if the native path reports one; transfer is
-not durable general-os acceptance. For coordinated work, project-level CoS
-inspects current Git, runs or evaluates fresh verification, and decides `PASS`,
-`FAIL`, or `BLOCKED` for the durable task.
+not durable general-os acceptance. For repository-bound coordinated work,
+project-level CoS inspects current Git, runs or evaluates fresh verification,
+and decides `PASS`, `FAIL`, or `BLOCKED` for the durable task. External-only
+strategic evidence remains in the designated project decision record and does
+not produce a General OS task-state transition.
 
 General-os does not silently merge runtime worktrees, publish, or push. Git
 integration and any later repository disposition remain explicit operations
 outside the native runtime outcome.
 
-Runtime loss is recovered from durable general-os semantics and current Git.
-Useful independent outcomes may be accepted separately, while remaining work
-is derived again and a fresh native runtime is started. The previous Orca
-episode is not reconstructed.
+Repository-bound runtime loss is recovered from durable general-os semantics and
+current Git. External-only work is recovered from its designated project
+decision record and authoritative source evidence. Useful independent outcomes
+may be accepted separately, while remaining work is derived again and a fresh
+native runtime is started. The previous Orca episode is not reconstructed.
 
 ## Shallow routing
 
 When durable coordination is selected, the native CoS skill reads durable state
-and current Git, determines dependency-ready semantic work, resolves the
-semantic profile, and confirms material outcome, authority, or independence
-constraints. The active native controller chooses the execution mechanism based
-on task requirements, available capabilities, expected benefit, cost, and
-coordination overhead; it also owns internal planning, delegation, execution
-topology, and worker lifecycle. CoS owns acceptance requirements only for the
-durable commitment. Otherwise, authorized work starts in
+and, for repository-bound work, current Git; it determines dependency-ready
+semantic work, resolves the semantic profile, and confirms material outcome,
+authority, or independence constraints. External-only work uses the designated
+project decision record and authoritative source evidence instead. The active
+native controller chooses the execution mechanism based on task requirements,
+available capabilities, expected benefit, cost, and coordination overhead; it
+also owns internal planning, delegation, execution topology, and worker
+lifecycle. CoS owns acceptance requirements only for the durable commitment.
+Otherwise, authorized work starts in
 the native runtime directly:
 
 1. Codex handles ordinary work directly without creating general-os state.
@@ -138,15 +143,17 @@ versions fail closed.
 Loaded state carries an in-memory source digest, and saves compare that digest
 under an interprocess lock before atomic replacement.
 
-Acceptance uses the current Git snapshot identity and records that identity as
-historical evidence for the accepted result. Required independent work also
-needs typed ephemeral boundary evidence tied to that identity; a runtime
-completion report alone is not acceptance. Later Git changes do not by
+Machine-readable General OS task acceptance uses the current Git snapshot
+identity and records that identity as historical evidence for the accepted
+result. Required independent work also needs typed ephemeral boundary evidence
+tied to that identity; a runtime completion report alone is not acceptance.
+External-only strategic evidence does not produce a General OS task `PASS` and
+belongs in the designated project decision record. Later Git changes do not by
 themselves erase completed task results, while fresh current verification is
-still required before new acceptance or publication. Explicitly requested
-missing profiles fail clearly; implicit profile selection may use the neutral
-profile and inherit native runtime defaults. Local `deny` is a hard ceiling for
-durable policy exceptions.
+still required before new repository-bound acceptance or publication.
+Explicitly requested missing profiles fail clearly; implicit profile selection
+may use the neutral profile and inherit native runtime defaults. Local `deny` is
+a hard ceiling for durable policy exceptions.
 
 Execution-level failures stay inside the selected runtime when they can be
 resolved there. Only material authority, dependency, user, credential, Git,

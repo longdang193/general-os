@@ -61,7 +61,10 @@ emphasis; they do not require a fixed reviewer count, sequence, or topology.
 
 **3. Dispatch the reviewer through the selected runtime:**
 
-Fill the template at `code-reviewer.md`. If the selected runtime needs a
+Use `code-reviewer.md` as a reusable fallback when the selected runtime needs a
+structured review prompt. If a native review capability already captures the
+approved scope and evidence, pass the minimal required context directly rather
+than wrapping it in a second prompt contract. If the selected runtime needs a
 profile, use only an explicit semantic profile from `agents/*.toml`; never
 invent a worker-level or `discovered-profile` registry.
 Review context must include each applicable frontend, backend, and E2E evidence
@@ -164,4 +167,4 @@ You: [Fix progress indicators]
 - Show code/tests that prove it works
 - Request clarification
 
-See template at: `code-reviewer.md`
+See reusable fallback template at: `code-reviewer.md`

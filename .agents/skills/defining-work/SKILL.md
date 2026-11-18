@@ -69,7 +69,7 @@ executed.
       "objective": "Maintain the approved admission policy through each rollout phase",
       "state": "pending",
       "depends_on": [],
-      "acceptance": ["Each phase records the approved policy state and its authorized transition evidence"]
+      "acceptance": ["The approved admission policy is preserved across the rollout, with evidence referenced from the owning rollout records"]
     }
   ]
 }

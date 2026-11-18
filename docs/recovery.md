@@ -1,23 +1,26 @@
 # Recovery
 
-Runtime loss is intentionally boring. For coordinated work, recover from
-durable intent plus current Git, not from Codex or Orca session history. Direct
-authorized work without durable coordination starts a fresh native assignment
-from the current Git state:
+Runtime loss is intentionally boring. For repository-bound coordinated work,
+recover from durable intent plus current Git, not from Codex or Orca session
+history. External-only work recovers from its designated project decision record
+and authoritative source evidence. Direct authorized work without durable
+coordination starts a fresh native assignment from the current Git state:
 
 1. Read `state/coordination.json` when it exists and is part of the approved
    work boundary.
-2. Inspect the current branch, revision, worktree, conflicts, and changed
-   files directly from Git.
-   For an OpenSpec-enabled change, also inspect its active change artifacts and
-   maintained specifications; use those artifacts for proposed and intended
-   behavior, while Git remains authoritative for implementation reality.
-3. When a completed task is needed for continuation, acceptance, or
-   publication, run `python -m general_os state revalidate --state
-   state/coordination.json [--task-id TASK_ID]` as a targeted semantic check.
-   It applies the existing task-contract and dependency revalidation semantics;
-   it does not perform Git verification and is not a required recovery ceremony
-   for unrelated unfinished work.
+2. For repository-bound work, inspect the current branch, revision, worktree,
+   conflicts, and changed files directly from Git. For an OpenSpec-enabled
+   change, also inspect its active change artifacts and maintained
+   specifications; use those artifacts for proposed and intended behavior,
+   while Git remains authoritative for implementation reality. For external-only
+   work, inspect the designated decision record and authoritative source instead.
+3. When a repository-bound completed task is needed for continuation,
+   acceptance, or publication, run `python -m general_os state revalidate
+   --state state/coordination.json [--task-id TASK_ID]` as a targeted semantic
+   check. It applies the existing task-contract and dependency revalidation
+   semantics; it does not perform Git verification and is not a required
+   recovery ceremony for unrelated unfinished work. External-only decisions
+   return to the designated project workflow instead of this task transition.
 4. Determine unfinished dependency-ready semantic work, or redispatch the global
    goal when the task graph is empty. Goal-only state is intent-only and has no
    durable completion record; use it only for a material high-level commitment
@@ -25,10 +28,11 @@ from the current Git state:
    records. Use a task graph when completion must be retained. If no durable
    coordination state exists, do not create it merely for recovery; continue
    with the native runtime.
-5. Treat legacy completed tasks without current acceptance identities as
-   pending until fresh verification establishes completion again. For current
-   completed tasks, revalidate the accepted task-contract fingerprint and
-   dependency closure only when that result is being relied upon. The accepted `GitSnapshot.identity` remains historical
+5. For repository-bound tasks, treat legacy completed tasks without current
+   acceptance identities as pending until fresh verification establishes
+   completion again. For current completed tasks, revalidate the accepted
+   task-contract fingerprint and dependency closure only when that result is
+   being relied upon. The accepted `GitSnapshot.identity` remains historical
    evidence of where acceptance occurred; later commits or unrelated Git changes
    do not automatically demote completed tasks. A fresh current Git snapshot is
    still required before relying on the result for new acceptance or publication.
@@ -37,16 +41,18 @@ from the current Git state:
    decision that relies on their evidence, not a mandate for a global sweep;
    run task-level verification against current Git only before relying on the
    affected result, and do not persist a candidate list.
-6. Reuse required evidence only after checking that it is fresh and applies to
-   the current task and complete current Git snapshot identity.
+6. Reuse repository-bound evidence only after checking that it is fresh and
+   applies to the current task and complete current Git snapshot identity.
 7. Start a fresh native assignment. Use the current Codex runtime by default;
    use Orca only when the unfinished work needs an independent workstream and
    the configured boundary is available.
 
-If Git has a material conflict, a required dependency is unfinished, authority
-is insufficient, or a required independent boundary is unavailable, block and
-preserve the workspace. Missing optional runtime metadata lowers confidence but
-does not create a new recovery ledger or automatically stop safe work.
+If repository-bound work has a material Git conflict, a required dependency is
+unfinished, authority is insufficient, or a required independent boundary is
+unavailable, block and preserve the workspace. For external-only work, block
+only on its equivalent authority, dependency, or source-availability risk.
+Missing optional runtime metadata lowers confidence but does not create a new
+recovery ledger or automatically stop safe work.
 
 There is no separate recovery runtime or recovery ledger. Do not reconstruct
 lost runtime sessions, persist runtime IDs, or copy runtime progress into
