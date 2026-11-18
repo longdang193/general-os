@@ -23,6 +23,18 @@ notes, changed specs, and task checklists in OpenSpec. Those artifacts are not
 copied into general-os state. Projects without OpenSpec and small or reversible
 changes retain their existing native specification route.
 
+The specification SSOT is explicit: maintained OpenSpec specifications define
+accepted intended behavior when OpenSpec is adopted; an active OpenSpec change
+defines proposed behavior until native reconciliation updates those
+specifications; current code and runtime evidence describe implementation
+reality; and an approved Figma, OpenDesign, or code-first design authority
+defines visual design. A project-owned Markdown decision record may preserve
+substantive strategic rationale, alternatives, and reconsideration triggers
+when that rationale genuinely needs persistence. Use `state/coordination.json`
+only when the decision also requires durable coordination or an exceptional
+authority boundary. No mandatory decision template or decision database is
+created.
+
 `agents/*.toml` is the only profile registry. A profile name is semantic
 selection, not a guessed model or effort setting. General-os may project
 explicit profile facts one way to a selected native runtime; omitted facts
@@ -49,6 +61,11 @@ Codex, or Orca at the point of use, derive it instead of persisting a copy.
 | Runtime decomposition, workers, internal dependencies, retries, questions, supervision, fan-in, and cleanup | selected native runtime |
 | Repository state, worktrees, commits, diffs, and recovery evidence | Git |
 | Durable completion after fresh verification for coordinated work | project-level CoS over general-os state |
+| Accepted intended behavior when OpenSpec is adopted | maintained OpenSpec specifications |
+| Proposed behavior before OpenSpec reconciliation | active OpenSpec change |
+| Implementation reality | current code and runtime evidence |
+| Approved visual design | selected design authority |
+| Strategic decision rationale | project-owned General OS decision context |
 
 The durable invariant is that coordinated work has one semantic owner and the
 selected native runtime chooses execution topology. General-os must not become

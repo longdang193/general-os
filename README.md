@@ -54,8 +54,10 @@ Reusable skills live under `.agents/skills/`; active shared rules live under
 runtime SSOT or schema dependency. It records the predecessor inventory without
 importing generated adapter trees or a second orchestration authority.
 
-Before acceptance, run the focused tests affected by the change and
-`python -m general_os state validate state/coordination.json`. For shared/core
+When durable General OS coordination is selected, run the focused tests
+affected by the change and `python -m general_os state validate state/coordination.json`
+before acceptance. Ordinary direct work and native
+OpenSpec changes use their owning project verification instead. For shared/core
 or package-wide changes, and before release, run `pytest -q`. During
 documentation or governance changes, use
 `pytest -q tests/test_documentation_contracts.py` as the focused check. Run the

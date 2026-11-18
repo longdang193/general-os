@@ -62,6 +62,16 @@ reversible changes, retain the existing native specification route.
 
 ## Specification Lifecycle
 
+### Native OpenSpec route
+
+When the target project adopts OpenSpec and the change benefits from it, use
+the project's native OpenSpec proposal, design, maintained-spec, and task
+workflow as the specification lifecycle. Do not require this skill's separate
+approval or `defining-work` handoff for that change. Use `defining-work` only
+when a genuinely independent durable General OS coordination boundary is also
+needed. This skill remains the route for projects without OpenSpec or for
+changes that are not suitable for the native OpenSpec workflow.
+
 - Keep draft or approved specification content in the current task or an
   existing repository-owned document path. Do not invent a specification
   directory, template ID, validator, or promotion mechanism without an active
@@ -69,7 +79,8 @@ reversible changes, retain the existing native specification route.
 - Keep assumptions, open questions, prototype references, and findings with
   the specification while design remains unsettled.
 - After explicit approval, preserve material evidence and hand the accepted
-  contract to `defining-work`; do not create a second coordination authority.
+  contract to `defining-work` only when durable General OS coordination is
+  required; do not create a second coordination authority.
 - Use `proposed`, `active`, `completed`, or `superseded` status only when the
   chosen artifact format has an active consumer.
 - For material backend behavior, define verification claims using
@@ -305,11 +316,11 @@ Format records specification; it does not replace specification reasoning.
 ## Review And Handoff
 
 1. Present draft findings or detailed specification and unresolved approved deferrals.
-2. Request explicit approval and preserve any applicable validation evidence in the accepted specification.
-3. For cross-cutting, data-sensitive, operational, starter/public-sync, or expensive-to-reverse specifications, use `plan-document-reviewer` before approval or planning handoff.
-4. Hand off the accepted contract to `defining-work`, which selects direct execution, L1, L2, or L3.
+2. Request explicit approval only when this skill owns the specification lifecycle, and preserve any applicable validation evidence in the accepted specification.
+3. For cross-cutting, data-sensitive, operational, starter/public-sync, or expensive-to-reverse specifications, use `plan-document-reviewer` before approval or planning handoff when the risk warrants it.
+4. Hand off to the owning native project workflow, OpenSpec when adopted, or `defining-work` when a durable General OS boundary is required.
 5. `executing-work` starts when the selected durable assignment or approved direct scope is ready.
-6. `verification-before-completion` later proves acceptance and completion criteria.
+6. `verification-before-completion` proves acceptance only when its evidence contract applies; otherwise the owning native workflow verifies its result.
 7. `finishing-development-work` owns authorized Git disposition after verified implementation.
 
 ## Red Flags

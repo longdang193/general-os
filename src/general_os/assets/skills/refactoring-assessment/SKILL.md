@@ -31,9 +31,12 @@ Read only references needed for current assessment:
 - no repository audit template; keep formal audit output in the approved task or plan format
 - `brainstorming` when desired behavior or design direction remains unclear
 - `spec-drafting` when behavior, interfaces, schemas, defaults, compatibility, or invariants require a decision contract
-- `defining-work` when design is settled but execution needs ordered tasks
+- `defining-work` when design is settled but a durable General OS boundary or
+  non-derivable execution ordering is needed
 - `test-driven-development` before a bounded behavior-preserving patch
-- `executing-work` after `defining-work` selects direct execution, L1, L2, or L3; native runtime planning remains local to that assignment
+- `executing-work` for an approved direct scope, native OpenSpec change, or
+  selected durable assignment; native runtime planning remains local to that
+  assignment
 - `executing-work` for bounded native work with disjoint ownership
 - `verification-before-completion` after implementation
 - `finishing-development-work` only after fresh verification and explicit Git authorization
@@ -96,13 +99,17 @@ Route rather than perform next stage:
 |---|---|
 | Small, bounded, behavior-preserving patch | `test-driven-development`, then direct implementation |
 | Unresolved behavior, interface, schema, default, compatibility, or invariant | `spec-drafting` |
-| Settled design with multi-step execution | `defining-work` |
-| Ready direct scope, goal, task graph, or detailed plan | `executing-work` |
+| Settled design requiring a durable General OS boundary or non-derivable ordering | `defining-work` |
+| Approved OpenSpec change or other ready direct scope | `executing-work` |
 | Independent actions with disjoint write ownership | `executing-work` |
 | Completed implementation | `verification-before-completion` |
 | Verified work needing authorized Git disposition | `finishing-development-work` |
 
 Use `brainstorming` before specification when desired behavior remains unresolved.
+For a behavior-preserving refactor with sufficient tests, Codex may proceed
+directly. When intended behavior changes in an OpenSpec-enabled project, use
+the native OpenSpec workflow rather than creating a duplicate General OS
+specification.
 
 ### How Will It Be Verified?
 

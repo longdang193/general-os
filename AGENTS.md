@@ -12,8 +12,9 @@ authority constraints, acceptance criteria, and non-derivable decisions.
   context, approvals, tools, and native subagents.
 - Native subagents remain subordinate to their parent Codex assignment and do
   not become peer project coordinators.
-- Orca owns internal runtime orchestration and execution topology when CoS
-  selects an independent boundary.
+- Orca owns internal runtime orchestration and execution topology. An
+  authorized native controller may select Orca within its approved assignment;
+  CoS selects execution boundaries only for General OS-coordinated work.
 - When durable coordination is selected, CoS reads durable state plus current
   Git and native runtime observations, then coordinates assignment,
   continuation, escalation, and acceptance. Ordinary authorized work may use

@@ -21,7 +21,8 @@ recreate the Codex agent loop.
    repository instructions.
 4. Keep the assignment bounded by its objective and acceptance criteria.
 5. Run focused verification, inspect the resulting Git state, and return
-   evidence to CoS.
+   evidence to the owning native assignment or project workflow. Return it to
+   CoS only when the work belongs to a durable General OS commitment.
 
 The current Codex runtime is the normal interactive execution path. General-os
 does not maintain a second Python interactive runtime; compatibility proof must

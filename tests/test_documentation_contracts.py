@@ -59,6 +59,28 @@ def test_external_review_does_not_bypass_git_bound_acceptance():
     assert "supported acceptance contract" in contents
 
 
+def test_native_workflows_and_strategic_decisions_keep_single_owners():
+    root = Path(__file__).parents[1]
+    spec = (root / ".agents" / "skills" / "spec-drafting" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    wayfinding = (root / ".agents" / "skills" / "wayfinding" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    architecture = (root / "docs" / "architecture.md").read_text(encoding="utf-8")
+    contracts = (root / "docs" / "contracts.md").read_text(encoding="utf-8")
+    frontend = (root / "docs" / "rules" / "frontend-ui.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Native OpenSpec route" in spec
+    assert "Do not require this skill's separate" in spec
+    assert "authoritative project workflow" in wayfinding
+    assert "Strategic decision rationale" in architecture
+    assert "project-owned Markdown" in contracts
+    assert "observed implementation behavior" in frontend
+
+
 def test_root_guidance_and_templates_define_durable_ownership():
     root = Path(__file__).parents[1]
     guidance = (root / "AGENTS.md").read_text(encoding="utf-8")

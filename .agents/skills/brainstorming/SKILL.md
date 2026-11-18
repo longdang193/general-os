@@ -5,7 +5,8 @@ description: Use when unresolved problem framing or design options need structur
 # Brainstorming Ideas Into Designs
 
 <HARD-GATE>
-Do not promote production implementation before:
+While a material design choice remains unresolved, do not promote production
+implementation before:
 1. the design is presented
 2. the user or owning controller approves it
 
@@ -81,7 +82,10 @@ source-first design, but never replaces mandatory evidence.
      default
    - link supporting files directly only when they materially help
 9. Restate accepted recommendations in approved direct scope or a specification; do not treat the report as design truth.
-10. Request approval before implementation planning when a plan is needed. Direct approved scope may proceed without a saved spec or plan when the change is local, reversible, and design-clear.
+10. Request approval before implementation planning when material design choices
+remain unresolved or a plan is needed. Once an approved direct scope is clear,
+do not require another brainstorming approval; local, reversible, design-clear
+work may proceed without a saved spec or plan.
 </MUST-DO>
 
 ## Output Paths

@@ -59,12 +59,14 @@ estimates, schedules, tracker IDs, or builder assignments.
 
 Record evidence and alternatives needed to answer a question. Keep approved
 behavior, interfaces, invariants, and design decisions out of the map's
-canonical truth; promote them once through `spec-drafting`.
+canonical truth; promote them once through the authoritative project workflow:
+OpenSpec when adopted, the native project specification otherwise, or
+`spec-drafting` when General OS owns the specification.
 
 When an upstream decision changes, record the affected question and evidence in
 the non-authoritative artifact, then promote the settled result once through
-the specification path. Do not close the map, create implementation tickets,
-or encode workflow transitions in it.
+the authoritative specification or decision path. Do not close the map, create
+implementation tickets, or encode workflow transitions in it.
 
 ## Code Pressure
 
@@ -82,14 +84,16 @@ Finish the design exploration only when all conditions hold:
 
 - destination remains valid;
 - no material dependent decision or relevant fog remains;
-- approved behavior has been promoted once through `spec-drafting`;
+- approved behavior has been promoted once through the authoritative project
+  workflow;
 - the resulting specification or decision link is available to the owning
   planning flow.
 
-After promotion, return to durable coordination state and use the chief-of-staff
-decision flow and `defining-work` when implementation sequencing is needed.
-Apply the next applicable gate from current `AGENTS.md` guidance. Wayfinding
-does not pre-author plan tasks,
+After promotion, return to the owning authoritative workflow: the active
+OpenSpec change, the native project specification, or General OS only when the
+issue is a strategic coordination decision. Use the chief-of-staff decision
+flow and `defining-work` only when a durable General OS boundary or sequencing
+decision is actually needed. Wayfinding does not pre-author plan tasks,
 dependency order, write ownership, executor choice, or verification commands.
 
 ## Verification

@@ -9,6 +9,9 @@ from the current Git state:
    work boundary.
 2. Inspect the current branch, revision, worktree, conflicts, and changed
    files directly from Git.
+   For an OpenSpec-enabled change, also inspect its active change artifacts and
+   maintained specifications; use those artifacts for proposed and intended
+   behavior, while Git remains authoritative for implementation reality.
 3. When a completed task is needed for continuation, acceptance, or
    publication, run `python -m general_os state revalidate --state
    state/coordination.json [--task-id TASK_ID]` as a targeted semantic check.

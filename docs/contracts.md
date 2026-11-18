@@ -11,6 +11,17 @@
 - exceptional authority or boundary decisions that materially change safe
   execution.
 
+Substantive strategic rationale belongs in an existing project-owned Markdown
+decision record when it genuinely needs persistence. Keep alternatives and any
+reconsideration trigger there rather than forcing them into task records.
+Use this durable coordination state only when the decision also requires a
+General OS assignment, acceptance boundary, or exceptional authority decision.
+
+When OpenSpec is adopted, maintained specifications are the accepted intended
+behavior and an active change is proposed behavior until reconciliation. Do not
+silently treat the active change as the maintained contract or copy either
+OpenSpec tasks or specifications into this state.
+
 The task state is one of `pending`, `active`, `blocked`, or `completed`.
 Dispatch requests, runtime identities, Goal Mode status, native subagent
 counts, Orca lifecycle, heartbeats, temporary plans, and verification output

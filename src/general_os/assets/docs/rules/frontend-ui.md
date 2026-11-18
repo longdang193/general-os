@@ -7,8 +7,12 @@ reduced motion. Browser evidence supplements committed regression tests.
 
 ## Design Tool Integration
 
-- Treat specifications, source code, tests, and the existing design system as
-  authoritative for behavior and reusable implementation values.
+- Treat maintained specifications and the existing design system as
+  authoritative for intended behavior and reusable implementation values. Code
+  and tests establish observed implementation behavior; they do not
+  automatically replace the intended product contract.
+- When OpenSpec is adopted, maintained specifications define accepted intended
+  behavior and an active change remains proposed until native reconciliation.
 - Use approved Figma or OpenDesign references as visual and interaction
   evidence when available; record the reference and revision without
   duplicating it.
