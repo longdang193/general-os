@@ -54,6 +54,12 @@ Ordinary implementation planning remains native-runtime work. It does not
 replace `state/coordination.json`, grant runtime authority, or replace native
 runtime planning.
 
+When the target project adopts OpenSpec and the change benefits from it, keep
+change-local requirements, proposals, design notes, changed specs, and task
+checklists in the project's native OpenSpec artifacts. Do not copy those
+artifacts into general-os state. Projects without OpenSpec, and small or
+reversible changes, retain the existing native specification route.
+
 ## Specification Lifecycle
 
 - Keep draft or approved specification content in the current task or an

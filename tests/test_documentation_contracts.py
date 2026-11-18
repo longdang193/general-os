@@ -24,6 +24,41 @@ def test_documentation_explains_fact_ownership_and_boundaries():
     assert "--strict-migration" in deployment
 
 
+def test_documentation_keeps_native_specification_and_direct_work_native():
+    root = Path(__file__).parents[1]
+    texts = [
+        (root / "README.md").read_text(encoding="utf-8"),
+        (root / "docs" / "architecture.md").read_text(encoding="utf-8"),
+        (root / "docs" / "contracts.md").read_text(encoding="utf-8"),
+        (root / ".agents" / "skills" / "spec-drafting" / "SKILL.md").read_text(
+            encoding="utf-8"
+        ),
+        (root / ".agents" / "skills" / "executing-work" / "SKILL.md").read_text(
+            encoding="utf-8"
+        ),
+        (root / ".agents" / "skills" / "defining-work" / "SKILL.md").read_text(
+            encoding="utf-8"
+        ),
+    ]
+    contents = "\n".join(texts)
+    assert "OpenSpec" in contents
+    assert "tasks.md" in contents
+    assert "Do not copy" in contents or "Do not mirror" in contents
+    assert "ordinary authorized work" in contents
+
+
+def test_external_review_does_not_bypass_git_bound_acceptance():
+    root = Path(__file__).parents[1]
+    contracts = (root / "docs" / "contracts.md").read_text(encoding="utf-8")
+    verification = (
+        root / ".agents" / "skills" / "verification-before-completion" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    contents = f"{contracts}\n{verification}"
+    assert "Source-specific review" in contents
+    assert "external-only" in contents
+    assert "supported acceptance contract" in contents
+
+
 def test_root_guidance_and_templates_define_durable_ownership():
     root = Path(__file__).parents[1]
     guidance = (root / "AGENTS.md").read_text(encoding="utf-8")
@@ -61,6 +96,18 @@ def test_root_guidance_and_templates_define_durable_ownership():
         assert term in detailed_plan
     assert "## Agent Memory" in guidance
     assert "## Command Safety" in guidance
+
+
+def test_frontend_ui_rule_matches_packaged_asset():
+    root = Path(__file__).parents[1]
+    canonical = (root / "docs" / "rules" / "frontend-ui.md").read_text(
+        encoding="utf-8"
+    )
+    packaged = (
+        root / "src" / "general_os" / "assets" / "docs" / "rules" / "frontend-ui.md"
+    ).read_text(encoding="utf-8")
+
+    assert canonical == packaged
 
 
 def test_maintained_skill_descriptions_are_actionable():

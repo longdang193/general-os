@@ -1,20 +1,24 @@
 # general-os
 
 `general-os` is a small durable semantic coordination layer above Git, native
-Codex execution, and optional Orca orchestration.
+Codex execution, and optional Orca orchestration. It is used when durable
+project decisions, dependencies, authority exceptions, or acceptance records
+are needed; ordinary authorized work may start directly in the native runtime.
 
-General-os remembers durable semantics. Project-level CoS chooses the execution
-boundary; the selected native runtime executes and owns its topology; Git proves
-repository state; and CoS accepts verified results. Native Codex subagents may
-decompose a bounded assignment while remaining subordinate to that assignment.
-Orca is used only when work needs an independently managed workstream or that
-boundary is materially useful.
+General-os remembers durable semantics when a project chooses that coordination
+path. Project-level CoS chooses the execution boundary for that path; the
+selected native runtime executes and owns its topology; Git proves repository
+state; and CoS accepts verified results. Native Codex subagents may decompose a
+bounded assignment while remaining subordinate to that assignment. Orca is
+used only when work needs an independently managed workstream or that boundary
+is materially useful.
 
-The durable coordination object is `state/coordination.json`. It stores the
-goal, optional task objectives and dependencies, acceptance criteria, and only
-material exceptions. Current Git, Codex, and Orca runtime facts are observed
-directly at the point of use; runtime IDs, progress, heartbeats, and lifecycle
-mirrors are not copied into durable state.
+The durable coordination object is `state/coordination.json` when durable
+coordination is selected. It stores the goal, optional task objectives and
+dependencies, acceptance criteria, and only material exceptions. Current Git,
+Codex, and Orca runtime facts are observed directly at the point of use; runtime
+IDs, progress, heartbeats, and lifecycle mirrors are not copied into durable
+state.
 
 Acceptance is separate from runtime completion: fresh evidence yields `PASS`,
 retryable or incomplete evidence yields `FAIL`, and only a material safety,
@@ -31,6 +35,16 @@ read-only and does not infer runtime model or effort values.
 
 The predecessor repository is a read-only migration reference, not a runtime
 or schema dependency. It remains unmodified.
+
+## Native specification and direct work
+
+Projects that adopt OpenSpec keep change-local requirements, proposals, design
+notes, changed specs, and task checklists in OpenSpec. General-os does not copy
+those artifacts into `state/coordination.json` or add an OpenSpec adapter.
+Projects without OpenSpec, and small or reversible changes, retain their
+existing native specification route. Figma, OpenDesign, and project code remain
+authoritative for their own design and implementation concerns; link those
+sources instead of duplicating them.
 
 ## Maintained SSOT and migration evidence
 

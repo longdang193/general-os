@@ -20,18 +20,19 @@ are observations, not another durable ledger.
 
 An empty task list is a valid goal-only intent assignment. It has no durable
 completion or acceptance record, so recovery may redispatch the goal; use a task
-graph when acceptance must be persisted. When a
-task has an objective, that objective is the assignment; the global goal is not
-copied into the task or used as a second task assignment. Codex may use native
-subagents inside that assignment. Project-level CoS selects Orca only when independent
-ownership is materially useful or required; a required
-independent boundary cannot silently fall back to Codex when Orca is
-unavailable.
+graph when acceptance must be persisted. When a task has an objective, that
+objective is the assignment; the global goal is not copied into the task or
+used as a second task assignment. Codex may use native subagents inside that
+assignment. Ordinary authorized work may bypass this coordination contract and
+start directly in the native runtime. Within already authorized scope, native
+Orca may be selected when independent ownership is materially useful or
+required; a required independent boundary cannot silently fall back to Codex
+when Orca is unavailable.
 
-`general-os` owns the durable semantic assignment. Project-level CoS owns the
-coordination judgment that selects the boundary and later decides acceptance.
-The selected native runtime owns execution decomposition and execution topology inside
-that boundary.
+When coordination is selected, `general-os` owns the durable semantic
+assignment. Project-level CoS owns the coordination judgment that selects the
+boundary and later decides acceptance. The selected native runtime owns
+execution decomposition and execution topology inside that boundary.
 
 Profiles are selected by name from `agents/*.toml`. Explicit profile facts may
 be projected one way to the selected runtime, while absent facts inherit native
@@ -72,6 +73,12 @@ is supplied without an explicit model. This helper does not define the
 conceptual multi-agent boundary.
 
 ## Acceptance
+
+Source-specific review of strategic or external findings is distinct from
+repository-bound task acceptance. An external-only review may inform a decision,
+but it must not be recorded as a successful durable task transition unless its
+evidence satisfies a supported acceptance contract. The existing Git-bound
+acceptance subsystem remains authoritative for repository tasks.
 
 Acceptance uses the current task, current Git snapshot, and fresh verification:
 

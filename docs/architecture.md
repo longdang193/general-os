@@ -1,20 +1,27 @@
 # Architecture
 
 `general-os` is a thin semantic coordination and governance layer above Git,
-native Codex, and optional Orca. It is not an agent runtime and does not
-reimplement Codex turns, Goal Mode, context, tools, approvals, or native
-subagent scheduling.
+native Codex, and optional Orca. It is used when durable coordination is
+needed; ordinary authorized work may remain direct in the native runtime. It
+is not an agent runtime and does not reimplement Codex turns, Goal Mode,
+context, tools, approvals, or native subagent scheduling.
 
 ## Fact ownership
 
-`general-os` owns the durable project semantics in `state/coordination.json`:
-goals, meaningful task objectives, dependencies, durable task state, acceptance
-criteria, and material exceptions. Project-level CoS owns coordination
-judgment: readiness, profile selection, execution-boundary choice, and
-acceptance decisions. Git owns repository and recovery facts. Codex owns its
-native execution loop, Goal Mode, context, tools, approvals, and subordinate
-native subagents. Orca owns internal orchestration and execution topology after
-CoS selects that boundary.
+When durable coordination is selected, `general-os` owns the durable project
+semantics in `state/coordination.json`: goals, meaningful task objectives,
+dependencies, durable task state, acceptance criteria, and material exceptions.
+Project-level CoS owns coordination judgment for that path: readiness, profile
+selection, execution-boundary choice, and acceptance decisions. Git owns
+repository and recovery facts. Codex owns its native execution loop, Goal Mode,
+context, tools, approvals, and subordinate native subagents. Orca owns internal
+orchestration and execution topology after an authorized native controller
+selects that boundary.
+
+Projects that adopt OpenSpec keep change-local requirements, proposals, design
+notes, changed specs, and task checklists in OpenSpec. Those artifacts are not
+copied into general-os state. Projects without OpenSpec and small or reversible
+changes retain their existing native specification route.
 
 `agents/*.toml` is the only profile registry. A profile name is semantic
 selection, not a guessed model or effort setting. General-os may project
@@ -35,21 +42,23 @@ Codex, or Orca at the point of use, derive it instead of persisting a copy.
 
 | Decision or fact | Owner |
 | --- | --- |
-| Durable goals, semantic task boundaries, dependencies, profiles, constraints, and acceptance criteria | general-os |
-| Readiness, profile resolution, execution-boundary selection, and acceptance decisions | project-level CoS |
+| Durable goals, semantic task boundaries, dependencies, profiles, constraints, and acceptance criteria when coordination is selected | general-os |
+| Readiness, profile resolution, execution-boundary selection, and acceptance decisions for coordinated work | project-level CoS |
 | Direct execution, native planning, and subordinate Codex delegation | Codex |
 | Orca internal orchestration and execution topology | native Orca coordinator/coordinating agent provided by the installed version |
 | Runtime decomposition, workers, internal dependencies, retries, questions, supervision, fan-in, and cleanup | selected native runtime |
 | Repository state, worktrees, commits, diffs, and recovery evidence | Git |
-| Durable completion after fresh verification | project-level CoS over general-os state |
+| Durable completion after fresh verification for coordinated work | project-level CoS over general-os state |
 
-The durable invariant is that CoS chooses the boundary and the selected native
-runtime chooses execution topology. General-os must not become a second Orca
-coordinator, scheduler, worker registry, runtime ledger, or result aggregator.
+The durable invariant is that coordinated work has one semantic owner and the
+selected native runtime chooses execution topology. General-os must not become
+a second Orca coordinator, scheduler, worker registry, runtime ledger, or
+result aggregator.
 
 ## Orca workstream boundary
 
-When CoS selects Orca, it hands over one semantic workstream containing the
+When an authorized native controller selects Orca, it hands over one semantic workstream
+containing the
 objective, task identity, relevant context and constraints, acceptance/evidence
 requirements, explicit resolved profile facts, and the relevant repository or
 work boundary. It does not prescribe worker count or roles, runtime IDs,
@@ -62,9 +71,9 @@ cleanup when those capabilities are used. A supervised path may return a
 semantic outcome/evidence bundle representing success, partial progress,
 failure, or a material blocker. A lightweight ownership handoff may return
 only a transfer acknowledgement, if the native path reports one; transfer is
-not durable general-os acceptance. Project-level CoS inspects current Git,
-runs or evaluates fresh verification, and decides `PASS`, `FAIL`, or
-`BLOCKED` for the durable task.
+not durable general-os acceptance. For coordinated work, project-level CoS
+inspects current Git, runs or evaluates fresh verification, and decides `PASS`,
+`FAIL`, or `BLOCKED` for the durable task.
 
 General-os does not silently merge runtime worktrees, publish, or push. Git
 integration and any later repository disposition remain explicit operations
@@ -77,19 +86,21 @@ episode is not reconstructed.
 
 ## Shallow routing
 
-The native CoS skill reads durable state and current Git, determines
-dependency-ready semantic work, resolves the semantic profile, and chooses the
-smallest effective native execution boundary based on task requirements,
-available capabilities, expected benefit, cost, and coordination overhead. CoS
-chooses the semantic boundary and acceptance requirements; the selected runtime
-chooses its internal planning, delegation, execution topology, and worker
-lifecycle:
+When durable coordination is selected, the native CoS skill reads durable state
+and current Git, determines dependency-ready semantic work, resolves the
+semantic profile, and chooses the smallest effective native execution boundary
+based on task requirements, available capabilities, expected benefit, cost, and
+coordination overhead. CoS chooses the semantic boundary and acceptance
+requirements; the selected runtime chooses its internal planning, delegation,
+execution topology, and worker lifecycle. Otherwise, authorized work starts in
+the native runtime directly:
 
-1. Codex handles ordinary work directly.
+1. Codex handles ordinary work directly without creating general-os state.
 2. Codex may use native subagents when that helps its bounded assignment; those
    children remain subordinate and do not become peer project coordinators.
-3. Orca is selected when independent ownership is required or materially
-   useful, and only when the configured Orca boundary is available.
+3. Native Orca is selected within authorized scope when independent ownership
+   is required or materially useful, and only when the configured boundary is
+   available.
 4. A real Git, authority, dependency, or required-boundary failure blocks;
    missing optional runtime bookkeeping does not.
 
@@ -117,7 +128,8 @@ durable policy exceptions.
 
 Execution-level failures stay inside the selected runtime when they can be
 resolved there. Only material authority, dependency, user, credential, Git,
-required-boundary, or acceptance blockers need to cross back to CoS. This keeps
+required-boundary, or acceptance blockers need to cross back to CoS when a
+coordinated assignment exists. This keeps
 runtime chatter and internal fan-in out of the project coordination layer.
 
 ## Central deployment ownership

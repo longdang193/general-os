@@ -1,15 +1,15 @@
 ---
 name: orca-orchestration
-description: Use when CoS selects Orca for an independently managed top-level workstream.
+description: Use when an authorized native controller selects Orca for an independently managed top-level workstream.
 ---
 
 # Orca Orchestration
 
-Use this skill only when CoS has selected Orca for one independently owned
-semantic workstream. Selection may be required or opportunistic; it is not
-limited to a predefined task category or to a `requires_independent_boundary`
-flag. Ordinary work stays in the current Codex runtime, and native Codex
-subagents remain subordinate to that assignment.
+Use this skill when an authorized native controller selects Orca for one
+independently owned semantic workstream. Selection may be required or
+opportunistic; it is not limited to a predefined task category or to a
+`requires_independent_boundary` flag. Ordinary work stays in the current Codex
+runtime, and native Codex subagents remain subordinate to that assignment.
 
 Orca may be useful for investigation, independent hypothesis testing, parallel
 research, debugging, implementation, reviews, synthesis, or other work where
@@ -52,9 +52,10 @@ Before the first native worker dispatch for repository-bound work:
 
 ## Handoff
 
-Project-level CoS chooses this boundary for one independently owned semantic
-workstream. General-os owns the durable semantic assignment and passes it to
-the native Orca entrypoint selected by the installed version:
+Project-level CoS may choose this boundary for coordinated work, and the native
+working controller may choose it within already authorized scope. When a
+durable assignment exists, general-os owns its semantic contract and passes it
+to the native Orca entrypoint selected by the installed version:
 
 - task objective and semantic identity;
 - relevant context and material constraints;
@@ -74,9 +75,10 @@ the installed version decides its internal orchestration and execution
 topology, including decomposition, workers, supervision, retries, questions,
 nested helpers, synthesis, release, and cleanup.
 
-After CoS selects Orca, let the installed native guidance choose the smallest
-useful path—lightweight handoff, independent workspace, or supervised
-orchestration. Do not add that topology choice to durable general-os state.
+After an authorized native controller selects Orca, let the installed native
+guidance choose the smallest useful path—lightweight handoff, independent
+workspace, or supervised orchestration. Do not add that topology choice to
+durable general-os state.
 
 `build_orca_launch(project_profile(profile), assignment)` remains a low-level
 leaf/compatibility projection for simple native CLI launch paths. It maps only
@@ -91,9 +93,9 @@ progress, failure, or a material blocker. A lightweight ownership handoff may
 return only a transfer acknowledgement, if the native path reports one; the
 handoff is not semantic task completion. Never persist or mirror Run IDs, Task
 IDs, Dispatch IDs, worker IDs, heartbeats, progress, or other Orca runtime
-state in `general-os` durable state. Project-level CoS must inspect current Git,
-evaluate fresh evidence, and decide durable task acceptance; neither a native
-outcome nor a successful handoff completes a general-os task by itself.
+state in `general-os` durable state. The owning verifier must inspect current
+Git and evaluate fresh evidence; neither a native outcome nor a successful
+handoff completes a general-os task by itself.
 
 ## Degradation
 

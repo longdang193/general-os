@@ -8,8 +8,9 @@ description: Use when a durable general-os goal needs dependency-aware work sele
 ## Overview
 
 The native CoS skill is the canonical coordination intelligence for
-`general-os`. It decides what should happen next from durable intent, current
-Git, and direct runtime observations; it does not become an agent loop or a
+`general-os` when durable coordination is selected. It decides what should
+happen next from durable intent, current Git, and direct runtime observations;
+ordinary authorized work may bypass it. It does not become an agent loop or a
 second runtime scheduler.
 
 ## Ownership

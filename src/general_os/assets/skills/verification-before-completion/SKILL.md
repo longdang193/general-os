@@ -32,6 +32,12 @@ Profile names and runtime observations are context, not acceptance evidence.
 Use fresh Git and verification output; do not require optional runtime
 bookkeeping when current source and tests establish the result.
 
+Source-specific review of strategic or external findings is separate from
+repository-bound durable task acceptance. Do not record an external-only review
+as a durable `PASS` unless its evidence satisfies a supported acceptance
+contract; the existing Git-bound acceptance path remains authoritative for
+repository tasks.
+
 ## Result Contract
 
 ### `PASS`

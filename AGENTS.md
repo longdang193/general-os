@@ -14,8 +14,11 @@ authority constraints, acceptance criteria, and non-derivable decisions.
   not become peer project coordinators.
 - Orca owns internal runtime orchestration and execution topology when CoS
   selects an independent boundary.
-- CoS reads durable state plus current Git and native runtime observations,
-  then coordinates assignment, continuation, escalation, and acceptance.
+- When durable coordination is selected, CoS reads durable state plus current
+  Git and native runtime observations, then coordinates assignment,
+  continuation, escalation, and acceptance. Ordinary authorized work may use
+  the native runtime directly without creating coordination state or invoking
+  CoS.
 
 ## Durable State
 
@@ -49,10 +52,11 @@ logs, patches, or generated artifacts.
 
 ## Execution And Recovery
 
-Prefer the current Codex runtime. Let Codex use native subagents when useful
-and allowed. Use Orca only when independent ownership is required or
-materially useful. `requires_independent_boundary` is a hard requirement, not
-the complete Orca selection algorithm.
+Prefer the current Codex runtime for ordinary authorized work. Let Codex use
+native subagents when useful and allowed. Within already authorized scope, use
+native Orca only when independent ownership is required or materially useful.
+`requires_independent_boundary` is a hard requirement, not the complete Orca
+selection algorithm.
 
 Recover from durable `general-os` state plus current Git. Do not reconstruct
 lost runtime sessions unless a concrete operational reason makes that safer

@@ -1,9 +1,12 @@
 # Recovery
 
-Runtime loss is intentionally boring. Recover from durable intent plus current
-Git, not from Codex or Orca session history:
+Runtime loss is intentionally boring. For coordinated work, recover from
+durable intent plus current Git, not from Codex or Orca session history. Direct
+authorized work without durable coordination starts a fresh native assignment
+from the current Git state:
 
-1. Read `state/coordination.json`.
+1. Read `state/coordination.json` when it exists and is part of the approved
+   work boundary.
 2. Inspect the current branch, revision, worktree, conflicts, and changed
    files directly from Git.
 3. When a completed task is needed for continuation, acceptance, or
@@ -15,6 +18,8 @@ Git, not from Codex or Orca session history:
 4. Determine unfinished dependency-ready semantic work, or redispatch the global
    goal when the task graph is empty. Goal-only state is intent-only and has no
    durable completion record; use a task graph when completion must be retained.
+   If no durable coordination state exists, do not create it merely for
+   recovery; continue with the native runtime.
 5. Treat legacy completed tasks without current acceptance identities as
    pending until fresh verification establishes completion again. For current
    completed tasks, revalidate the accepted task-contract fingerprint and

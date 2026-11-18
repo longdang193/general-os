@@ -8,8 +8,9 @@ description: Use when a general-os task is ready for native Codex execution, bou
 ## Overview
 
 Execute the assigned objective in the native Codex runtime. `general-os`
-provides semantic context and acceptance boundaries; it does not recreate the
-Codex agent loop.
+provides semantic context and acceptance boundaries when a coordinated
+assignment exists; ordinary authorized work may execute directly. It does not
+recreate the Codex agent loop.
 
 ## Normal Codex Path
 
@@ -27,6 +28,10 @@ does not maintain a second Python interactive runtime; compatibility proof must
 not be presented as native Codex execution evidence.
 Use the native mechanisms opportunistically; the assignment does not prescribe
 Goal Mode versus direct work, plan shape, or native subagent count.
+
+For an OpenSpec-enabled project, execute against the project's native change
+artifacts and reconcile its maintained specs through the native project
+workflow. Do not create a duplicate general-os specification or task ledger.
 
 ## Native Subagents
 

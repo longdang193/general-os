@@ -7,9 +7,11 @@ description: Use when a general-os request needs a durable goal, a small depende
 
 ## Overview
 
-Choose the smallest durable representation that makes the work safe to
-execute, hand off, and recover. `general-os` owns durable coordination facts;
-the selected native runtime owns temporary execution planning.
+Choose the smallest durable representation that makes coordinated work safe to
+execute, hand off, and recover. `general-os` owns durable coordination facts
+when that path is selected; the selected native runtime owns temporary
+execution planning. Direct authorized work does not need a durable general-os
+plan merely because the native runtime uses a temporary plan.
 
 Persist a planning fact only when a fresh capable executor could not safely
 reconstruct it from the goal, current Git, repository guidance, and current
@@ -83,6 +85,10 @@ Do not persist exploratory steps, anticipated tool calls, temporary
 checklists, runtime IDs or sessions, native subagent assignments, progress,
 file-by-file edits that can be derived safely, Codex `update_plan` state, or
 Claude/native planning state.
+
+When a target project adopts OpenSpec, its change-local requirements, design
+notes, changed specs, and `tasks.md` remain native project artifacts. Do not
+mirror them into general-os coordination state.
 
 ## Planning Ownership
 

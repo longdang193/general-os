@@ -6,10 +6,13 @@ alternate owners of coordination policy.
 The current Codex runtime is the primary execution path. It owns Goal Mode,
 `update_plan`, context, approvals, tools, native subagents, and execution
 lifecycle. General-os supplies durable intent, acceptance boundaries, and
-exceptional authority; it does not reimplement a Codex transport or runtime
-registry.
+exceptional authority only when coordination is selected; ordinary authorized
+work may use Codex directly. It does not reimplement a Codex transport or
+runtime registry.
 
-The Orca capability is optional. `orca_enabled` is permission/configuration,
+The Orca capability is optional. Within already authorized scope, the native
+working controller may select Orca when independent orchestration materially
+helps; `orca_enabled` is permission/configuration,
 not runtime health and not an authority escalation. CoS chooses the smallest
 effective native execution boundary using task requirements, available
 capabilities, expected benefit, cost, and coordination overhead. Prefer Codex
@@ -26,8 +29,9 @@ simple independent assignments use lightweight handoff guidance, while
 supervised assignments use the native orchestration guidance. worker lifecycle,
 inspection, retry, release, and cleanup remain inside native Orca.
 
-After CoS selects Orca, native guidance chooses the smallest useful execution
-path. That topology choice is not a durable general-os routing field.
+After an authorized native controller selects Orca, native guidance chooses the
+smallest useful execution path. That topology choice is not a durable general-os
+routing field.
 
 `agents/*.toml` is the sole profile registry. Profile names do not imply
 runtime model or effort values. Explicit facts may be projected one way to the
@@ -44,8 +48,8 @@ Use `general-os profile resolve --name <name> --directory agents` to inspect
 the deterministic projection without launching a runtime. The command never
 infers model or effort from rank or profile name.
 
-When project-level CoS selects Orca, general-os hands the native Orca
-entrypoint selected by the installed version a semantic workstream contract:
+When coordinated work selects Orca, general-os hands the native Orca entrypoint
+selected by the installed version a semantic workstream contract:
 objective, task identity, relevant context and constraints, acceptance/evidence
 requirements, explicit profile facts, and the relevant repository or work
 boundary. The selected native path owns internal orchestration and execution
@@ -75,10 +79,10 @@ supplies another timeout. Malformed or unsupported status envelopes return a
 bounded failed observation with an actionable message.
 
 Acceptance does not infer independent execution from Orca reachability or
-runtime completion. Project-level CoS must inspect current Git and the native
-verifier or controller must provide ephemeral typed boundary evidence bound to
-the current Git snapshot identity; no worker or runtime identifier is
-persisted.
+runtime completion. The owning verifier or controller must inspect current Git
+and provide ephemeral typed boundary evidence bound to the current Git snapshot
+identity when the acceptance contract requires it; no worker or runtime
+identifier is persisted.
 
 Neither adapter writes runtime IDs, heartbeats, progress, or lifecycle mirrors
 into `state/coordination.json`.
