@@ -27,9 +27,10 @@ changes retain their existing native specification route.
 
 The specification SSOT is explicit: maintained OpenSpec specifications define
 accepted intended behavior when OpenSpec is adopted; an authorized active
-OpenSpec change defines target behavior for its scoped implementation until
-native reconciliation updates those specifications; it does not globally
-replace the maintained contract. Current code and runtime evidence describe
+OpenSpec change defines the implementation target for its scope while remaining
+a proposal against the maintained contract until native reconciliation updates
+those specifications; it does not globally replace the maintained contract.
+Current code and runtime evidence describe
 implementation reality; and an approved Figma, OpenDesign, or code-first design
 authority defines visual design. A project-owned Markdown decision record may preserve
 substantive strategic rationale, alternatives, and reconsideration triggers
@@ -65,7 +66,7 @@ Codex, or Orca at the point of use, derive it instead of persisting a copy.
 | Repository state, worktrees, commits, diffs, and recovery evidence | Git |
 | Durable completion after fresh verification for coordinated work | project-level CoS over general-os state |
 | Accepted intended behavior when OpenSpec is adopted | maintained OpenSpec specifications |
-| Authorized scoped target behavior before OpenSpec reconciliation | active OpenSpec change |
+| Authorized scoped implementation target before OpenSpec reconciliation | active OpenSpec change |
 | Implementation reality | current code and runtime evidence |
 | Approved visual design | selected design authority |
 | Strategic decision rationale | project-owned General OS decision context |

@@ -169,7 +169,8 @@ Don't add features, refactor other code, or "improve" beyond the test.
 
 ### Verify GREEN - Watch It Pass
 
-**MANDATORY.**
+Use this check whenever the test-first cycle was selected; otherwise run the
+smallest focused regression proof that establishes the invariant.
 
 ```bash
 npm test path/to/test.test.ts
@@ -229,65 +230,44 @@ Automated tests are systematic. They run the same way every time.
 
 **"Deleting X hours of work is wasteful"**
 
-Sunk cost fallacy. The time is already gone. Your choice now:
-- Delete and rewrite with TDD (X more hours, high confidence)
-- Keep it and add tests after (30 min, low confidence, likely bugs)
-
-The "waste" is keeping code you can't trust. Working code without real tests is technical debt.
+Do not rewrite working code merely to satisfy a test-first ceremony. Add the
+smallest regression evidence that would fail if the correction were reverted;
+rewrite only when the implementation itself is unsafe or the contract cannot
+be tested clearly.
 
 **"TDD is dogmatic, being pragmatic means adapting"**
 
-TDD IS pragmatic:
-- Finds bugs before commit (faster than debugging after)
-- Prevents regressions (tests catch breaks immediately)
-- Documents behavior (tests show how to use code)
-- Enables refactoring (change freely, tests catch breaks)
-
-"Pragmatic" shortcuts = debugging in production = slower.
+Adapt the technique, not the evidence requirement. Test-first is preferred for
+non-trivial or unclear behavior; focused characterization, boundary, or
+regression proof is enough for small, well-understood, configuration,
+generated, or disposable changes.
 
 **"Tests after achieve the same goals - it's spirit not ritual"**
 
-No. Tests-after answer "What does this do?" Tests-first answer "What should this do?"
-
-Tests-after are biased by your implementation. You test what you built, not what's required. You verify remembered edge cases, not discovered ones.
-
-Tests-first force edge case discovery before implementing. Tests-after verify you remembered everything (you didn't).
-
-30 minutes of tests after ≠ TDD. You get coverage, lose proof tests work.
+Tests-after can establish the regression-proof invariant when the test exercises
+the changed behavior and fails if the correction is reverted. Test-first still
+helps discover the contract before implementation, so prefer it when that
+benefit is material.
 
 ## Common Rationalizations
 
 | Excuse | Reality |
 |--------|---------|
-| "Too simple to test" | Simple code breaks. Test takes 30 seconds. |
-| "I'll test after" | Tests passing immediately prove nothing. |
-| "Tests after achieve same goals" | Tests-after = "what does this do?" Tests-first = "what should this do?" |
-| "Already manually tested" | Ad-hoc ≠ systematic. No record, can't re-run. |
-| "Deleting X hours is wasteful" | Sunk cost fallacy. Keeping unverified code is technical debt. |
-| "Keep as reference, write tests first" | You'll adapt it. That's testing after. Delete means delete. |
-| "Need to explore first" | Fine. Throw away exploration, start with TDD. |
-| "Test hard = design unclear" | Listen to test. Hard to test = hard to use. |
-| "TDD will slow me down" | TDD faster than debugging. Pragmatic = test-first. |
-| "Manual test faster" | Manual doesn't prove edge cases. You'll re-test every change. |
-| "Existing code has no tests" | You're improving it. Add tests for existing code. |
+| "Too simple to test" | Use the smallest focused proof that catches reversion when the change affects behavior. |
+| "I'll test after" | Acceptable only when the resulting proof exercises changed behavior and fails on reversion. |
+| "Tests after achieve same goals" | Test-first is preferred for contract discovery; tests-after can still provide regression evidence. |
+| "Already manually tested" | Manual evidence may supplement but does not replace repeatable regression proof for changed behavior. |
+| "Need to explore first" | Explore when useful, then preserve the smallest evidence that proves the final behavior. |
+| "Test hard = design unclear" | Simplify the design when useful, but do not impose test-first ceremony on trivial work. |
+| "Existing code has no tests" | Add focused coverage for the changed behavior when the change is material. |
 
-## Red Flags - STOP and Start Over
+## Red Flags
 
-- Code before test
-- Test after implementation
-- Test passes immediately
-- Can't explain why test failed
-- Tests added "later"
-- Rationalizing "just this once"
-- "I already manually tested it"
-- "Tests after achieve the same purpose"
-- "It's about spirit not ritual"
-- "Keep as reference" or "adapt existing code"
-- "Already spent X hours, deleting is wasteful"
-- "TDD is dogmatic, I'm being pragmatic"
-- "This is different because..."
-
-**All of these mean: Delete code. Start over with TDD.**
+- No repeatable evidence for changed behavior
+- Evidence does not exercise the changed boundary
+- Evidence passes even when the correction is reverted
+- Test-first was selected but its failure was never checked
+- Edge cases or failure paths are omitted when they are material
 
 ## Example: Bug Fix
 
@@ -330,10 +310,10 @@ Extract validation for multiple fields if needed.
 
 Before marking work complete:
 
-- [ ] Every new function/method has a test
-- [ ] Watched each test fail before implementing
-- [ ] Each test failed for expected reason (feature missing, not typo)
-- [ ] Wrote minimal code to pass each test
+- [ ] Changed behavior has proportional regression evidence
+- [ ] Test-first was used when the contract was non-trivial, unclear, or its discovery benefit was material
+- [ ] When test-first was selected, each test failed for the expected reason before implementation
+- [ ] Wrote the smallest code that satisfies the evidence
 - [ ] All tests pass
 - [ ] Output pristine (no errors, warnings)
 - [ ] Tests use real code (mocks only if unavoidable)
@@ -353,9 +333,10 @@ smallest missing evidence before claiming completion.
 
 ## Debugging Integration
 
-Bug found? Write failing test reproducing it. Follow TDD cycle. Test proves fix and prevents regression.
-
-Never fix bugs without a test.
+Bug found? Prefer a failing reproducer when the behavior is non-trivial or
+unclear. For a small, well-understood fix, add the smallest focused regression
+proof alongside or after the implementation. Never fix a behavior bug without
+repeatable evidence that would fail if the fix were reverted.
 
 For material backend behavior, TDD owns implementation loop while `backend-verification` owns direct boundary, failure, state, dependency, contract, and representative-operation evidence.
 

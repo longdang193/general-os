@@ -12,7 +12,9 @@ reduced motion. Browser evidence supplements committed regression tests.
   and tests establish observed implementation behavior; they do not
   automatically replace the intended product contract.
 - When OpenSpec is adopted, maintained specifications define accepted intended
-  behavior and an active change remains proposed until native reconciliation.
+  behavior. An active change is the authorized implementation target for its
+  scope while remaining proposed against that maintained contract until native
+  reconciliation.
 - Use approved Figma or OpenDesign references as visual and interaction
   evidence when available; record the reference and revision without
   duplicating it.

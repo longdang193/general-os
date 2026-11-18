@@ -32,14 +32,17 @@ plan.
 
 ### Level 1: Goal-only intent
 
-Use when the intent must survive runtime loss, a capable fresh executor can
-safely derive the implementation approach, and repeating the assignment is
-safe. Goal-only state has no durable completion or acceptance record; use Level
-2 when completion must be accepted and retained.
+Use only when a material high-level commitment must survive runtime loss, its
+intent cannot be safely or economically reconstructed from Git, project
+records, or native runtime evidence, a capable fresh executor can safely
+derive the implementation approach, and repeating the assignment is safe.
+Persistence alone is insufficient. Ordinary execution intent stays in the
+project's native workflow. Goal-only state has no durable completion or
+acceptance record; use Level 2 when completion must be accepted and retained.
 
 ```json
 {
-  "goal": "Fix duplicate admission",
+  "goal": "Preserve the approved admission-policy decision across the rollout",
   "tasks": []
 }
 ```
@@ -59,7 +62,7 @@ executed.
 
 ```json
 {
-  "goal": "Ship the admission change",
+  "goal": "Preserve the approved admission-policy decision across the rollout",
   "tasks": [
     {
       "id": "implementation",

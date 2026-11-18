@@ -19,7 +19,8 @@ profiles, databases, publication output, or persistent project knowledge.
 - Direct cleanup requires the producing workflow to have finished using the artifact.
 - Delegated routing may occur when work no longer needs a lifecycle resource; the owner then retires it, retirement is verified, and dependent storage cleanup becomes eligible.
 - Verification decides whether an artifact is still needed for proof, debug, recovery, or handoff.
-- Direct cleanup runs before the final `verified` snapshot, then affected proof runs again.
+- Direct cleanup runs before the final owning-verifier snapshot, then affected
+  proof runs again.
 - Git worktree cleanup remains owned by `finishing-development-work` after verified Git disposition, assignment retirement, clean-state proof, and exact authorization.
 - Verification, not this skill, emits the final `verified` result.
 
@@ -180,6 +181,8 @@ owning workflow and are not disposable by default.
 ## Integration
 
 - `executing-work` may invoke this skill in Audit Mode only.
-- `verification-before-completion` identifies retention dependencies and reruns affected proof; it does not perform deletion.
+- The owning verifier identifies retention dependencies and reruns affected
+  proof; `verification-before-completion` applies only when a durable General OS
+  commitment is being accepted. This skill does not perform deletion.
 - `finishing-development-work` owns Git disposition and Git-managed branch, worktree, and stash cleanup after `verified`.
 - The producing workflow or lifecycle owner remains authoritative for Orca runtime, browser or application state, and databases.

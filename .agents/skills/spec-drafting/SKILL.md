@@ -6,9 +6,12 @@ description: Use when a problem, approved direction, or diagnosed defect needs a
 
 ## Role
 
-Turn an understood problem, approved direction, or diagnosed root cause into an implementation-independent specification that explains why change is needed, what behavior is required, and how design-level boundaries satisfy it.
+Turn an understood problem, approved direction, or diagnosed root cause into an implementation-independent specification that explains why change is needed, what behavior is required, and how design-level boundaries satisfy it. Write the result into the designated project specification artifact; do not create a parallel General OS specification authority.
 
-This skill owns specification reasoning and artifact creation. It does not explore unresolved options indefinitely, write implementation tasks, execute code, or claim implementation complete.
+This skill owns specification reasoning and contribution to the designated
+project artifact. It does not explore unresolved options indefinitely, create a
+second specification SSOT, write implementation tasks, execute code, or claim
+implementation complete.
 
 ## When To Use
 

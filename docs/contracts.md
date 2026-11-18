@@ -18,10 +18,10 @@ Use this durable coordination state only when the decision also requires a
 General OS assignment, acceptance boundary, or exceptional authority decision.
 
 When OpenSpec is adopted, maintained specifications are the accepted intended
-behavior. An authorized active OpenSpec change defines target behavior for its
-scoped implementation until reconciliation; it does not globally replace the
-maintained contract. Do not copy either OpenSpec tasks or specifications into
-this state.
+behavior. An authorized active OpenSpec change defines the implementation target
+for its scope while remaining a proposal against the maintained contract until
+native reconciliation; it does not globally replace the maintained contract.
+Do not copy either OpenSpec tasks or specifications into this state.
 
 The task state is one of `pending`, `active`, `blocked`, or `completed`.
 Dispatch requests, runtime identities, Goal Mode status, native subagent

@@ -29,8 +29,10 @@ If destination or problem framing is unknown, use `brainstorming`.
 If behavior and design are settled, promote them through the target project's
 authoritative specification workflow. Prefer native OpenSpec when adopted;
 otherwise use the project's existing specification approach. Use
-`spec-drafting` only when the current task explicitly requires a General
-OS-owned strategic or coordination specification. If approved behavior needs
+`spec-drafting` when no stronger project specification owner exists and a
+precise contract is still needed; write to that designated project artifact.
+Record General OS strategic decisions as minimal decision or coordination
+records rather than a parallel specification. If approved behavior needs
 durable General OS coordination, use `defining-work`. Local, reversible,
 design-clear work uses the existing direct execution route.
 
@@ -65,8 +67,8 @@ Record evidence and alternatives needed to answer a question. Keep approved
 behavior, interfaces, invariants, and design decisions out of the map's
 canonical truth; promote them once through the authoritative project workflow:
 OpenSpec when adopted or the project's existing specification approach
-otherwise. Use `spec-drafting` only for an explicitly General OS-owned
-strategic or coordination specification.
+otherwise. Use `spec-drafting` only to write the project's designated
+specification artifact when no stronger owner exists.
 
 When an upstream decision changes, record the affected question and evidence in
 the non-authoritative artifact, then promote the settled result once through
@@ -79,9 +81,10 @@ If the user asks for production code while the decision frontier is unresolved,
 do not promote implementation or bypass the map, author control, decision
 questions, promotion checks, or links to the owning planning flow. Bounded
 diagnostic or prototype work is allowed when it directly resolves a frontier
-question and remains clearly non-production. Implementation begins through the
-approved durable scope or specification and the planning tier selected by
-`defining-work`.
+question and remains clearly non-production. Implementation returns to the
+approved durable scope, project specification, active OpenSpec change, or
+direct native workflow. `defining-work` is used only when a durable General OS
+coordination boundary is actually needed.
 
 ## Completion And Promotion
 

@@ -27,8 +27,10 @@ Skip for tiny, local, reversible tasks with settled behavior and obvious proof.
 - The owning specification workflow defines approved behavior, interfaces,
   decisions, invariants, acceptance criteria, and validation intent. Prefer
   native OpenSpec when adopted; otherwise use the target project's existing
-  specification approach. Use `spec-drafting` only when General OS explicitly
-  owns a strategic or coordination specification.
+  specification approach. Use `spec-drafting` when no stronger project owner
+  exists and a precise contract is needed; write to the designated project
+  artifact. General OS strategic decisions remain minimal decision or
+  coordination records, not a parallel specification authority.
 - `defining-work` chooses the smallest durable General OS representation only
   when that coordination boundary is actually needed: direct execution, a goal,
   a semantic task graph, or a durable coordination plan.

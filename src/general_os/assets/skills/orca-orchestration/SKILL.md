@@ -36,26 +36,21 @@ Before the first native worker dispatch for repository-bound work:
 1. Resolve the intended repository from the task boundary and current Git as an
    absolute, normalized path.
 2. Load the installed, version-matched native Orca guidance.
-3. Query Orca's registered worktrees through that native guidance and require an
-   exact normalized path match.
-4. Use the registered `path:<absolute-path>` or exact worktree ID selector.
-   Never assume `--worktree current` means the caller's shell directory; it means
-   Orca's active coordinator worktree.
-5. If no registered worktree matches, stop before dispatch and report that the
-   target repository is not registered. Register/open it only with explicit
-   authority.
-6. Observe `orca status --json` and require the runtime to be reachable before
-   dispatch. Treat state and version fields as diagnostics unless the installed
-   native contract declares them incompatible.
-7. Re-resolve the worktree if the target repository, Orca runtime, or session
-   context changes before dispatch.
+3. Ask that native guidance to validate the repository boundary, worktree
+   selector, runtime capability, and reachability using its installed contract.
+4. If native guidance reports that the target is unavailable or requires
+   registration, authority, or another precondition, stop before dispatch and
+   report that result. Register or open it only with explicit authority.
+5. Re-resolve the repository boundary if the target repository, Orca runtime, or
+   session context changes before dispatch.
 
 ## Handoff
 
-Project-level CoS may choose this boundary for coordinated work, and the native
-working controller may choose it within already authorized scope. When a
-durable assignment exists, general-os owns its semantic contract and passes it
-to the native Orca entrypoint selected by the installed version:
+The active native controller chooses this boundary within already authorized
+scope. CoS may require an independent boundary as a durable constraint, but it
+does not select Orca, a reviewer, or the execution topology. When a durable
+assignment exists, general-os owns its semantic contract and passes it to the
+native Orca entrypoint selected by the installed version:
 
 - task objective and semantic identity;
 - relevant context and material constraints;

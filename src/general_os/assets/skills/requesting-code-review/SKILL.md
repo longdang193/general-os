@@ -44,12 +44,12 @@ Do not infer a base from commit count; `HEAD~1` can omit multi-commit changes.
 
 **2. Select review topology:**
 
-Codex decides whether ordinary local execution benefits from a native reviewer
-subagent; another authorized native controller may select an independent
-reviewer when useful. CoS selects an independent review boundary only when the
-review belongs to General OS-coordinated work or crosses a
-strategic or exceptional authority boundary. Native Orca owns internal worker
-dispatch and topology.
+The active native controller chooses whether review uses the current Codex
+runtime, a native reviewer, or native Orca, and chooses the useful topology.
+CoS may record a hard independence or review requirement for General
+OS-coordinated work or an exceptional authority boundary, but it does not
+select the reviewer runtime, profile, or topology. Native Orca owns internal
+worker dispatch and topology after the native controller selects it.
 Neither choice changes the review contract or makes the reviewer a merge owner.
 Specialized profile names such as `review` or `ui` describe optional review
 emphasis; they do not require a fixed reviewer count, sequence, or topology.

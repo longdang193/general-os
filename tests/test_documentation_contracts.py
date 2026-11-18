@@ -82,7 +82,7 @@ def test_native_workflows_and_strategic_decisions_keep_single_owners():
     assert "Native OpenSpec route" in spec
     assert "Do not require this skill's separate" in spec
     assert "target project's authoritative specification workflow" in " ".join(wayfinding.split())
-    assert "explicitly General OS-owned" in wayfinding
+    assert "designated project artifact" in wayfinding
     assert "active OpenSpec change" in " ".join(brainstorming.split())
     assert "only when durable General OS coordination is actually needed" in " ".join(brainstorming.split())
     assert "owning specification workflow" in plan_reviewer
@@ -109,7 +109,7 @@ def test_templates_and_openspec_precedence_are_scoped():
     assert "only when `defining-work` selects a durable General OS" in detailed_plan
     for text in (architecture, contracts):
         normalized = " ".join(text.split())
-        assert "authorized active OpenSpec change defines target behavior for its scoped implementation" in normalized
+        assert "authorized active OpenSpec change defines the implementation target for its scope" in normalized
         assert "does not globally replace the maintained contract" in normalized
 
 
@@ -124,7 +124,7 @@ def test_debugging_and_review_guidance_preserve_qualifications():
 
     assert "inspect existing evidence first" in debugging
     assert "Instrument only unresolved component boundaries" in debugging
-    assert "review belongs to General OS-coordinated work" in review
+    assert "hard independence or review requirement" in review
 
 
 def test_root_guidance_and_templates_define_durable_ownership():
@@ -176,6 +176,36 @@ def test_frontend_ui_rule_matches_packaged_asset():
     ).read_text(encoding="utf-8")
 
     assert canonical == packaged
+
+
+def test_centrally_deployed_docs_match_canonical_sources():
+    root = Path(__file__).parents[1]
+    canonical_root = root / "docs"
+    packaged_root = root / "src" / "general_os" / "assets" / "docs"
+    canonical_paths = {
+        Path("runtime-adapters.md"),
+        *(
+            path.relative_to(canonical_root)
+            for path in (canonical_root / "rules").rglob("*")
+            if path.is_file()
+        ),
+        *(
+            path.relative_to(canonical_root)
+            for path in (canonical_root / "templates").rglob("*")
+            if path.is_file()
+        ),
+    }
+    packaged_paths = {
+        path.relative_to(packaged_root)
+        for path in packaged_root.rglob("*")
+        if path.is_file()
+    }
+
+    assert packaged_paths == canonical_paths
+    for relative_path in sorted(canonical_paths):
+        assert (canonical_root / relative_path).read_bytes() == (
+            packaged_root / relative_path
+        ).read_bytes()
 
 
 def test_maintained_skill_descriptions_are_actionable():
@@ -249,10 +279,10 @@ def test_review_and_wayfinding_guidance_keep_topology_and_state_native():
         root / "src" / "general_os" / "assets" / "skills" / "wayfinding" / "SKILL.md"
     ).read_text(encoding="utf-8")
 
-    assert "Codex decides whether ordinary local execution" in review
+    assert "active native controller chooses whether review" in review
     normalized_review = " ".join(review.split())
-    assert "CoS selects an independent review boundary only when the review belongs to General OS-coordinated work" in normalized_review
-    assert "another authorized native controller may select an independent reviewer" in normalized_review
+    assert "CoS may record a hard independence or review requirement" in normalized_review
+    assert "it does not select the reviewer runtime, profile, or topology" in normalized_review
     assert "Native Orca" in review
     assert "controller-selected discovered-profile reviewer" not in review
     assert "Reviewer:" in reviewer
@@ -260,8 +290,9 @@ def test_review_and_wayfinding_guidance_keep_topology_and_state_native():
     orca = (root / ".agents" / "skills" / "orca-orchestration" / "SKILL.md").read_text(
         encoding="utf-8"
     )
-    assert "--worktree current` means the caller's shell directory" in orca
-    assert "exact normalized path match" in orca
+    assert "Ask that native guidance to validate the repository boundary" in orca
+    assert "does not select Orca, a reviewer, or the execution topology" in orca
+    assert "--worktree current" not in orca
     assert "docs/wayfinding/" in wayfinding
     assert "remains the only durable" in " ".join(wayfinding.split())
     assert "workflow state" in wayfinding

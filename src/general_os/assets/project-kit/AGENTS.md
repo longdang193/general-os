@@ -6,9 +6,11 @@ the selected native runtime.
 Git owns repository state and recovery facts. The native runtime owns
 execution, tools, approvals, and subordinate workers. Durable project intent,
 task boundaries, dependencies, acceptance criteria, and material authority
-exceptions belong in the project's own coordination state only when the project
-has established that coordination path; ordinary authorized work may remain
-native and direct.
+exceptions belong in the project's own coordination state only when the intent
+is a material high-level commitment that cannot be safely or economically
+reconstructed from Git, project records, or native runtime evidence.
+Establishing a coordination path alone does not promote routine execution
+state; ordinary authorized work may remain native and direct.
 
 Keep project-specific guidance, goals, and decisions in this repository. Do
 not persist runtime IDs, heartbeats, temporary plans, worker registries, or

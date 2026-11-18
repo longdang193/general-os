@@ -31,9 +31,11 @@ This skill produces design artifacts only.
 - Brainstorming owns problem exploration, options, trade-offs, recommendations, assumptions, and unresolved questions.
 - When approved direction still needs prototype validation, contribute the
   exploratory evidence to the owning project specification or active OpenSpec
-  change. Use `spec-drafting` only when that artifact is an explicitly
-  General OS-owned strategic or coordination specification; do not create a
-  second permanent brainstorming or UI-intent artifact.
+  change. Use `spec-drafting` when the destination project has no stronger
+  specification owner and a precise contract is still needed; write to the
+  designated project artifact rather than creating a second specification
+  authority. Record a General OS strategic decision as the minimal decision or
+  coordination record it actually needs.
 - Approved behavior, interfaces, decisions, and invariants belong in the
   owning project specification. Use `defining-work` only when durable General
   OS coordination is actually needed; native runtimes own temporary execution
