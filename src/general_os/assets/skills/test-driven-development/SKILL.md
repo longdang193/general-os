@@ -6,15 +6,16 @@ description: Use when implementing non-trivial behavior or bug fixes with regres
 
 ## Overview
 
-Write the test first. Watch it fail. Write minimal code to pass.
+Prefer writing the test first, watching it fail, and writing minimal code to
+pass when that sequence is proportional and clarifies the contract.
 
-**Core principle:** If you didn't watch the test fail, you don't know if it tests the right thing.
-
-**Violating the letter of the rules is violating the spirit of the rules.**
+**Core principle:** Regression evidence must exercise the changed behavior and
+fail if the correction is reverted; test-first is a preferred technique, not a
+universal phase gate.
 
 ## When to Use
 
-**Always:**
+Use this skill for:
 - New features
 - Bug fixes
 - Behavior changes
@@ -25,12 +26,8 @@ Write the test first. Watch it fail. Write minimal code to pass.
 - Keep coverage green before and after the refactor
 - Do not require a deliberately failing test when behavior is unchanged
 
-**Exceptions (ask your human partner):**
-- Throwaway prototypes
-- Generated code
-- Configuration files
-
-Thinking "skip TDD just this once"? Stop. That's rationalization.
+Small, well-understood, configuration, generated, or disposable changes may
+use proportional focused proof without a separate failing-test phase.
 
 ## Regression-proof invariant
 
@@ -44,7 +41,11 @@ refactors. For a small, well-understood change, focused regression proof may be
 written alongside or after the implementation, but it must exercise the
 failure or behavior and fail if the correction is reverted.
 
-## Red-Green-Refactor
+## Preferred Red-Green-Refactor
+
+Use this cycle when the behavior is non-trivial or the contract is unclear.
+For smaller changes, retain the regression-proof invariant with the smallest
+direct evidence that proves it.
 
 ```dot
 digraph tdd_cycle {
@@ -112,7 +113,8 @@ Vague name, tests mock not code
 
 ### Verify RED - Watch It Fail
 
-**MANDATORY. Never skip.**
+Use the failing-test step when it adds signal; do not add instrumentation or a
+phase solely to satisfy this diagram.
 
 ```bash
 npm test path/to/test.test.ts
@@ -337,7 +339,8 @@ Before marking work complete:
 - [ ] Tests use real code (mocks only if unavoidable)
 - [ ] Edge cases and errors covered
 
-Can't check all boxes? You skipped TDD. Start over.
+If the chosen proof does not establish the regression-proof invariant, add the
+smallest missing evidence before claiming completion.
 
 ## When Stuck
 

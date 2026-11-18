@@ -15,10 +15,12 @@ This skill references that rule and does not redefine its ownership.
 
 ## Preconditions
 
-Require a fresh accepted task-proof handoff for task-bound work, or a fresh
-Git-bound direct-scope result for direct execution and Level 1 goal-only intent,
-plus a fresh `verified` result from `verification-before-completion` before
-branch or PR publication, final merge, or cleanup. The evidence must contain:
+Require a fresh accepted task-proof handoff plus a fresh `verified` result from
+`verification-before-completion` for task-bound work before branch or PR
+publication, final merge, or cleanup. For ordinary direct execution and Level 1
+goal-only intent, require current Git facts and focused native/project
+verification; invoke the General OS verifier only when the approved scope
+explicitly requires that evidence handoff. The evidence must contain:
 
 - workspace path and creation mechanism
 - branch or detached state
@@ -37,8 +39,10 @@ If verification is missing, stale, incomplete, or blocked, stop.
 
 When verified work used external worker runtime or another delegated executor:
 
-- Treat executor output as claims. Require current Git evidence and the verified
-  handoff from `verification-before-completion` before disposition.
+- Treat executor output as claims. Require current Git evidence and the owning
+  native/project verification before ordinary disposition; require the verified
+  handoff from `verification-before-completion` only for durable General OS
+  commitments.
 - Never stage executor-local runtime state, credentials, provider bindings, or
   user-local handoff artifacts. Canonical in-scope
   repository configuration such as `agents/*.toml` remains eligible.
@@ -221,10 +225,11 @@ When fast-forward is impossible or conflicts exist, report:
 
 Use the smallest evidence procedure that matches the risk. Safe local commits,
 read-only fetches, clean fast-forwards, and bounded integrations without
-overlap need current Git facts and focused checks only. Before rebase, merge,
-conflict resolution, stash apply or pop, reset, checkout restore, worktree
-cleanup, or deletion, collect and show evidence for every overlapping file,
-including tracked, untracked, ignored, conflict, and stash-only files:
+overlap need current Git facts and focused checks only. When state is ambiguous
+or a destructive/reconciling action is proposed—such as rebase, merge, conflict
+resolution, stash apply or pop, reset, checkout restore, worktree cleanup, or
+deletion—collect and show evidence for every overlapping file, including
+tracked, untracked, ignored, conflict, and stash-only files:
 
 - path and source state: base, workstream, current worktree, index, untracked, or stash ID
 - blob or content hashes for each available source
@@ -372,5 +377,7 @@ Stop when:
 
 - `workspace-isolation` provides workspace identity and creation mechanism.
 - `executing-work` completes implementation tasks.
-- `verification-before-completion` produces required `verified` handoff.
+- `verification-before-completion` produces the required `verified` handoff for
+  durable General OS commitments; native project verification covers ordinary
+  direct work.
 - publication remains owned by repository publication workflow.

@@ -12,15 +12,14 @@ runtime registry.
 
 The Orca capability is optional. Within already authorized scope, the native
 working controller may select Orca when independent orchestration materially
-helps; `orca_enabled` is permission/configuration,
-not runtime health and not an authority escalation. CoS chooses the smallest
-effective native execution boundary using task requirements, available
-capabilities, expected benefit, cost, and coordination overhead. Prefer Codex
-for ordinary work, but select Orca whenever its native orchestration offers
-material benefit. `requires_independent_boundary: true` makes Orca availability
-a hard boundary; `false` does not prohibit Orca selection. Required independent
-work blocks when Orca is disabled or unavailable rather than falling back to
-Codex.
+helps; `orca_enabled` is permission/configuration, not runtime health and not
+an authority escalation. The active native controller chooses the smallest
+effective execution boundary using task requirements, available capabilities,
+expected benefit, cost, and coordination overhead. Prefer Codex for ordinary
+work, but select Orca whenever its native orchestration offers material
+benefit. `requires_independent_boundary: true` makes Orca availability a hard
+boundary; `false` does not prohibit Orca selection. Required independent work
+blocks when Orca is disabled or unavailable rather than falling back to Codex.
 
 `general-os` observes current Orca availability through the CLI `status --json`
 boundary. The repository `orca-orchestration` skill loads the installed,

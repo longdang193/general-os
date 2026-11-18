@@ -109,10 +109,11 @@ interrupt the sequence when needed to limit active impact.
 
    **WHEN system has multiple components (CI → build → signing, API → service → database):**
 
-   **BEFORE proposing fixes, add diagnostic instrumentation:**
+   **BEFORE proposing fixes, inspect existing evidence first:**
 
    ```
-   For EACH component boundary:
+   Reuse existing logs, traces, metrics, configuration, and state evidence.
+   Instrument only unresolved component boundaries:
      - Log what data enters component
      - Log what data exits component
      - Verify environment/config propagation
@@ -335,4 +336,6 @@ These techniques are part of systematic debugging and available in this director
 - **test-driven-development** - For creating failing test case (Phase 4, Step 1)
 - **performance-optimization** - Define representative workloads, metrics, targets, and comparable performance proof
 - **full-stack-integration** - Reconcile frontend intent, transport contracts, API impact, and browser evidence
-- **verification-before-completion** - Verify fix worked before claiming success
+- **verification-before-completion** - Verify durable General OS acceptance
+  when that boundary is explicitly selected; otherwise use native project
+  verification before claiming success

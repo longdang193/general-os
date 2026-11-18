@@ -183,7 +183,8 @@ Invoke only applicable supporting skills:
 - `frontend-component-engineering` for stateful UI and filter mechanics
 - `full-stack-integration` for frontend/backend contract work
 - `performance-optimization` for measured performance problems
-- `verification-before-completion` for final completion proof
+- `verification-before-completion` for durable General OS acceptance proof;
+  native project verification covers ordinary completion
 
 Do not add every supporting procedure to the skill metadata. Keep workflow focused.
 
@@ -209,4 +210,6 @@ Before claiming completion, report:
 - presentation and accessibility evidence
 - preview or deployment result, including unverified states
 
-Final completion proof belongs to `verification-before-completion`.
+Final acceptance proof belongs to `verification-before-completion` only when
+General OS owns a durable commitment; otherwise report the owning project's
+native verification.

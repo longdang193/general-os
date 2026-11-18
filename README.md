@@ -6,12 +6,13 @@ project decisions, dependencies, authority exceptions, or acceptance records
 are needed; ordinary authorized work may start directly in the native runtime.
 
 General-os remembers durable semantics when a project chooses that coordination
-path. Project-level CoS chooses the execution boundary for that path; the
-selected native runtime executes and owns its topology; Git proves repository
-state; and CoS accepts verified results. Native Codex subagents may decompose a
-bounded assignment while remaining subordinate to that assignment. Orca is
-used only when work needs an independently managed workstream or that boundary
-is materially useful.
+path. Project-level CoS establishes material outcome, authority, and
+independence constraints for that path; the active native controller chooses the
+execution mechanism and owns its topology; Git proves repository state; and
+CoS accepts verified results only for commitments it owns. Native Codex
+subagents may decompose a bounded assignment while remaining subordinate to
+that assignment. Orca may be selected by the active native controller when
+independent orchestration is materially useful or required.
 
 The durable coordination object is `state/coordination.json` when durable
 coordination is selected. It stores the goal, optional task objectives and
@@ -20,9 +21,11 @@ Codex, and Orca runtime facts are observed directly at the point of use; runtime
 IDs, progress, heartbeats, and lifecycle mirrors are not copied into durable
 state.
 
-Acceptance is separate from runtime completion: fresh evidence yields `PASS`,
-retryable or incomplete evidence yields `FAIL`, and only a material safety,
-authority, dependency, Git, or required-runtime boundary yields `BLOCKED`.
+For durable General OS commitments, acceptance is separate from runtime
+completion: fresh evidence yields `PASS`, retryable or incomplete evidence
+yields `FAIL`, and only a material safety, authority, dependency, Git, or
+required-runtime boundary yields `BLOCKED`. Ordinary work uses its owning
+project's native verification and Git evidence instead.
 
 Profiles are named semantic choices from `agents/*.toml`, the sole profile
 registry. The four general-purpose profiles explicitly own their configured

@@ -8,13 +8,15 @@ context, tools, approvals, or native subagent scheduling.
 
 ## Fact ownership
 
-When durable coordination is selected, `general-os` owns the durable project
-semantics in `state/coordination.json`: goals, meaningful task objectives,
-dependencies, durable task state, acceptance criteria, and material exceptions.
-Project-level CoS owns coordination judgment for that path: readiness, profile
-selection, execution-boundary choice, and acceptance decisions. Git owns
-repository and recovery facts. Codex owns its native execution loop, Goal Mode,
-context, tools, approvals, and subordinate native subagents. Orca owns internal
+When durable coordination is selected for a material high-level commitment that
+cannot be safely or economically reconstructed from Git, project records, or
+native runtime evidence, `general-os` owns the durable project semantics in
+`state/coordination.json`: goals, meaningful task objectives, dependencies,
+durable task state, acceptance criteria, and material exceptions. Project-level
+CoS owns coordination judgment for that path: readiness, material outcome and
+authority constraints, and acceptance decisions. Git owns repository and
+recovery facts. Codex owns its native execution loop, Goal Mode, context,
+tools, approvals, and subordinate native subagents. Orca owns internal
 orchestration and execution topology after an authorized native controller
 selects that boundary.
 
@@ -24,11 +26,12 @@ copied into general-os state. Projects without OpenSpec and small or reversible
 changes retain their existing native specification route.
 
 The specification SSOT is explicit: maintained OpenSpec specifications define
-accepted intended behavior when OpenSpec is adopted; an active OpenSpec change
-defines proposed behavior until native reconciliation updates those
-specifications; current code and runtime evidence describe implementation
-reality; and an approved Figma, OpenDesign, or code-first design authority
-defines visual design. A project-owned Markdown decision record may preserve
+accepted intended behavior when OpenSpec is adopted; an authorized active
+OpenSpec change defines target behavior for its scoped implementation until
+native reconciliation updates those specifications; it does not globally
+replace the maintained contract. Current code and runtime evidence describe
+implementation reality; and an approved Figma, OpenDesign, or code-first design
+authority defines visual design. A project-owned Markdown decision record may preserve
 substantive strategic rationale, alternatives, and reconsideration triggers
 when that rationale genuinely needs persistence. Use `state/coordination.json`
 only when the decision also requires durable coordination or an exceptional
@@ -54,15 +57,15 @@ Codex, or Orca at the point of use, derive it instead of persisting a copy.
 
 | Decision or fact | Owner |
 | --- | --- |
-| Durable goals, semantic task boundaries, dependencies, profiles, constraints, and acceptance criteria when coordination is selected | general-os |
-| Readiness, profile resolution, execution-boundary selection, and acceptance decisions for coordinated work | project-level CoS |
-| Direct execution, native planning, and subordinate Codex delegation | Codex |
+| Durable goals, semantic task boundaries, dependencies, profiles, constraints, and acceptance criteria for material high-level commitments | general-os |
+| Readiness, material authority constraints, and acceptance decisions for coordinated work | project-level CoS |
+| Direct execution, native planning, execution-mechanism selection, and subordinate Codex delegation | active native controller |
 | Orca internal orchestration and execution topology | native Orca coordinator/coordinating agent provided by the installed version |
 | Runtime decomposition, workers, internal dependencies, retries, questions, supervision, fan-in, and cleanup | selected native runtime |
 | Repository state, worktrees, commits, diffs, and recovery evidence | Git |
 | Durable completion after fresh verification for coordinated work | project-level CoS over general-os state |
 | Accepted intended behavior when OpenSpec is adopted | maintained OpenSpec specifications |
-| Proposed behavior before OpenSpec reconciliation | active OpenSpec change |
+| Authorized scoped target behavior before OpenSpec reconciliation | active OpenSpec change |
 | Implementation reality | current code and runtime evidence |
 | Approved visual design | selected design authority |
 | Strategic decision rationale | project-owned General OS decision context |
@@ -105,11 +108,12 @@ episode is not reconstructed.
 
 When durable coordination is selected, the native CoS skill reads durable state
 and current Git, determines dependency-ready semantic work, resolves the
-semantic profile, and chooses the smallest effective native execution boundary
-based on task requirements, available capabilities, expected benefit, cost, and
-coordination overhead. CoS chooses the semantic boundary and acceptance
-requirements; the selected runtime chooses its internal planning, delegation,
-execution topology, and worker lifecycle. Otherwise, authorized work starts in
+semantic profile, and confirms material outcome, authority, or independence
+constraints. The active native controller chooses the execution mechanism based
+on task requirements, available capabilities, expected benefit, cost, and
+coordination overhead; it also owns internal planning, delegation, execution
+topology, and worker lifecycle. CoS owns acceptance requirements only for the
+durable commitment. Otherwise, authorized work starts in
 the native runtime directly:
 
 1. Codex handles ordinary work directly without creating general-os state.

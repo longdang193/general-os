@@ -1,5 +1,9 @@
 # Goal
 
+Use this template only when `defining-work` selects a durable General OS
+coordination plan. Direct native work and native OpenSpec changes stay in their
+own authoritative workflows.
+
 Describe the desired outcome in one sentence.
 
 # Outcomes

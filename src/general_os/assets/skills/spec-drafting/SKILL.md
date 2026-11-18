@@ -320,7 +320,9 @@ Format records specification; it does not replace specification reasoning.
 3. For cross-cutting, data-sensitive, operational, starter/public-sync, or expensive-to-reverse specifications, use `plan-document-reviewer` before approval or planning handoff when the risk warrants it.
 4. Hand off to the owning native project workflow, OpenSpec when adopted, or `defining-work` when a durable General OS boundary is required.
 5. `executing-work` starts when the selected durable assignment or approved direct scope is ready.
-6. `verification-before-completion` proves acceptance only when its evidence contract applies; otherwise the owning native workflow verifies its result.
+6. `verification-before-completion` proves acceptance only when a durable
+   General OS commitment boundary is selected; otherwise the owning native
+   workflow verifies its result.
 7. `finishing-development-work` owns authorized Git disposition after verified implementation.
 
 ## Red Flags
@@ -343,5 +345,6 @@ Format records specification; it does not replace specification reasoning.
 - `plan-document-reviewer`: review specification correctness and readiness.
 - `defining-work`: select the smallest durable coordination tier for the approved specification.
 - `executing-work`: execute the selected durable assignment or approved direct scope.
-- `verification-before-completion`: prove required behavior and completion.
+- `verification-before-completion`: prove durable General OS acceptance when
+  that boundary is selected.
 - `finishing-development-work`: perform authorized Git closure.

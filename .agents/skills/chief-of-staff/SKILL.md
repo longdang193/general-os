@@ -1,6 +1,6 @@
 ---
 name: chief-of-staff
-description: Use when a durable general-os goal needs dependency-aware work selection, execution-boundary choice, continuation, escalation, or acceptance.
+description: Use when a durable general-os goal needs dependency-aware work selection, continuation, escalation, or acceptance.
 ---
 
 # Chief Of Staff
@@ -20,8 +20,9 @@ second runtime scheduler.
 - Git owns repository and recovery facts.
 - Codex owns its native execution loop, Goal Mode, tools, context, approvals,
   and subordinate native subagents.
-- Orca owns internal runtime orchestration and execution topology after CoS
-  selects that boundary and the `orca-orchestration` skill is loaded.
+- Orca owns internal runtime orchestration and execution topology after an
+  authorized native controller selects that boundary and the
+  `orca-orchestration` skill is loaded.
 - `agents/*.toml` is the sole profile registry. Profile selection is semantic;
   explicit facts may be projected one way to a selected runtime and absent
   facts inherit native defaults.
@@ -32,22 +33,24 @@ second runtime scheduler.
 2. Determine unfinished dependency-ready semantic work and choose the smallest
    useful assignment boundary. An empty task graph is a valid goal-only intent
    assignment with no durable completion record; use a task graph when
-   acceptance must be persisted.
-3. Resolve effective runtime policy, including `orca_enabled`, before choosing
-   an independent boundary. A disabled Orca capability keeps ordinary work on
-   Codex and blocks only work whose durable contract requires independence.
+   acceptance must be persisted for a material high-level commitment that
+   cannot be reconstructed from native evidence.
+3. Resolve effective runtime policy, including `orca_enabled`, before handing
+   off any explicit independence constraint. A disabled Orca capability keeps
+   ordinary work on Codex and blocks only work whose durable contract requires
+   independence.
 4. Resolve the semantic profile without translating missing metadata into
    guessed runtime model or effort settings. Treat explicit harness, model,
    and effort values as optional preferences only where the selected runtime
    supports them; they do not prescribe Orca topology or replace native
    runtime decisions.
-5. Select the smallest effective native execution boundary based on the task's
-   requirements, native capabilities, expected benefit, cost, and coordination
-   overhead. Prefer the current Codex runtime for ordinary work and let Codex
-   decide whether to use Goal Mode, `update_plan`, tools, approvals, or native
-   subagents for its bounded assignment.
-6. Select Orca when independent ownership is required or materially useful and
-   `orca_enabled` permits that boundary. Predefined use cases are examples, not
+5. Confirm only the material outcome, authority, and independence constraints
+   that must survive runtime loss. The active native controller chooses Codex
+   direct, native subagents, or Orca within that authorized scope and owns the
+   execution topology.
+6. If independent ownership is required or materially useful, make that
+   constraint explicit and allow the active native controller to select Orca
+   when `orca_enabled` permits it. Predefined use cases are examples, not
    restrictions. `requires_independent_boundary: true` is a hard requirement,
    not the whole Orca-selection algorithm; `false` does not prohibit selecting
    Orca when its native orchestration offers material benefit.

@@ -18,9 +18,10 @@ Use this durable coordination state only when the decision also requires a
 General OS assignment, acceptance boundary, or exceptional authority decision.
 
 When OpenSpec is adopted, maintained specifications are the accepted intended
-behavior and an active change is proposed behavior until reconciliation. Do not
-silently treat the active change as the maintained contract or copy either
-OpenSpec tasks or specifications into this state.
+behavior. An authorized active OpenSpec change defines target behavior for its
+scoped implementation until reconciliation; it does not globally replace the
+maintained contract. Do not copy either OpenSpec tasks or specifications into
+this state.
 
 The task state is one of `pending`, `active`, `blocked`, or `completed`.
 Dispatch requests, runtime identities, Goal Mode status, native subagent
@@ -31,7 +32,9 @@ are observations, not another durable ledger.
 
 An empty task list is a valid goal-only intent assignment. It has no durable
 completion or acceptance record, so recovery may redispatch the goal; use a task
-graph when acceptance must be persisted. When a task has an objective, that
+graph only when a material high-level commitment needs persisted acceptance that
+cannot be safely or economically reconstructed from Git, OpenSpec, project
+records, or native runtime evidence. When a task has an objective, that
 objective is the assignment; the global goal is not copied into the task or
 used as a second task assignment. Codex may use native subagents inside that
 assignment. Ordinary authorized work may bypass this coordination contract and
@@ -41,9 +44,10 @@ required; a required independent boundary cannot silently fall back to Codex
 when Orca is unavailable.
 
 When coordination is selected, `general-os` owns the durable semantic
-assignment. Project-level CoS owns the coordination judgment that selects the
-boundary and later decides acceptance. The selected native runtime owns
-execution decomposition and execution topology inside that boundary.
+assignment. Project-level CoS owns the coordination judgment that establishes
+material outcome, authority, or independence constraints and later decides
+acceptance. The active native controller selects the execution mechanism and
+owns execution decomposition and topology inside the authorized scope.
 
 Profiles are selected by name from `agents/*.toml`. Explicit profile facts may
 be projected one way to the selected runtime, while absent facts inherit native

@@ -6,10 +6,14 @@ dirty working-tree changes in that checkout are never migration input.
 
 ## Ownership
 
+The ownership wording below records the historical predecessor cutover model;
+current runtime ownership is defined by `docs/architecture.md` and
+`docs/runtime-adapters.md`.
+
 `general-os` owns the maintained semantic skills and active shared rules.
 Git owns repository truth; Codex owns ordinary execution and subordinate native
 children; Orca owns internal runtime orchestration and execution topology inside
-a CoS-selected boundary; `agents/*.toml` is the only profile registry;
+an authorized native-controller-selected boundary; `agents/*.toml` is the only profile registry;
 `state/coordination.json` is the only durable coordination state. Generated
 adapter trees, runtime ledgers, Herdr, Project Secretary, and DeepAgents
 control-plane machinery are not migrated.

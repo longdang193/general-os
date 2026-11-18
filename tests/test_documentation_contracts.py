@@ -67,6 +67,12 @@ def test_native_workflows_and_strategic_decisions_keep_single_owners():
     wayfinding = (root / ".agents" / "skills" / "wayfinding" / "SKILL.md").read_text(
         encoding="utf-8"
     )
+    brainstorming = (root / ".agents" / "skills" / "brainstorming" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    plan_reviewer = (root / ".agents" / "skills" / "plan-document-reviewer" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
     architecture = (root / "docs" / "architecture.md").read_text(encoding="utf-8")
     contracts = (root / "docs" / "contracts.md").read_text(encoding="utf-8")
     frontend = (root / "docs" / "rules" / "frontend-ui.md").read_text(
@@ -75,10 +81,50 @@ def test_native_workflows_and_strategic_decisions_keep_single_owners():
 
     assert "Native OpenSpec route" in spec
     assert "Do not require this skill's separate" in spec
-    assert "authoritative project workflow" in wayfinding
+    assert "target project's authoritative specification workflow" in " ".join(wayfinding.split())
+    assert "explicitly General OS-owned" in wayfinding
+    assert "active OpenSpec change" in " ".join(brainstorming.split())
+    assert "only when durable General OS coordination is actually needed" in " ".join(brainstorming.split())
+    assert "owning specification workflow" in plan_reviewer
+    assert "material ambiguity, risk, independent handoff" in " ".join(plan_reviewer.split())
     assert "Strategic decision rationale" in architecture
     assert "project-owned Markdown" in contracts
     assert "observed implementation behavior" in frontend
+
+
+def test_templates_and_openspec_precedence_are_scoped():
+    root = Path(__file__).parents[1]
+    template = json.loads(
+        (root / "docs" / "templates" / "coordination-state.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    detailed_plan = (root / "docs" / "templates" / "detailed-plan.md").read_text(
+        encoding="utf-8"
+    )
+    architecture = (root / "docs" / "architecture.md").read_text(encoding="utf-8")
+    contracts = (root / "docs" / "contracts.md").read_text(encoding="utf-8")
+
+    assert template["goal"] == "Coordinate a material cross-session decision"
+    assert "only when `defining-work` selects a durable General OS" in detailed_plan
+    for text in (architecture, contracts):
+        normalized = " ".join(text.split())
+        assert "authorized active OpenSpec change defines target behavior for its scoped implementation" in normalized
+        assert "does not globally replace the maintained contract" in normalized
+
+
+def test_debugging_and_review_guidance_preserve_qualifications():
+    root = Path(__file__).parents[1]
+    debugging = (root / ".agents" / "skills" / "systematic-debugging" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    review = (root / ".agents" / "skills" / "requesting-code-review" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "inspect existing evidence first" in debugging
+    assert "Instrument only unresolved component boundaries" in debugging
+    assert "review belongs to General OS-coordinated work" in review
 
 
 def test_root_guidance_and_templates_define_durable_ownership():
@@ -204,7 +250,9 @@ def test_review_and_wayfinding_guidance_keep_topology_and_state_native():
     ).read_text(encoding="utf-8")
 
     assert "Codex decides whether ordinary local execution" in review
-    assert "CoS selects an independent review boundary" in review
+    normalized_review = " ".join(review.split())
+    assert "CoS selects an independent review boundary only when the review belongs to General OS-coordinated work" in normalized_review
+    assert "another authorized native controller may select an independent reviewer" in normalized_review
     assert "Native Orca" in review
     assert "controller-selected discovered-profile reviewer" not in review
     assert "Reviewer:" in reviewer
@@ -343,12 +391,13 @@ def test_architecture_contract_keeps_project_and_runtime_ownership_separate():
 
     for text in (architecture, contracts):
         assert "`general-os` owns" in text
-        assert "Project-level CoS owns" in text
-        assert "execution topology" in text
+        assert "coordination judgment" in text
+        assert "active native controller" in text
         assert "semantic workstream" in text or "workstream contract" in text
         assert "partial progress" in text
         assert "does not silently merge" in text or "does not silently merge runtime" in text
 
+    assert "execution topology" in architecture
     assert "lightweight ownership handoff" in architecture
     assert "not durable general-os acceptance" in architecture
     assert "Transfer or runtime completion is not durable" in contracts
@@ -357,11 +406,35 @@ def test_architecture_contract_keeps_project_and_runtime_ownership_separate():
     assert "~/.agents/general-os/" in deployment
     assert "seed-only" in deployment
     assert "state/coordination.json` is never seeded" in deployment
-    assert "runtime registry" in deployment
-    assert "state revalidate" in (root / "docs" / "recovery.md").read_text(
-        encoding="utf-8"
-    )
-    assert "implicit profile selection may use the neutral" in architecture
+
+
+def test_native_first_architecture_rejects_routine_general_os_gates():
+    root = Path(__file__).parents[1]
+    active_paths = [
+        root / "README.md",
+        root / "docs" / "architecture.md",
+        root / "docs" / "contracts.md",
+        root / "docs" / "runtime-adapters.md",
+        root / "docs" / "migration" / "project-os-starter.md",
+        root / ".agents" / "skills" / "chief-of-staff" / "SKILL.md",
+        root / ".agents" / "skills" / "verification-before-completion" / "SKILL.md",
+        root / ".agents" / "skills" / "finishing-development-work" / "SKILL.md",
+        root / ".agents" / "skills" / "test-driven-development" / "SKILL.md",
+        root / ".agents" / "skills" / "defining-work" / "SKILL.md",
+    ]
+    contents = "\n".join(path.read_text(encoding="utf-8") for path in active_paths)
+    normalized = " ".join(contents.split())
+
+    for forbidden in (
+        "Project-level CoS chooses the execution boundary",
+        "CoS chooses the smallest effective native execution boundary",
+        "inside a CoS-selected boundary",
+        "CoS selects Orca",
+    ):
+        assert forbidden not in normalized
+    assert "native project verification" in normalized
+    assert "Persistence alone is insufficient" in normalized
+    assert "test-first is a preferred technique, not a universal phase gate" in normalized
 
 
 def test_native_cos_keeps_orca_optional_but_allows_material_independence():
@@ -388,8 +461,8 @@ def test_native_cos_keeps_orca_optional_but_allows_material_independence():
 
     assert "materially useful" in chief
     assert "hard requirement" in chief
-    assert "smallest effective native execution boundary" in chief
-    assert "expected benefit, cost, and coordination overhead" in normalized_chief
+    assert "active native controller chooses Codex direct" in normalized_chief
+    assert "CoS chooses the smallest effective native execution boundary" not in normalized_chief
     assert "false` does not prohibit selecting" in chief
     assert "independent hypothesis testing" in normalized_orca
     assert "examples, not mandatory workflows" in normalized_orca

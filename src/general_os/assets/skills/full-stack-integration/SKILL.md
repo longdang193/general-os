@@ -49,7 +49,13 @@ Reference request and response schemas; do not copy them.
 8. Use external documentation capability only when active executor exposes it and pinned local sources do not answer a version-specific library question; treat output as advisory and follow runtime data-boundary rules.
 9. Run focused frontend checks. When browser-interaction capability is available, use it for repeatable user flows and accessibility state.
 10. If a sidecar was created, remove it when all acceptance evidence passes. If blocked, delete completed items and retain only exact unresolved work.
-11. Hand final claims to `verification-before-completion`. Store MCP Memory only for a verified recurring invariant or costly failure not already owned by source or documentation when active executor exposes it; under external worker runtime, use validated Codex handoff facts. Never store task progress, payloads, credentials, or user data.
+11. Hand durable General OS acceptance claims to
+    `verification-before-completion`; ordinary completion remains with the
+    owning project workflow. Store MCP Memory only for a verified recurring
+    invariant or costly failure not already owned by source or documentation
+    when active executor exposes it; under external worker runtime, use
+    validated Codex handoff facts. Never store task progress, payloads,
+    credentials, or user data.
 
 ## Common Mistakes
 

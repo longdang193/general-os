@@ -29,10 +29,15 @@ This skill produces design artifacts only.
 ## Artifact Boundaries
 
 - Brainstorming owns problem exploration, options, trade-offs, recommendations, assumptions, and unresolved questions.
-- When approved direction still needs prototype validation, hand off to `spec-drafting`; do not create a second permanent brainstorming or UI-intent artifact.
-- Approved behavior, interfaces, decisions, and invariants belong in
-  specifications. Use `defining-work` for durable task boundaries and
-  coordination; native runtimes own temporary execution planning. An
+- When approved direction still needs prototype validation, contribute the
+  exploratory evidence to the owning project specification or active OpenSpec
+  change. Use `spec-drafting` only when that artifact is an explicitly
+  General OS-owned strategic or coordination specification; do not create a
+  second permanent brainstorming or UI-intent artifact.
+- Approved behavior, interfaces, decisions, and invariants belong in the
+  owning project specification. Use `defining-work` only when durable General
+  OS coordination is actually needed; native runtimes own temporary execution
+  planning. An
   implementation plan may retain concrete files, symbols, commands, and
   execution steps only when they are non-derivable durable boundaries or an
   explicitly requested handoff contract.

@@ -1,14 +1,16 @@
 ---
 name: verification-before-completion
-description: Use when a Codex or Orca assignment reports completion and fresh Git, acceptance, and failure evidence must determine whether the durable task is accepted.
+description: Use when a Codex or Orca assignment reports completion and fresh Git, acceptance, and failure evidence must determine whether a durable General OS commitment is accepted.
 ---
 
 # Verification Before Completion
 
 ## Overview
 
-Verify the requested outcome against current Git and fresh evidence before
-CoS changes durable task state. Runtime completion is only an observation.
+Verify a durable General OS commitment against current Git and fresh evidence
+before CoS changes durable task state. Runtime completion is only an
+observation. Ordinary direct work uses the owning project's native verification
+and does not require this skill merely to produce a General OS result.
 
 ## Procedure
 
@@ -22,11 +24,11 @@ For task-bound work:
 5. Report one result with the exact checks, results, revision, and remaining
    work.
 
-For direct execution or Level 1 goal-only intent, use the same Git and check
-sequence against the approved direct scope or durable goal constraints. Return
-an ephemeral Git-bound verification result for the current scope; do not invent
-durable goal acceptance or write a completion record to
-`state/coordination.json`.
+For ordinary direct execution or Level 1 work without a durable acceptance
+boundary, use the owning project's native verification and current Git facts.
+Invoke this skill only when the approved scope explicitly requires a Git-bound
+General OS evidence handoff; do not invent durable goal acceptance or write a
+completion record to `state/coordination.json`.
 
 Profile names and runtime observations are context, not acceptance evidence.
 Use fresh Git and verification output; do not require optional runtime
@@ -42,11 +44,10 @@ repository tasks.
 
 ### `PASS`
 
-Use only when required checks pass, evidence is current, the applicable task or
-direct-scope criteria are satisfied, and no material Git conflict remains. CoS
-may persist a task as `completed` only for task-bound work. Direct and Level 1
-results remain ephemeral and may be handed to the Git owner for an explicitly
-authorized disposition.
+Use only when required checks pass, evidence is current, the durable commitment
+criteria are satisfied, and no material Git conflict remains. CoS may persist a
+task as `completed` only for task-bound work. Native verification remains
+authoritative for ordinary direct and Level 1 work.
 
 ### `FAIL`
 
@@ -64,8 +65,9 @@ unavailable. Record the concrete reason.
 ## Boundaries
 
 - Do not accept work because Codex Goal Mode or an Orca worker reports done.
-- Do not require a durable task proof when the approved work is direct or
-  Level 1 goal-only intent; use current Git-bound evidence instead.
+- Do not require this General OS proof when the approved work is direct or
+  Level 1 goal-only intent; use the owning project's native verification and
+  current Git-bound evidence instead.
 - Do not write runtime IDs, progress, heartbeats, or verifier state into
   `general-os` durable state.
 - Do not own branch merge, publication, worktree cleanup, Orca cleanup, or

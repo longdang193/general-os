@@ -26,9 +26,13 @@ Before opening a map, record evidence for all conditions:
 - expected work beyond one focused session.
 
 If destination or problem framing is unknown, use `brainstorming`.
-If behavior and design are settled, use `spec-drafting`. If approved
-behavior needs implementation sequencing, use `defining-work`. Local,
-reversible, design-clear work uses the existing direct execution route.
+If behavior and design are settled, promote them through the target project's
+authoritative specification workflow. Prefer native OpenSpec when adopted;
+otherwise use the project's existing specification approach. Use
+`spec-drafting` only when the current task explicitly requires a General
+OS-owned strategic or coordination specification. If approved behavior needs
+durable General OS coordination, use `defining-work`. Local, reversible,
+design-clear work uses the existing direct execution route.
 
 ## Map Ownership
 
@@ -60,8 +64,9 @@ estimates, schedules, tracker IDs, or builder assignments.
 Record evidence and alternatives needed to answer a question. Keep approved
 behavior, interfaces, invariants, and design decisions out of the map's
 canonical truth; promote them once through the authoritative project workflow:
-OpenSpec when adopted, the native project specification otherwise, or
-`spec-drafting` when General OS owns the specification.
+OpenSpec when adopted or the project's existing specification approach
+otherwise. Use `spec-drafting` only for an explicitly General OS-owned
+strategic or coordination specification.
 
 When an upstream decision changes, record the affected question and evidence in
 the non-authoritative artifact, then promote the settled result once through

@@ -38,7 +38,9 @@ Read only references needed for current assessment:
   selected durable assignment; native runtime planning remains local to that
   assignment
 - `executing-work` for bounded native work with disjoint ownership
-- `verification-before-completion` after implementation
+- `verification-before-completion` after implementation only when a durable
+  General OS commitment requires its acceptance result; otherwise use native
+  project verification
 - `finishing-development-work` only after fresh verification and explicit Git authorization
 
 Formal audit ceremony is conditional. Ordinary refactor assessment requires traceable evidence, not an audit bundle.
@@ -102,7 +104,7 @@ Route rather than perform next stage:
 | Settled design requiring a durable General OS boundary or non-derivable ordering | `defining-work` |
 | Approved OpenSpec change or other ready direct scope | `executing-work` |
 | Independent actions with disjoint write ownership | `executing-work` |
-| Completed implementation | `verification-before-completion` |
+| Completed implementation with a durable General OS acceptance boundary | `verification-before-completion` |
 | Verified work needing authorized Git disposition | `finishing-development-work` |
 
 Use `brainstorming` before specification when desired behavior remains unresolved.

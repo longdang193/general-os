@@ -14,7 +14,8 @@ This skill detects incorrect, contradictory, underspecified, unprovable, overeng
 
 Use when:
 
-- a specification or plan will drive real implementation
+- a specification or plan carries material ambiguity, risk, independent
+  handoff, or costly-to-reverse implementation
 - another session, agent, team, or worktree will execute it
 - work is cross-cutting, operational, data-sensitive, starter/public-sync, or expensive to reverse
 - a flawed contract, task order, or validation strategy would create hidden risk
@@ -23,8 +24,14 @@ Skip for tiny, local, reversible tasks with settled behavior and obvious proof.
 
 ## Ownership Boundaries
 
-- `spec-drafting` creates approved behavior, interfaces, decisions, invariants, acceptance criteria, and validation intent.
-- `defining-work` chooses the smallest durable representation: direct execution, a goal, a semantic task graph, or a durable coordination plan.
+- The owning specification workflow defines approved behavior, interfaces,
+  decisions, invariants, acceptance criteria, and validation intent. Prefer
+  native OpenSpec when adopted; otherwise use the target project's existing
+  specification approach. Use `spec-drafting` only when General OS explicitly
+  owns a strategic or coordination specification.
+- `defining-work` chooses the smallest durable General OS representation only
+  when that coordination boundary is actually needed: direct execution, a goal,
+  a semantic task graph, or a durable coordination plan.
 - A durable plan may add exact files, symbols, commands, dependencies, and
   execution order only when they are non-derivable ownership boundaries or an
   explicit handoff contract; those details do not become runtime state or
@@ -32,7 +39,9 @@ Skip for tiny, local, reversible tasks with settled behavior and obvious proof.
 - this skill identifies readiness defects in those artifacts without silently rewriting them
 - `workspace-isolation` optionally establishes isolated workspace identity
 - `executing-work` discovers implementation reality and performs task-local proof
-- `verification-before-completion` runs final proof and produces verified, incomplete, or blocked result
+- `verification-before-completion` runs final proof and produces a verified,
+  incomplete, or blocked result only when a durable General OS acceptance
+  boundary applies; native project verification covers ordinary work
 - `finishing-development-work` owns authorized Git disposition after verified result
 - `requesting-code-review` initiates implementation-diff review; `receiving-code-review` evaluates returned findings; neither reviews proposed documents
 
@@ -198,4 +207,5 @@ State exactly one readiness verdict and short reason.
 
 ## Integration
 
-Use after `spec-drafting` or `defining-work` when review cost is justified and before `executing-work` or external handoff.
+Use after the owning specification or planning workflow when review cost is
+justified and before `executing-work` or external handoff.

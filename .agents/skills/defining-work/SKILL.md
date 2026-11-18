@@ -13,10 +13,12 @@ when that path is selected; the selected native runtime owns temporary
 execution planning. Direct authorized work does not need a durable general-os
 plan merely because the native runtime uses a temporary plan.
 
-Persist a planning fact only when a fresh capable executor could not safely
-reconstruct it from the goal, current Git, repository guidance, and current
-environment. Do not duplicate Codex Goal Mode, `update_plan`, Claude planning,
-native subagent decomposition, or other runtime-local planning mechanisms.
+Persist a planning fact only for a material high-level commitment that a fresh
+capable executor could not safely or economically reconstruct from the goal,
+current Git, OpenSpec, project records, repository guidance, and current
+environment. Persistence alone is insufficient. Do not duplicate Codex Goal
+Mode, `update_plan`, Claude planning, native subagent decomposition, or other
+runtime-local planning mechanisms.
 
 ## Planning Depths
 
@@ -49,8 +51,9 @@ exploratory work, temporary steps, tools, retries, and delegation.
 
 ### Level 2: Small task graph
 
-Use when work has multiple meaningful durable boundaries, dependencies, or
-separate acceptance conditions. Tasks describe semantic work boundaries, not
+Use only when a material high-level commitment has multiple meaningful durable
+boundaries, dependencies, or separate acceptance conditions that native project
+records cannot safely retain. Tasks describe semantic work boundaries, not
 implementation checklists. The native runtime determines how each task is
 executed.
 

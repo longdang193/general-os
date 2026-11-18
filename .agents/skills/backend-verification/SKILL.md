@@ -19,7 +19,11 @@ Prove backend behavior directly before consumer or frontend integration. Use thi
 6. Run real-dependency proof when database, queue, cache, filesystem, external service, or infrastructure semantics are material. Avoid mocks that erase behavior under test.
 7. Reconstruct one representative operation using existing logs, correlation or trace IDs, job/message IDs, dependency records, or test instrumentation when traceability is material.
 8. Run fresh focused automated checks and record exact command, exit status, failures, skips, and relevant evidence.
-9. Hand failures to `systematic-debugging`, implementation loops to `test-driven-development`, consumer integration to `full-stack-integration`, and final claims to `verification-before-completion`.
+9. Hand failures to `systematic-debugging`, implementation loops to
+   `test-driven-development`, consumer integration to `full-stack-integration`,
+   and durable General OS acceptance claims to
+   `verification-before-completion`; ordinary completion remains with the
+   owning project workflow.
 
 ## Evidence Output
 
