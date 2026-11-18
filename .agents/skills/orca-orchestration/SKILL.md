@@ -88,9 +88,11 @@ progress, failure, or a material blocker. A lightweight ownership handoff may
 return only a transfer acknowledgement, if the native path reports one; the
 handoff is not semantic task completion. Never persist or mirror Run IDs, Task
 IDs, Dispatch IDs, worker IDs, heartbeats, progress, or other Orca runtime
-state in `general-os` durable state. The owning verifier must inspect current
-Git and evaluate fresh evidence; neither a native outcome nor a successful
-handoff completes a general-os task by itself.
+ state in `general-os` durable state. For repository-bound work, the owning
+ verifier must inspect current Git; for external-only work, it must inspect the
+ owning project record and authoritative source. In either case, evaluate fresh
+ evidence; neither a native outcome nor a successful handoff completes a
+ general-os task by itself.
 
 ## Degradation
 

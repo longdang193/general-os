@@ -22,6 +22,20 @@ runtime-local planning mechanisms.
 
 ## Planning Depths
 
+### Outcome ownership
+
+Before choosing a planning depth, classify who owns the durable outcome:
+
+- **Project-owned external outcome:** retain the decision and source-specific
+  evidence in the designated project record and workflow. Do not create a
+  General OS task or task graph merely because the outcome must be remembered.
+- **Repository-bound General OS outcome:** choose Direct execution, Level 1,
+  Level 2, or Level 3 only when the corresponding durable coordination facts
+  cannot be safely reconstructed from native project records and current state.
+
+External-only work must not be routed into a General OS task that the existing
+Git-bound acceptance path cannot complete.
+
 ### Direct execution
 
 Use when the work is local, design-clear, reversible, and does not require
@@ -38,7 +52,8 @@ records, or native runtime evidence, a capable fresh executor can safely
 derive the implementation approach, and repeating the assignment is safe.
 Persistence alone is insufficient. Ordinary execution intent stays in the
 project's native workflow. Goal-only state has no durable completion or
-acceptance record; use Level 2 when completion must be accepted and retained.
+acceptance record; for a repository-bound General OS outcome, use Level 2 when
+completion must be accepted and retained.
 
 ```json
 {
@@ -54,7 +69,7 @@ exploratory work, temporary steps, tools, retries, and delegation.
 
 ### Level 2: Small task graph
 
-Use only when a material high-level commitment has multiple meaningful durable
+Use only for a repository-bound General OS commitment with multiple meaningful durable
 boundaries, dependencies, or separate acceptance conditions that native project
 records cannot safely retain. Tasks describe semantic work boundaries, not
 implementation checklists. The native runtime determines how each task is

@@ -60,9 +60,10 @@ native Orca only when independent ownership is required or materially useful.
 `requires_independent_boundary` is a hard requirement, not the complete Orca
 selection algorithm.
 
-Recover from durable `general-os` state plus current Git. Do not reconstruct
-lost runtime sessions unless a concrete operational reason makes that safer
-than starting fresh.
+For repository-bound work, recover from durable `general-os` state plus current
+Git. For external-only work, recover from the designated project decision record
+and authoritative source. Do not reconstruct lost runtime sessions unless a
+concrete operational reason makes that safer than starting fresh.
 
 Block only for material authority, dependency, Git, or external-state risks.
 Missing optional runtime evidence lowers confidence; it does not by itself

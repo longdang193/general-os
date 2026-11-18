@@ -316,7 +316,9 @@ Extract validation for multiple fields if needed.
 
 Before marking work complete:
 
-- [ ] Changed behavior has proportional regression evidence
+- [ ] Changed behavior has proportional evidence; deterministic changes prefer
+      regression evidence, while external, exploratory, or non-deterministic
+      claims may use repeatable source-specific or representative evidence
 - [ ] Test-first was used when the contract was non-trivial, unclear, or its discovery benefit was material
 - [ ] When test-first was selected, each test failed for the expected reason before implementation
 - [ ] Wrote the smallest code that satisfies the evidence
@@ -342,7 +344,8 @@ the smallest missing evidence before claiming completion.
 Bug found? Prefer a failing reproducer when the behavior is non-trivial or
 unclear. For a small, well-understood fix, add the smallest focused regression
 proof alongside or after the implementation. Never fix a behavior bug without
-repeatable evidence that would fail if the fix were reverted.
+repeatable evidence proportional to the claim; deterministic fixes should use
+evidence that would fail if the fix were reverted when practical.
 
 For material backend behavior, TDD owns implementation loop while `backend-verification` owns direct boundary, failure, state, dependency, contract, and representative-operation evidence.
 
@@ -356,6 +359,7 @@ When adding mocks or test utilities, read @testing-anti-patterns.md to avoid com
 ## Final Rule
 
 ```
-Production code → regression evidence exists and passes
+Production code → proportional evidence exists and passes
+Deterministic behavior → prefer regression evidence that fails on reversion
 Test-first → preferred when it reduces uncertainty or clarifies the contract
 ```

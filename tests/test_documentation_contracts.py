@@ -105,9 +105,12 @@ def test_reviewed_guidance_handles_scope_specific_acceptance_and_native_ownershi
     assert "Present options only when no closure choice" in normalized_finishing
     assert "uncommitted review possible" in review
     assert "staged, unstaged, and untracked inventory" in review
+    assert "approved path inventory and exclusions" in review
+    assert "outside that inventory are unrelated" in review
     assert "known baseline/unrelated failures" in tdd
     assert "No introduced unexpected errors or warnings" in tdd
     assert "proportional evidence" in " ".join(tdd.split())
+    assert "deterministic changes prefer" in " ".join(tdd.split())
 
 
 def test_reviewed_skill_mirrors_match_canonical_sources():
@@ -118,10 +121,24 @@ def test_reviewed_skill_mirrors_match_canonical_sources():
         "finishing-development-work",
         "requesting-code-review",
         "test-driven-development",
+        "executing-work",
+        "orca-orchestration",
     ):
         canonical = root / ".agents" / "skills" / name / "SKILL.md"
         packaged = root / "src" / "general_os" / "assets" / "skills" / name / "SKILL.md"
         assert canonical.read_bytes() == packaged.read_bytes(), name
+
+    reviewer = root / ".agents" / "skills" / "requesting-code-review" / "code-reviewer.md"
+    packaged_reviewer = (
+        root
+        / "src"
+        / "general_os"
+        / "assets"
+        / "skills"
+        / "requesting-code-review"
+        / "code-reviewer.md"
+    )
+    assert reviewer.read_bytes() == packaged_reviewer.read_bytes()
 
 
 def test_native_workflows_and_strategic_decisions_keep_single_owners():
@@ -353,8 +370,13 @@ def test_review_and_wayfinding_guidance_keep_topology_and_state_native():
     assert "Reviewer:" in reviewer
     assert "COMMITTED_RANGE | WORKING_TREE" in reviewer
     assert "git diff --cached" in reviewer
+    assert "git diff --stat [BASE_SHA] -- [APPROVED_PATHS]" in reviewer
+    assert "Do not inspect unrelated paths" in reviewer
     assert "frozen review package" in reviewer
     assert "optional" in reviewer
+    assert "otherwise continue native" in " ".join(reviewer.split())
+    assert "````\nReviewer:" in reviewer
+    assert "````\n\n**Placeholders:**" in reviewer
     assert "controller-selected profile" not in reviewer
     orca = (root / ".agents" / "skills" / "orca-orchestration" / "SKILL.md").read_text(
         encoding="utf-8"
@@ -407,6 +429,8 @@ def test_core_governance_skills_define_native_ownership():
     assert "PASS" in contents["verification-before-completion"]
     assert "version-matched guidance" in contents["orca-orchestration"]
     assert "lightweight handoff guidance" in contents["orca-orchestration"]
+    assert "Repository-bound runtime loss" in contents["executing-work"]
+    assert "owning project record and authoritative source" in contents["orca-orchestration"]
 
 
 def test_goal_only_and_reusable_skill_boundaries_are_explicit():
@@ -535,6 +559,22 @@ def test_native_first_architecture_rejects_routine_general_os_gates():
     assert "native project verification" in normalized
     assert "Persistence alone is insufficient" in normalized
     assert "Changed behavior requires proportional evidence" in normalized
+
+
+def test_planning_and_recovery_route_external_outcomes_to_project_records():
+    root = Path(__file__).parents[1]
+    defining = (root / ".agents" / "skills" / "defining-work" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    recovery = (root / "docs" / "recovery.md").read_text(encoding="utf-8")
+    normalized_defining = " ".join(defining.split())
+    normalized_recovery = " ".join(recovery.split())
+
+    assert "### Outcome ownership" in defining
+    assert "Project-owned external outcome" in defining
+    assert "must not be routed into a General OS task" in normalized_defining
+    assert "repository-bound General OS completion" in normalized_recovery
+    assert "External-only completion returns to the designated project" in normalized_recovery
 
 
 def test_repository_bound_acceptance_and_recovery_are_scoped():

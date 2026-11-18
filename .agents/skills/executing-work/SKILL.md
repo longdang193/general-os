@@ -16,13 +16,16 @@ recreate the Codex agent loop.
 
 1. Read the assigned goal or task objective, dependencies, acceptance, and
    exceptional authority.
-2. Inspect current Git before changing files.
+2. For repository changes, inspect current Git before changing files; for
+   external-only work, inspect the authoritative project or service source
+   instead.
 3. Use native Codex Goal Mode, `update_plan`, context, approvals, tools, and
    repository instructions.
 4. Keep the assignment bounded by its objective and acceptance criteria.
-5. Run focused verification, inspect the resulting Git state, and return
-   evidence to the owning native assignment or project workflow. Return it to
-   CoS only when the work belongs to a durable General OS commitment.
+5. Run focused verification, inspect the resulting Git state for repository
+   changes, and return evidence to the owning native assignment or project
+   workflow. Return it to CoS only when the work belongs to a durable General
+   OS commitment.
 
 The current Codex runtime is the normal interactive execution path. General-os
 does not maintain a second Python interactive runtime; compatibility proof must
@@ -54,14 +57,17 @@ look durable. Do not copy Orca IDs, worker progress, or lifecycle state into
 
 - A failed check, stale evidence, or incomplete proof means continue or
   reverify; it is not automatically a durable blocker.
-- A material Git, authority, dependency, credential, user-decision, or
+- A material repository Git, authority, dependency, credential, user-decision, or
   required-runtime failure is reported as `BLOCKED`.
-- Runtime loss is recovered by rereading durable state and Git and starting a
-  fresh assignment. Runtime history is not the recovery source of truth.
+- Repository-bound runtime loss is recovered by rereading durable state and Git
+  and starting a fresh assignment. External-only work is recovered from its
+  owning project record and authoritative source. Runtime history is not the
+  recovery source of truth.
 
 ## Common Mistakes
 
 - Rebuilding Codex Goal Mode or `update_plan` as a general-os ledger.
 - Treating a native child as a peer coordinator.
 - Persisting thread IDs, progress, or temporary plans.
-- Assuming runtime completion proves acceptance without fresh Git verification.
+- Assuming runtime completion proves repository-bound acceptance without fresh
+  Git verification.

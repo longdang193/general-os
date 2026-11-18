@@ -5,7 +5,7 @@ structured code-review prompt.
 
 **Purpose:** Review completed work against requirements and code quality standards before it cascades into more work.
 
-```
+````
 Reviewer:
   description: "Review code changes"
   prompt: |
@@ -33,6 +33,8 @@ Reviewer:
     **Review mode:** [COMMITTED_RANGE | WORKING_TREE]
     **Base:** [BASE_SHA]
     **Head:** [HEAD_SHA]
+    **Approved inventory:** [APPROVED_PATHS]
+    **Excluded or protected paths:** [EXCLUDED_PATHS]
 
     For `COMMITTED_RANGE`, inspect the approved immutable range:
 
@@ -41,29 +43,38 @@ Reviewer:
     git diff [BASE_SHA]..[HEAD_SHA]
     ```
 
-    For `WORKING_TREE`, inspect the scoped current checkout instead:
+    For `WORKING_TREE`, use the supplied approved base whenever committed
+    changes belong to the scope. Inspect the complete approved inventory,
+    including committed, staged, unstaged, and relevant untracked changes:
 
-    ```bash
-    git status --short
-    git diff --cached
-    git diff
-    ```
+    ````bash
+    git diff --stat [BASE_SHA] -- [APPROVED_PATHS]
+    git diff [BASE_SHA] -- [APPROVED_PATHS]
+    git diff --cached [BASE_SHA] -- [APPROVED_PATHS]
+    git status --short -- [APPROVED_PATHS]
+    ````
 
-    Inspect relevant untracked files directly. Do not substitute
-    `Not applicable: local worktree review` into a Git range command.
+    Inspect approved untracked files directly. Do not inspect unrelated paths
+    or protected content. If no approved base is supplied, review only the
+    current staged, unstaged, and untracked scope; never infer a base from
+    commit count. Do not substitute `Not applicable: local worktree review`
+    into a Git range command when committed changes are in scope.
 
     ## Review Evidence Identity
 
     For `COMMITTED_RANGE`, bind review evidence to the supplied `[BASE_SHA]` and
-    `[HEAD_SHA]` commit identities and the caller-owned Git inventory. For
-    `WORKING_TREE`, bind evidence to the scoped staged, unstaged, and untracked
-    inventory. A frozen review package and its SHA-256 plus Git-inventory digest
-    are optional, used only when delegation or reproducibility requires them.
+    `[HEAD_SHA]` commit identities and the caller-owned approved inventory. For
+    `WORKING_TREE`, bind evidence to the approved base, current HEAD, and
+    scoped staged, unstaged, and untracked inventory. A frozen review package
+    and its SHA-256 plus Git-inventory digest are optional, used only when
+    delegation or reproducibility requires them.
     Re-run review when the selected scope or any recorded package digest changes.
 
-    Optional OCR preparation is advisory only. Consume exactly one
-    `[REVIEW_PREPARATION_FILE]` after verifying `scope_identity.base_sha`,
-    `scope_identity.head_sha`, `scope_identity.inventory_sha256`, and `status`.
+    Optional OCR preparation is advisory only. If
+    `[REVIEW_PREPARATION_FILE]` is supplied, consume exactly one after
+    verifying `scope_identity.base_sha`, `scope_identity.head_sha`,
+    `scope_identity.inventory_sha256`, and `status`; otherwise continue native
+    review without waiting for an OCR artifact or digest metadata.
     Preserve every inventory path. Protected paths and old/new rename/copy
     sides are metadata-only; never load protected content. Current repository
     governance and rules outrank OCR. Only `system` OCR rules may be consumed as advisory
@@ -165,7 +176,7 @@ Reviewer:
     - Give feedback on code you didn't actually read
     - Be vague ("improve error handling")
     - Avoid giving a clear verdict
-```
+````
 
 **Placeholders:**
 - `[DESCRIPTION]` — brief summary of what was built
@@ -174,5 +185,8 @@ Reviewer:
   base or `Not applicable: local worktree review`
 - `[HEAD_SHA]` — ending commit for `COMMITTED_RANGE`; otherwise `Not applicable:
   local worktree review`
+- `[APPROVED_PATHS]` — caller-owned files or directories in review scope
+- `[EXCLUDED_PATHS]` — unrelated or protected paths that must not be loaded
+- `[REVIEW_PREPARATION_FILE]` — optional OCR preparation file, when supplied
 
 **Reviewer returns:** Strengths, Issues (Critical / Important / Minor), Recommendations, Assessment

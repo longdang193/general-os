@@ -25,9 +25,10 @@ coordination starts a fresh native assignment from the current Git state:
    goal when the task graph is empty. Goal-only state is intent-only and has no
    durable completion record; use it only for a material high-level commitment
    that cannot be safely or economically reconstructed from project-native
-   records. Use a task graph when completion must be retained. If no durable
-   coordination state exists, do not create it merely for recovery; continue
-   with the native runtime.
+   records. Use a task graph when repository-bound General OS completion must
+   be retained. External-only completion returns to the designated project
+   decision record and workflow. If no durable coordination state exists, do
+   not create it merely for recovery; continue with the native runtime.
 5. For repository-bound tasks, treat legacy completed tasks without current
    acceptance identities as pending until fresh verification establishes
    completion again. For current completed tasks, revalidate the accepted

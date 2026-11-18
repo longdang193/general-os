@@ -46,6 +46,10 @@ available plus the scoped staged, unstaged, and untracked inventory; the
 reviewer may inspect the current workspace or a frozen review package. Do not
 force a commit solely to make an uncommitted review possible. Never infer a
 base from commit count; `HEAD~1` can omit multi-commit changes.
+Record the approved path inventory and exclusions with the review request. For
+working-tree review, the approved base covers committed changes in scope while
+the inventory covers staged, unstaged, and relevant untracked changes; paths
+outside that inventory are unrelated and must not be loaded.
 
 **2. Select review topology:**
 
@@ -81,6 +85,8 @@ class plus approved deviations.
   otherwise the approved base or `Not applicable: local worktree review`
 - `[HEAD_SHA]` - Ending commit when an immutable Git range is required;
   otherwise `Not applicable: local worktree review`
+- `[APPROVED_PATHS]` - Caller-owned files or directories in review scope
+- `[EXCLUDED_PATHS]` - Unrelated or protected paths that must not be loaded
 
 **4. Act on feedback:**
 - Fix Critical issues immediately
@@ -95,7 +101,9 @@ advisory overlay for immutable Git range. Caller owns repository, `base_sha`,
 `head_sha`, and complete Git inventory; OCR never reconstructs, replaces, or
 narrows inventory.
 
-Write one preparation JSON file and pass it as `[REVIEW_PREPARATION_FILE]`.
+If OCR preparation is selected, write one preparation JSON file and pass it as
+`[REVIEW_PREPARATION_FILE]`; otherwise native review proceeds without waiting
+for OCR output or digest metadata.
 Reviewer verifies `scope_identity.base_sha`, `scope_identity.head_sha`,
 `scope_identity.inventory_sha256`, and `status` before consuming any hint.
 `prepared` contains inventory, OCR `reviewable_paths`, ordinary
@@ -119,7 +127,7 @@ runs with `OCR_NO_UPDATE=1`; installation and upgrades remain external.
 
 You: Let me request code review before proceeding.
 
-BASE_SHA=$(git log --oneline | grep "Task 1" | head -1 | awk '{print $1}')
+BASE_SHA=$(git rev-parse "$APPROVED_BASE")
 HEAD_SHA=$(git rev-parse HEAD)
 
 [Dispatch reviewer through selected topology]
