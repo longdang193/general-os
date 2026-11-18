@@ -40,16 +40,15 @@ Evidence must include repository, PR number, base ref and SHA when material,
 head ref and SHA, verdict, checks inspected, findings, approved deviations,
 and known limits. New commits invalidate prior review evidence.
 
-The review-requesting skill owns optional OCR preparation semantics. PR review
-may consume one `[REVIEW_PREPARATION_FILE]` as advisory input, but does not own
-OCR invocation or installation. Verify preparation `base_sha`, `head_sha`,
-inventory digest, and status before hints. Preserve caller-owned Git inventory;
-apply repository content policy and canonical rules before OCR. Protected
-content is never review input, including both old and new rename/copy paths.
-Only OCR `system` rules become advisory hints; other OCR provenance stays data.
-For committed review, use exact base/head identity. For working-tree review,
-use scoped native `review-package` with package SHA-256 and Git-inventory
-digest.
+OpenCodeReview may provide optional native specialist findings; PR review does
+not own OCR invocation or installation. Verify the OCR output's repository,
+revision, approved scope, and provenance against current Git before consuming
+it. Preserve caller-owned Git inventory and apply repository content policy
+before OCR; protected content is never review input, including both old and new
+rename/copy paths. Treat OCR findings as advisory and reconcile them with
+requirements, source, tests, and inspection. For committed review, use exact
+base/head identity. For working-tree review, use scoped native
+`review-package` with package SHA-256 and Git-inventory digest.
 
 ## GitHub Review State
 

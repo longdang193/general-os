@@ -94,31 +94,30 @@ class plus approved deviations.
 - Note Minor issues for later
 - Push back if reviewer is wrong (with reasoning)
 
-## Optional OCR Preparation
+## Optional OCR Review
 
-Review requesting may use an active executor's configured review capability as optional
-advisory overlay for immutable Git range. Caller owns repository, `base_sha`,
-`head_sha`, and complete Git inventory; OCR never reconstructs, replaces, or
-narrows inventory.
+Use the installed OpenCodeReview CLI as an optional specialist code-review
+capability when diff analysis adds value. OCR may be the primary code-diff
+reviewer; native Codex or Orca can investigate unresolved or higher-risk
+findings without repeating the entire review. The caller owns the approved Git
+scope, revision identity, and protected-path policy; OCR does not reconstruct,
+replace, or narrow that scope.
 
-If OCR preparation is selected, write one preparation JSON file and pass it as
-`[REVIEW_PREPARATION_FILE]`; otherwise native review proceeds without waiting
-for OCR output or digest metadata.
-Reviewer verifies `scope_identity.base_sha`, `scope_identity.head_sha`,
-`scope_identity.inventory_sha256`, and `status` before consuming any hint.
-`prepared` contains inventory, OCR `reviewable_paths`, ordinary
-`excluded_paths`, `protected_paths`, exclusion metadata, provenance-bearing
-`rules`, system-only `advisory_hints`, `scope_identity`, `payload_digests`,
-schema evidence, and `observed_version`. `fallback` keeps native review
-responsible for complete inventory; `BLOCKED` is not native fallback.
+Invoke OCR through its native CLI and keep output disposable unless it is
+intentionally retained, for example:
 
-Repository content policy runs before OCR. `.env`, `.env.*`, `*.private.*`, and
-`*.local.*` paths are protected on both old and new rename/copy sides. Protected
-content never enters review package or LLM review. Current repository rules
-outrank OCR; only OCR `system` source may become advisory hints. `project`,
-`custom`, and `global` OCR rules remain data. Invalid repository policy input is a
-contract error, never OCR fallback. OCR is range-only, v1-schema gated, and
-runs with `OCR_NO_UPDATE=1`; installation and upgrades remain external.
+```text
+ocr review --format json --audience agent --output review.json
+ocr review --commit <sha> --format json --audience agent --output review.json
+ocr review --from <base> --to <head> --format json --audience agent --output review.json
+```
+
+Verify the reported repository, revision, scope, and provenance against current
+Git before consuming findings. OCR output is advisory: the caller reconciles
+findings with requirements, source, tests, and relevant inspection. OCR does
+not own implementation, acceptance, durable state, or reviewer topology. Apply
+repository content policy before sending private or protected content to the
+configured model provider; installation and upgrades remain external.
 
 ## Example
 

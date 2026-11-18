@@ -20,6 +20,13 @@ tools, approvals, and subordinate native subagents. Orca owns internal
 orchestration and execution topology after an authorized native controller
 selects that boundary.
 
+Specialist review tools such as OpenCodeReview may own their native analysis
+and review output, but not implementation, acceptance, reviewer topology, or
+General OS durable state. The active native controller selects them only when
+useful; the caller verifies Git scope and provenance and reconciles findings
+with requirements, source, tests, and inspection. A clean specialist result is
+not proof that no defects exist.
+
 Projects that adopt OpenSpec keep change-local requirements, proposals, design
 notes, changed specs, and task checklists in OpenSpec. Those artifacts are not
 copied into general-os state. The active change owner is accountable for

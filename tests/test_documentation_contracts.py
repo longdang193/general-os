@@ -447,6 +447,26 @@ def test_review_and_wayfinding_guidance_keep_topology_and_state_native():
     assert wayfinding == derived_wayfinding
 
 
+def test_optional_ocr_review_uses_native_output_without_new_coordination_state():
+    root = Path(__file__).parents[1]
+    review = (root / ".agents" / "skills" / "requesting-code-review" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    pull_request_review = (
+        root / ".agents" / "skills" / "reviewing-pull-requests" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    architecture = (root / "docs" / "architecture.md").read_text(encoding="utf-8")
+    combined = " ".join(f"{review}\n{pull_request_review}\n{architecture}".split())
+
+    assert "optional specialist code-review capability" in combined
+    assert "ocr review --format json" in combined
+    assert "OCR output is advisory" in combined
+    assert "does not own implementation, acceptance" in combined
+    assert "verify the ocr output's repository" in combined.lower()
+    assert "Specialist review tools such as OpenCodeReview" in combined
+    assert "REVIEW_PREPARATION_FILE" not in combined
+
+
 def test_core_governance_skills_define_native_ownership():
     root = Path(__file__).parents[1]
     skill_paths = {
