@@ -507,6 +507,87 @@ assert.equal(result.conversationId, "real-route");
     )
 
 
+def test_completion_allows_synthetic_route_handoff_after_response_progress():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+function pageFor(snapshots) {{
+  const page = {{
+    index: 0,
+    current() {{ return snapshots[Math.min(this.index, snapshots.length - 1)]; }},
+    url() {{ return this.current().url; }},
+    waitForTimeout() {{ this.index += 1; }},
+    locator(selector) {{
+      const current = () => this.current();
+      return {{
+        first() {{ return this; }},
+        last() {{ return this; }},
+        count: async () => selector.includes("conversation-turn-error") || selector.includes("role=alert") ? 0 : 1,
+        isVisible: async () => false,
+        evaluateAll: async (callback, includeText) => callback(
+          selector.includes("assistant")
+            ? current().assistant.map((text) => ({{ innerText: text, getAttribute: () => null }}))
+            : [],
+          includeText,
+        ),
+      }};
+    }},
+    getByRole(role) {{ return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }}; }},
+    getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+  }};
+  return page;
+}}
+
+const result = await waitForReviewCompletion(pageFor([
+  {{ url: "https://chatgpt.com/c/local-chatgpt:abc", assistant: ["Bootstrap"] }},
+  {{ url: "https://chatgpt.com/c/real-route", assistant: ["Partial response"] }},
+  {{ url: "https://chatgpt.com/c/real-route", assistant: ["Reviewed 0123456789abcdef0123456789abcdef01234567; no findings."] }},
+  {{ url: "https://chatgpt.com/c/real-route", assistant: ["Reviewed 0123456789abcdef0123456789abcdef01234567; no findings."] }},
+]), {{
+  baseline: {{ assistantMessageId: "visible-assistant-turn-0", assistantTurnCount: 1, conversationId: "local-chatgpt:abc", submissionConversationId: "local-chatgpt:abc", dispatchState: "acknowledged", submission: "acknowledged", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 1000,
+}});
+assert.equal(result.status, "confirmed");
+assert.equal(result.conversationId, "real-route");
+'''
+    )
+
+
+def test_completion_rejects_static_same_count_synthetic_route_handoff_without_user_anchor():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/stale-route",
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => 0,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => selector.includes("assistant")
+        ? callback([{{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", getAttribute: () => null }}], includeText)
+        : callback([], includeText),
+    }};
+  }},
+  getByRole(role) {{ return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }}; }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "visible-assistant-turn-0", assistantTurnCount: 1, conversationId: "local-chatgpt:abc", submissionConversationId: "local-chatgpt:abc", dispatchState: "acknowledged", submission: "acknowledged", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 20,
+}});
+assert.equal(result.status, "incomplete");
+assert.equal(result.checkpointAccepted, false);
+'''
+    )
+
+
 def test_completion_rejects_unanchored_zero_baseline_route_handoff():
     run_node_assertion(
         f'''

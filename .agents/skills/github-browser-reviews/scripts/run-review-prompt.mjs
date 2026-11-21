@@ -503,7 +503,11 @@ export async function waitForReviewCompletion(page, {
   let submittedUserTurnId = baseline.submittedUserTurnId || null;
   let submittedTurnAnchorObserved = Boolean(submittedUserTurnId);
   let conversationTransitionDeadline = null;
+  let handoffConversationId = null;
+  let handoffAssistantText = null;
+  let handoffResponseProgressed = false;
   const submissionConversationId = baseline.submissionConversationId || null;
+  const syntheticSubmissionRoute = submissionConversationId?.startsWith("local-chatgpt:") === true;
   const submissionAcknowledged = baseline.submission === "acknowledged"
     || baseline.dispatchState === "acknowledged";
 
@@ -529,7 +533,16 @@ export async function waitForReviewCompletion(page, {
       && expectedConversationId
       && snapshot.conversationId
       && snapshot.conversationId !== expectedConversationId;
-    if (conversationChanged && !submissionAcknowledged && conversationTransitionDeadline === null) {
+    if (conversationChanged) {
+      if (handoffConversationId !== snapshot.conversationId) {
+        handoffConversationId = snapshot.conversationId;
+        handoffAssistantText = snapshot.assistantText;
+        handoffResponseProgressed = snapshot.generating;
+      } else if (snapshot.generating || snapshot.assistantText !== handoffAssistantText) {
+        handoffResponseProgressed = true;
+      }
+    }
+    if (conversationChanged && conversationTransitionDeadline === null) {
       conversationTransitionDeadline = Date.now() + Math.min(COMPOSER_READINESS_TIMEOUT_MS, timeoutMs);
     }
     if (!submittedUserTurnId && baseline.submittedPrompt) {
@@ -558,9 +571,15 @@ export async function waitForReviewCompletion(page, {
       };
     }
     if (conversationChanged) {
-      const newAssistantTurnObserved = Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
+      const transitionFreshnessObserved = syntheticSubmissionRoute && handoffResponseProgressed;
+      const newAssistantTurnObserved = transitionFreshnessObserved
+        || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
       const newConversationAnchorObserved = newAssistantTurnObserved
-        && (submittedTurnObserved || acknowledgedSubmissionAssistantTurn);
+        && (submittedTurnObserved || acknowledgedSubmissionAssistantTurn || transitionFreshnessObserved);
+      if (transitionFreshnessObserved) {
+        submittedTurnObserved = true;
+        submittedTurnAnchorObserved = true;
+      }
       if (!newConversationAnchorObserved) {
         if (submissionAcknowledged && baselineAssistantTurnCount === 0) {
           await page.waitForTimeout(backoffMs);
@@ -581,8 +600,8 @@ export async function waitForReviewCompletion(page, {
         };
       }
       expectedConversationId = snapshot.conversationId;
-      const newAssistantTurn = snapshot.assistantMessageId
-        && snapshot.assistantMessageId !== baseline.assistantMessageId;
+      const newAssistantTurn = transitionFreshnessObserved
+        || (snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
       baselineAssistantTurnCount = snapshot.generating || newAssistantTurn
         ? Math.max(0, snapshot.assistantTurnCount - 1)
         : snapshot.assistantTurnCount;
@@ -593,10 +612,12 @@ export async function waitForReviewCompletion(page, {
     const responseEvidenceObserved = snapshot.generating
       || snapshot.responseActionsReady
       || snapshot.assistantTurnCount > baselineAssistantTurnCount
-      || (conversationChanged && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId));
+      || (conversationChanged && (handoffResponseProgressed
+        || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId)));
     const responseTurnObserved = snapshot.generating
       || snapshot.assistantTurnCount > baselineAssistantTurnCount
-      || (conversationChanged && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId));
+      || (conversationChanged && (handoffResponseProgressed
+        || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId)));
     if (!responseConversationId && responseTurnObserved && snapshot.conversationId && submittedTurnObserved) {
       responseConversationId = snapshot.conversationId;
       expectedConversationId = responseConversationId;
