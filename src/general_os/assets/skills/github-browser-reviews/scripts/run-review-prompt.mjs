@@ -299,7 +299,9 @@ export async function readSubmittedUserTurnId(page, prompt, { timeoutMs = SUBMIT
   if (!prompt) return null;
   const deadline = Date.now() + timeoutMs;
   const expectedPrompt = normalizePromptText(prompt);
-  while (Date.now() <= deadline) {
+  let firstAttempt = true;
+  while (firstAttempt || Date.now() <= deadline) {
+    firstAttempt = false;
     try {
       const turns = page.locator(USER_TURN_SELECTOR);
       const snapshots = await turns.evaluateAll((elements) => elements.map((element) => ({
@@ -484,11 +486,13 @@ export async function waitForReviewCompletion(page, {
   let baselineAssistantTurnCount = baseline.assistantTurnCount;
   let expectedConversationId = baseline.conversationId || null;
   let responseConversationId = null;
+  let submittedUserTurnId = baseline.submittedUserTurnId || null;
+  let conversationTransitionDeadline = null;
 
   while (Date.now() <= deadline) {
     if (await readVisibleInterruption(page)) {
       const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
-      const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, baseline.submittedUserTurnId);
+      const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
       if (submittedTurnObserved && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId)) {
         if (onSnapshot) await onSnapshot(interruptedSnapshot);
       }
@@ -503,6 +507,17 @@ export async function waitForReviewCompletion(page, {
     }
 
     snapshot = await readCompletionSnapshot(page);
+    const conversationChanged = !responseConversationId
+      && expectedConversationId
+      && snapshot.conversationId
+      && snapshot.conversationId !== expectedConversationId;
+    if (conversationChanged && conversationTransitionDeadline === null) {
+      conversationTransitionDeadline = Date.now() + Math.min(SUBMITTED_TURN_ID_TIMEOUT_MS, timeoutMs);
+    }
+    if (!submittedUserTurnId && baseline.submittedPrompt) {
+      submittedUserTurnId = await readSubmittedUserTurnId(page, baseline.submittedPrompt, { timeoutMs: 0 });
+    }
+    const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
     if (responseConversationId && snapshot.conversationId && snapshot.conversationId !== responseConversationId) {
       return {
         ...snapshot,
@@ -512,8 +527,15 @@ export async function waitForReviewCompletion(page, {
         failureReason: "conversation identity changed after response evidence was bound",
       };
     }
-    if (!responseConversationId && expectedConversationId && snapshot.conversationId && snapshot.conversationId !== expectedConversationId) {
-      if (!baseline.submittedUserTurnId) {
+    if (conversationChanged) {
+      const newConversationAnchorObserved = submittedTurnObserved
+        && snapshot.assistantTurnCount > baselineAssistantTurnCount;
+      if (!newConversationAnchorObserved) {
+        if (conversationTransitionDeadline !== null && Date.now() <= conversationTransitionDeadline) {
+          await page.waitForTimeout(backoffMs);
+          backoffMs = Math.min(backoffMs * 2, COMPLETION_MAX_BACKOFF_MS);
+          continue;
+        }
         return {
           ...snapshot,
           response: snapshot.assistantText,
@@ -530,7 +552,6 @@ export async function waitForReviewCompletion(page, {
         : snapshot.assistantTurnCount;
     }
     if (!expectedConversationId && snapshot.conversationId) expectedConversationId = snapshot.conversationId;
-      const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, baseline.submittedUserTurnId);
     if (onSnapshot && submittedTurnObserved) await onSnapshot({ ...snapshot, checkpointAccepted: true });
     generationObserved ||= snapshot.generating;
     const responseEvidenceObserved = snapshot.generating
@@ -581,7 +602,7 @@ export async function waitForReviewCompletion(page, {
   }
 
   const finalSnapshot = await readCompletionSnapshot(page, { includeText: true });
-  const finalSubmittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, baseline.submittedUserTurnId);
+  const finalSubmittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
   const finalCheckpointAccepted = (!expectedConversationId || finalSnapshot.conversationId === expectedConversationId)
     && finalSubmittedTurnObserved;
   if (onSnapshot && finalCheckpointAccepted) await onSnapshot({ ...finalSnapshot, checkpointAccepted: true });

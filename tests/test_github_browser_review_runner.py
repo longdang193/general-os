@@ -257,6 +257,41 @@ assert.match(result.failureReason, /association|submitted user turn/i);
     )
 
 
+def test_completion_allows_normal_route_handoff_after_new_turn_anchor_is_visible():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/new-route",
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => selector.includes("conversation-turn-error") || selector.includes("role=alert") ? 0 : 1,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => selector.includes("assistant")
+        ? callback([{{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", getAttribute: (name) => name === "data-message-id" ? "assistant-new" : null }}], includeText)
+        : selector.includes("data-user-message-bubble")
+          ? callback([{{ innerText: "Review the pinned change.", getAttribute: () => null }}])
+          : callback([]),
+    }};
+  }},
+  getByRole(role) {{ return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }}; }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "assistant-base", assistantTurnCount: 0, conversationId: "bootstrap-route", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 20,
+}});
+assert.equal(result.status, "confirmed", JSON.stringify(result));
+assert.equal(result.conversationId, "new-route");
+'''
+    )
+
+
 def test_interrupted_unrelated_conversation_checkpoint_is_rejected():
     run_node_assertion(
         f'''
