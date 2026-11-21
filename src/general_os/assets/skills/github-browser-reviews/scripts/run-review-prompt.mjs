@@ -503,6 +503,15 @@ export async function waitForReviewCompletion(page, {
       };
     }
     if (!responseConversationId && expectedConversationId && snapshot.conversationId && snapshot.conversationId !== expectedConversationId) {
+      if (!baseline.submittedUserTurnId) {
+        return {
+          ...snapshot,
+          response: snapshot.assistantText,
+          status: "incomplete",
+          checkpointAccepted: false,
+          failureReason: "conversation identity changed before submitted user turn identity was bound",
+        };
+      }
       expectedConversationId = snapshot.conversationId;
       const newAssistantTurn = snapshot.assistantMessageId
         && snapshot.assistantMessageId !== baseline.assistantMessageId;

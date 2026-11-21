@@ -90,6 +90,7 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo 
 assert.equal(hasRevisionEvidence("https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md\\nSeverity: pending until I inspect it.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High; reviewed the pinned file.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nCould not access the pinned file; this review is not approved yet.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI don't have access to the pinned file, so I found no issues.", provenance), false);
 '''
     )
 
@@ -400,6 +401,57 @@ assert.equal(result.conversation_id, "route-2");
     )
 
 
+def test_rejected_completion_without_accepted_checkpoint_preserves_submission_identity():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const page = {{ isClosed: () => false, close: async () => {{}} }};
+const responses = [];
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-rejected-without-checkpoint",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/c/accepted",
+      conversationId: "accepted",
+    }}),
+    waitForReviewCompletion: async () => ({{
+      status: "incomplete",
+      checkpointAccepted: false,
+      currentUrl: "https://chatgpt.com/c/rejected",
+      conversationId: "rejected",
+      assistantMessageId: "assistant-rejected",
+      assistantTurnIndex: 1,
+      response: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.",
+      failureReason: "conversation identity changed",
+    }}),
+    writeResult: async () => {{}},
+    writeResponse: async (_filePath, content) => responses.push(content),
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.conversation_url, "https://chatgpt.com/c/accepted");
+assert.equal(result.conversation_id, "accepted");
+assert.equal(responses.length, 0);
+'''
+    )
+
+
 def test_bootstrap_page_selection_fails_closed_on_zero_or_multiple_pages():
     run_node_assertion(
         f'''
@@ -410,6 +462,39 @@ const page = {{}};
 assert.equal(await findBootstrapReviewPage({{ pages: () => [page] }}), page);
 await assert.rejects(findBootstrapReviewPage({{ pages: () => [] }}, {{ timeoutMs: 0 }}), /bootstrap page/);
 await assert.rejects(findBootstrapReviewPage({{ pages: () => [page, {{}}] }}), /Ambiguous/);
+'''
+    )
+
+
+def test_cleanup_waits_for_owned_chrome_process_exit_before_releasing_lease():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ EventEmitter }} from "node:events";
+import {{ existsSync }} from "node:fs";
+import {{ mkdtemp, writeFile, rm }} from "node:fs/promises";
+import {{ closeContext }} from {CLI_RUNNER.as_uri()!r};
+import {{ join }} from "node:path";
+
+const directory = await mkdtemp("review-lease-");
+const lockPath = join(directory, "profile.lock");
+await writeFile(lockPath, JSON.stringify({{ token: "token" }}));
+const chromeProcess = new EventEmitter();
+chromeProcess.exitCode = null;
+chromeProcess.signalCode = null;
+chromeProcess.killed = false;
+chromeProcess.kill = () => {{
+  chromeProcess.killed = true;
+  setTimeout(() => {{ chromeProcess.exitCode = 0; chromeProcess.emit("exit", 0, null); }}, 5);
+}};
+await closeContext({{
+  browser: {{ close: async () => {{}} }},
+  ownsContext: false,
+  chromeProcess,
+  profileLease: {{ lockPath, profilePath: directory, token: "token" }},
+}});
+assert.equal(existsSync(lockPath), false);
+await rm(directory, {{ recursive: true, force: true }});
 '''
     )
 
@@ -477,10 +562,12 @@ function pageFor(snapshots) {{
         isVisible: async () => false,
         innerText: async () => "",
         evaluateAll: async (callback, includeText) => callback(
-          current().assistant.map(([id, text]) => ({{
-            innerText: text,
-            getAttribute: (name) => name === "data-message-id" ? id : null,
-          }})),
+          selector.includes("data-user-message-bubble")
+            ? [{{ innerText: "Review the pinned change.", getAttribute: (name) => name === "data-message-id" ? "submitted-user" : null }}]
+            : current().assistant.map(([id, text]) => ({{
+              innerText: text,
+              getAttribute: (name) => name === "data-message-id" ? id : null,
+            }})),
           includeText,
         ),
       }};
@@ -502,6 +589,8 @@ const baseline = {{
   assistantMessageId: "old",
   assistantTurnCount: 1,
   conversationId: "base",
+  submittedPrompt: "Review the pinned change.",
+  submittedUserTurnId: "submitted-user",
 }};
 const checkpoints = [];
 const stable = await waitForReviewCompletion(pageFor([

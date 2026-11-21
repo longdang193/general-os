@@ -27,6 +27,7 @@ const DEFAULT_CONTEXT_INDEX = 0;
 const DEFAULT_CDP_PORT = 9222;
 const CDP_STARTUP_TIMEOUT_MS = 15000;
 const CDP_POLL_INTERVAL_MS = 100;
+const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const DEFAULT_OUTPUT_DIR = "review-output";
 const PROFILE_LEASE_SUFFIX = ".codex-review-profile.lock";
 const PROFILE_BINDING_FILE = ".codex-review-profile.json";
@@ -219,7 +220,7 @@ export function validateReviewProvenance({ repository, commitSha, reviewUrls, pr
 
 export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (typeof response !== "string" || !response.trim()) return false;
-  if (/(?:could not|unable to|failed to|cannot|can't)\s+(?:access|review|inspect|load|read)|\b(?:not|never|not yet|pending)\s+approved\b/i.test(response)) return false;
+  if (/(?:could not|unable to|failed to|cannot|can't)\s+(?:access|review|inspect|load|read)|\b(?:don't|do not)\s+have access\b|\bnot able to access\b|\baccess(?:ing)?(?: the| to)?\s+[^.\n]{0,40}\bfailed\b|\b(?:not|never|not yet|pending)\s+approved\b/i.test(response)) return false;
   const normalizedResponse = response.toLowerCase();
   let revisionMarkerFound = typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase());
   for (const reviewUrl of reviewUrls || []) {
@@ -662,6 +663,29 @@ export async function waitForCdpEndpoint(
   throw new Error(`Timed out waiting for Chrome CDP endpoint ${endpoint}: ${errorMessage(lastError)}`);
 }
 
+export async function waitForProcessExit(child, { timeoutMs = PROCESS_EXIT_TIMEOUT_MS } = {}) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  if (typeof child.once !== "function") throw new Error("Owned browser process does not expose an exit event");
+  await new Promise((resolveExit, rejectExit) => {
+    let timer;
+    const cleanup = () => {
+      clearTimeout(timer);
+      child.removeListener?.("exit", onExit);
+      child.removeListener?.("close", onExit);
+      child.removeListener?.("error", onError);
+    };
+    const onExit = () => { cleanup(); resolveExit(); };
+    const onError = (error) => { cleanup(); rejectExit(error); };
+    timer = setTimeout(() => {
+      cleanup();
+      rejectExit(new Error("Timed out waiting for owned browser process to exit"));
+    }, timeoutMs);
+    child.once("exit", onExit);
+    child.once("close", onExit);
+    child.once("error", onError);
+  });
+}
+
 export async function launchDedicatedChrome(
   profilePath,
   {
@@ -691,7 +715,13 @@ export async function launchDedicatedChrome(
     await waitForEndpoint(endpoint);
     return { endpoint, port, process: chromeProcess };
   } catch (error) {
-    chromeProcess.kill?.();
+    try {
+      chromeProcess.kill?.();
+      await waitForProcessExit(chromeProcess);
+      error.chromeProcessExited = true;
+    } catch (cleanupError) {
+      error.cleanupError = cleanupError;
+    }
     throw error;
   }
 }
@@ -743,12 +773,23 @@ export async function openContext(chromium, options, dependencies = {}) {
         repository: options.repository,
       };
     } catch (error) {
-      launched?.process?.kill?.();
-      try {
-        await releaseProfileLease(profileLease);
-      } catch (cleanupError) {
-        error.cleanupError = cleanupError;
-        error.message = `${errorMessage(error)}; profile lease cleanup failed: ${errorMessage(cleanupError)}`;
+      let processExited = error.chromeProcessExited === true;
+      if (launched?.process) {
+        try {
+          launched.process.kill?.();
+          await waitForProcessExit(launched.process);
+          processExited = true;
+        } catch (cleanupError) {
+          error.cleanupError = cleanupError;
+        }
+      }
+      if (processExited) {
+        try {
+          await releaseProfileLease(profileLease);
+        } catch (cleanupError) {
+          error.cleanupError = cleanupError;
+          error.message = `${errorMessage(error)}; profile lease cleanup failed: ${errorMessage(cleanupError)}`;
+        }
       }
       throw error;
     }
@@ -810,6 +851,7 @@ export async function closeContext(attached) {
   const { browser, context, ownsContext, page, profileLease, chromeProcess } = attached;
   let cleanupError;
   let ownedContextClosed = !ownsContext;
+  let chromeProcessExited = !chromeProcess;
   try {
     if (ownsContext && context) {
       await context.close();
@@ -831,11 +873,15 @@ export async function closeContext(attached) {
     }
     try {
       if (chromeProcess && !chromeProcess.killed) chromeProcess.kill?.();
+      if (chromeProcess) {
+        await waitForProcessExit(chromeProcess);
+        chromeProcessExited = true;
+      }
     } catch (error) {
       cleanupError ||= error;
     }
   }
-  if (ownedContextClosed) {
+  if (ownedContextClosed && profileLease && chromeProcessExited) {
     try {
       await releaseProfileLease(profileLease);
     } catch (error) {
@@ -1034,19 +1080,23 @@ export async function runReviewTransaction(context, options) {
     });
     const rejectedCompletion = completion.checkpointAccepted === false
       || (lastAcceptedSnapshot && completion.conversationId && completion.conversationId !== lastAcceptedSnapshot.conversationId);
-    const completionSnapshot = rejectedCompletion && lastAcceptedSnapshot
-      ? { ...completion, ...lastAcceptedSnapshot, response: lastAcceptedSnapshot.assistantText || null }
+    const completionSnapshot = rejectedCompletion
+      ? lastAcceptedSnapshot
+        ? { ...completion, ...lastAcceptedSnapshot, response: lastAcceptedSnapshot.assistantText || null }
+        : null
       : completion;
     result.completion = completion.status;
-    result.conversation_url = completionSnapshot.currentUrl || result.conversation_url || null;
-    result.conversation_id = completionSnapshot.conversationId || result.conversation_id || null;
-    result.assistant_message_id = completionSnapshot.assistantMessageId || result.assistant_message_id || null;
-    result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? result.assistant_turn_index ?? null;
+    if (completionSnapshot) {
+      result.conversation_url = completionSnapshot.currentUrl || result.conversation_url || null;
+      result.conversation_id = completionSnapshot.conversationId || result.conversation_id || null;
+      result.assistant_message_id = completionSnapshot.assistantMessageId || result.assistant_message_id || null;
+      result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? result.assistant_turn_index ?? null;
+    }
 
-    if (completionSnapshot.response && !rejectedCompletion) {
+    if (completionSnapshot?.response && !rejectedCompletion) {
       stage = "artifacts";
       await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
-    } else if (completionSnapshot.response && rejectedCompletion && lastAcceptedSnapshot) {
+    } else if (completionSnapshot?.response && rejectedCompletion && lastAcceptedSnapshot) {
       stage = "artifacts";
       await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
     }
@@ -1097,14 +1147,18 @@ export async function runReviewTransaction(context, options) {
           result.completion = completion.status;
            const rejectedCompletion = completion.checkpointAccepted === false
              || (lastAcceptedSnapshot && completion.conversationId && completion.conversationId !== lastAcceptedSnapshot.conversationId);
-           const completionSnapshot = rejectedCompletion && lastAcceptedSnapshot
-             ? { ...completion, ...lastAcceptedSnapshot, response: lastAcceptedSnapshot.assistantText || null }
-             : completion;
-           result.conversation_url = completionSnapshot.currentUrl || result.conversation_url;
-           result.conversation_id = completionSnapshot.conversationId || result.conversation_id;
-           result.assistant_message_id = completionSnapshot.assistantMessageId || null;
-           result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? null;
-           if (completionSnapshot.response && outputDir) {
+            const completionSnapshot = rejectedCompletion
+              ? lastAcceptedSnapshot
+                ? { ...completion, ...lastAcceptedSnapshot, response: lastAcceptedSnapshot.assistantText || null }
+                : null
+              : completion;
+            if (completionSnapshot) {
+              result.conversation_url = completionSnapshot.currentUrl || result.conversation_url;
+              result.conversation_id = completionSnapshot.conversationId || result.conversation_id;
+              result.assistant_message_id = completionSnapshot.assistantMessageId || null;
+              result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? null;
+            }
+            if (completionSnapshot?.response && outputDir) {
              await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
           }
            if (completion.status === "confirmed" && hasRevisionEvidence(completionSnapshot.response, options) && stage === "submission") {
