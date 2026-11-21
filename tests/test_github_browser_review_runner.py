@@ -140,6 +140,42 @@ assert.throws(() => validateReviewBatch([{{ ...base, existing_conversation_url: 
     )
 
 
+def test_conversation_identity_normalizes_encoded_route_segments():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ normalizeExistingConversationUrl, waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
+
+assert.equal(
+  normalizeExistingConversationUrl("https://chatgpt.com/c/local-chatgpt%3Aabc"),
+  "https://chatgpt.com/c/local-chatgpt%3Aabc",
+);
+
+const page = {{
+  url: () => "https://chatgpt.com/c/local-chatgpt:abc",
+  waitForTimeout: async () => {{}},
+  locator: () => ({{
+    first() {{ return this; }},
+    last() {{ return this; }},
+    count: async () => 1,
+    isVisible: async () => false,
+    evaluateAll: async (callback, includeText) => callback([
+      {{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null }},
+    ], includeText),
+  }}),
+  getByRole: (role) => ({{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }}),
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => true }}),
+}};
+const result = await waitForExistingReviewCompletion(page, {{
+  conversationUrl: "https://chatgpt.com/c/local-chatgpt%3Aabc",
+  timeoutMs: 20,
+}});
+assert.equal(result.status, "confirmed");
+assert.equal(result.conversationId, "local-chatgpt:abc");
+'''
+    )
+
+
 def test_direct_library_read_only_values_are_validated_before_browser_interaction():
     run_node_assertion(
         f'''
@@ -286,7 +322,7 @@ const result = await waitForReviewCompletion(page, {{
   baseline: {{ assistantMessageId: "assistant-base", assistantTurnCount: 0, conversationId: "bootstrap-route", submittedPrompt: "Review the pinned change." }},
   timeoutMs: 20,
 }});
-assert.equal(result.status, "confirmed", JSON.stringify(result));
+assert.equal(result.status, "confirmed");
 assert.equal(result.conversationId, "new-route");
 '''
     )

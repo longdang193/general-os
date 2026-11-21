@@ -195,7 +195,12 @@ async function closeModelMenu(page) {
 
 function extractConversationIdentity(url) {
   const match = url.match(/\/c\/([^/?#]+)/);
-  return match ? match[1] : null;
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
 }
 
 export function normalizeExistingConversationUrl(value) {
@@ -212,10 +217,17 @@ export function normalizeExistingConversationUrl(value) {
     throw new Error(`Existing conversation URL must use https://chatgpt.com/c/<id>: ${value}`);
   }
   const conversationId = extractConversationIdentity(parsed.href);
-  if (!conversationId || parsed.pathname.replace(/\/+$/g, "") !== `/c/${conversationId}`) {
+  const pathConversationId = parsed.pathname.replace(/^\/c\//, "").replace(/\/+$/g, "");
+  let decodedPathConversationId = null;
+  try {
+    decodedPathConversationId = decodeURIComponent(pathConversationId);
+  } catch {
+    // Keep invalid route segments on the existing validation failure path.
+  }
+  if (!conversationId || !pathConversationId || pathConversationId.includes("/") || decodedPathConversationId !== conversationId) {
     throw new Error(`Existing conversation URL must use https://chatgpt.com/c/<id>: ${value}`);
   }
-  return `https://chatgpt.com/c/${conversationId}`;
+  return `https://chatgpt.com/c/${encodeURIComponent(conversationId)}`;
 }
 
 export async function readVisibleInterruption(page) {
