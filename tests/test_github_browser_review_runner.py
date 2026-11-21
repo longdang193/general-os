@@ -200,6 +200,28 @@ assert.match(result.failureReason, /association|submitted user turn/i);
     )
 
 
+def test_submitted_user_turn_id_is_polled_through_spa_route_transition():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ readSubmittedUserTurnId }} from {RUNNER.as_uri()!r};
+
+let reads = 0;
+const page = {{
+  locator: () => ({{
+    evaluateAll: async (callback) => callback(reads++ === 0
+      ? [{{ innerText: "Review the pinned change.", getAttribute: () => null }}]
+      : [{{ innerText: "Review the pinned change.", getAttribute: (name) => name === "data-message-id" ? "submitted-user" : null }}]),
+  }}),
+  waitForTimeout: async () => {{}},
+}};
+
+assert.equal(await readSubmittedUserTurnId(page, "Review the pinned change.", {{ timeoutMs: 50 }}), "submitted-user");
+assert.equal(reads, 2);
+'''
+    )
+
+
 def test_completion_rejects_stale_same_prompt_conversation():
     run_node_assertion(
         f'''

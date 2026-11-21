@@ -5,6 +5,7 @@ export const UI_ACTION_TIMEOUT_MS = 5000;
 export const COMPOSER_READINESS_TIMEOUT_MS = 30000;
 export const SUBMISSION_ACK_TIMEOUT_MS = 10000;
 export const SUBMISSION_ACK_POLL_MS = 50;
+export const SUBMITTED_TURN_ID_TIMEOUT_MS = 2000;
 export const AMBIGUOUS_DISPATCH_TIMEOUT_MS = 15000;
 export const ASSISTANT_TURN_SELECTOR = '[data-message-author-role="assistant"]:visible:not([data-message-author-role="assistant"] [data-message-author-role="assistant"]), [data-response-body]:visible';
 const ASSISTANT_FALLBACK_SELECTOR = 'main [class*="MarkdownRoot-"]:visible:not(.rich-text-user-turn)';
@@ -294,25 +295,34 @@ async function hasSubmittedUserTurn(page, prompt, submittedUserTurnId = null) {
   }
 }
 
-async function readSubmittedUserTurnId(page, prompt) {
+export async function readSubmittedUserTurnId(page, prompt, { timeoutMs = SUBMITTED_TURN_ID_TIMEOUT_MS } = {}) {
   if (!prompt) return null;
-  try {
-    const turns = page.locator(USER_TURN_SELECTOR);
-    const expectedPrompt = normalizePromptText(prompt);
-    const snapshots = await turns.evaluateAll((elements) => elements.map((element) => ({
-      id: element.getAttribute("data-message-id")
-        || element.getAttribute("data-user-message-id")
-        || element.getAttribute("data-testid")
-        || element.id
-        || null,
-      text: element.innerText || "",
-    })));
-    return snapshots
-      .filter((snapshot) => snapshot.id && normalizePromptText(snapshot.text).includes(expectedPrompt))
-      .at(-1)?.id || null;
-  } catch {
-    return null;
+  const deadline = Date.now() + timeoutMs;
+  const expectedPrompt = normalizePromptText(prompt);
+  while (Date.now() <= deadline) {
+    try {
+      const turns = page.locator(USER_TURN_SELECTOR);
+      const snapshots = await turns.evaluateAll((elements) => elements.map((element) => ({
+        id: element.getAttribute("data-message-id")
+          || element.getAttribute("data-user-message-id")
+          || element.getAttribute("data-testid")
+          || element.id
+          || null,
+        text: element.innerText || "",
+      })));
+      const submittedTurnId = snapshots
+        .filter((snapshot) => snapshot.id && normalizePromptText(snapshot.text).includes(expectedPrompt))
+        .at(-1)?.id || null;
+      if (submittedTurnId) return submittedTurnId;
+    } catch {
+      // The SPA may replace the conversation turn while routing after dispatch.
+    }
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0 || typeof page.waitForTimeout !== "function") break;
+    await page.waitForTimeout(Math.min(SUBMISSION_ACK_POLL_MS, remaining));
   }
+  return null;
 }
 
 export async function isPromptVisibleInComposer(composer, prompt) {
