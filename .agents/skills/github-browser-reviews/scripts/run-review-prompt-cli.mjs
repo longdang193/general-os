@@ -922,7 +922,8 @@ function markCleanupFailure(result, cleanupReason) {
 }
 
 export async function runReviewTransaction(context, options) {
-  const hasExistingConversationUrl = Object.prototype.hasOwnProperty.call(options || {}, "existingConversationUrl");
+  const hasExistingConversationUrl = Object.prototype.hasOwnProperty.call(options || {}, "existingConversationUrl")
+    && options.existingConversationUrl !== undefined;
   options = hasExistingConversationUrl
     ? { ...options, existingConversationUrl: normalizeExistingConversationUrl(options.existingConversationUrl) }
     : options;

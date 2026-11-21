@@ -635,7 +635,8 @@ export async function runReviewPrompt(page, { beforeSubmit, model, effort, promp
 }
 
 export async function runReviewPromptInNewTab(context, options = {}) {
-  const hasExistingConversationUrl = Object.prototype.hasOwnProperty.call(options, "existingConversationUrl");
+  const hasExistingConversationUrl = Object.prototype.hasOwnProperty.call(options, "existingConversationUrl")
+    && options.existingConversationUrl !== undefined;
   const existingConversationUrl = hasExistingConversationUrl
     ? normalizeExistingConversationUrl(options.existingConversationUrl)
     : null;
