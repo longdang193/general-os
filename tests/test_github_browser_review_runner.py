@@ -449,6 +449,64 @@ assert.equal(result.checkpointAccepted, false);
     )
 
 
+def test_acknowledged_empty_baseline_allows_route_handoff_without_user_dom_anchor():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+function pageFor(snapshots) {{
+  const page = {{
+    index: 0,
+    current() {{ return snapshots[Math.min(this.index, snapshots.length - 1)]; }},
+    url() {{ return this.current().url; }},
+    waitForTimeout() {{ this.index += 1; }},
+    locator(selector) {{
+      const current = () => this.current();
+      return {{
+        first() {{ return this; }},
+        last() {{ return this; }},
+        count: async () => selector.includes("conversation-turn-error") || selector.includes("role=alert") ? 0 : 1,
+        isVisible: async () => false,
+        evaluateAll: async (callback, includeText) => callback(
+          selector.includes("assistant")
+            ? current().assistant.map(([id, text]) => ({{
+                innerText: text,
+                getAttribute: (name) => name === "data-message-id" ? id : null,
+              }}))
+            : [],
+          includeText,
+        ),
+      }};
+    }},
+    getByRole(role) {{
+      return {{
+        first() {{ return this; }},
+        last() {{ return this; }},
+        isVisible: async () => role === "textbox",
+      }};
+    }},
+    getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+  }};
+  return page;
+}}
+
+const result = await waitForReviewCompletion(pageFor([
+  {{ url: "https://chatgpt.com/", assistant: [] }},
+  {{ url: "https://chatgpt.com/c/new-route", assistant: [] }},
+  {{ url: "https://chatgpt.com/c/new-route", assistant: [["assistant-new", "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings."]] }},
+  {{ url: "https://chatgpt.com/c/new-route", assistant: [["assistant-new", "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings."]] }},
+  {{ url: "https://chatgpt.com/c/new-route", assistant: [["assistant-new", "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings."]] }},
+]), {{
+  baseline: {{ assistantMessageId: null, assistantTurnCount: 0, conversationId: null, dispatchState: "acknowledged", submission: "acknowledged", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 1000,
+}});
+assert.equal(result.status, "confirmed");
+assert.equal(result.conversationId, "new-route");
+'''
+    )
+
+
 def test_interrupted_unrelated_conversation_checkpoint_is_rejected():
     run_node_assertion(
         f'''

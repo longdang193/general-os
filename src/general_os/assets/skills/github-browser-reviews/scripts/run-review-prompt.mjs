@@ -502,6 +502,8 @@ export async function waitForReviewCompletion(page, {
   let submittedUserTurnId = baseline.submittedUserTurnId || null;
   let submittedTurnAnchorObserved = Boolean(submittedUserTurnId);
   let conversationTransitionDeadline = null;
+  const submissionAcknowledged = baseline.submission === "acknowledged"
+    || baseline.dispatchState === "acknowledged";
 
   while (Date.now() <= deadline) {
     if (await readVisibleInterruption(page)) {
@@ -525,7 +527,7 @@ export async function waitForReviewCompletion(page, {
       && expectedConversationId
       && snapshot.conversationId
       && snapshot.conversationId !== expectedConversationId;
-    if (conversationChanged && conversationTransitionDeadline === null) {
+    if (conversationChanged && !submissionAcknowledged && conversationTransitionDeadline === null) {
       conversationTransitionDeadline = Date.now() + Math.min(COMPOSER_READINESS_TIMEOUT_MS, timeoutMs);
     }
     if (!submittedUserTurnId && baseline.submittedPrompt) {
@@ -534,6 +536,14 @@ export async function waitForReviewCompletion(page, {
     let submittedTurnObserved = submittedTurnAnchorObserved
       || await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
     submittedTurnAnchorObserved ||= submittedTurnObserved;
+    const acknowledgedNewAssistantTurn = submissionAcknowledged
+      && baselineAssistantTurnCount === 0
+      && snapshot.assistantTurnCount > baselineAssistantTurnCount
+      && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
+    if (acknowledgedNewAssistantTurn) {
+      submittedTurnObserved = true;
+      submittedTurnAnchorObserved = true;
+    }
     if (responseConversationId && snapshot.conversationId && snapshot.conversationId !== responseConversationId) {
       return {
         ...snapshot,
@@ -546,8 +556,14 @@ export async function waitForReviewCompletion(page, {
     if (conversationChanged) {
       const newAssistantTurnObserved = snapshot.assistantTurnCount > baselineAssistantTurnCount
         && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
-      const newConversationAnchorObserved = newAssistantTurnObserved && submittedTurnObserved;
+      const newConversationAnchorObserved = newAssistantTurnObserved
+        && (submittedTurnObserved || (submissionAcknowledged && baselineAssistantTurnCount === 0));
       if (!newConversationAnchorObserved) {
+        if (submissionAcknowledged && baselineAssistantTurnCount === 0) {
+          await page.waitForTimeout(backoffMs);
+          backoffMs = Math.min(backoffMs * 2, COMPLETION_MAX_BACKOFF_MS);
+          continue;
+        }
         if (conversationTransitionDeadline !== null && Date.now() <= conversationTransitionDeadline) {
           await page.waitForTimeout(backoffMs);
           backoffMs = Math.min(backoffMs * 2, COMPLETION_MAX_BACKOFF_MS);
