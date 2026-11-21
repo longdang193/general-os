@@ -749,7 +749,7 @@ async function connectToCdpContext(chromium, endpoint, options) {
 export async function openContext(chromium, options, dependencies = {}) {
   if (options.cdpEndpoint) {
     const { browser, context } = await connectToCdpContext(chromium, options.cdpEndpoint, options);
-    return { browser, context, ownsContext: false };
+    return { browser, context, ownsContext: false, reviewPage: await findBootstrapReviewPage(context) };
   }
 
   const derivedProjectKey = deriveProjectKey(options.repository);

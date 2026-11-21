@@ -188,6 +188,26 @@ await closeContext(attached);
     )
 
 
+def test_attached_cdp_context_reuses_existing_review_page():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ openContext }} from {CLI_RUNNER.as_uri()!r};
+
+const page = {{}};
+const context = {{ pages: () => [page] }};
+const browser = {{ contexts: () => [context] }};
+const chromium = {{ connectOverCDP: async () => browser }};
+const attached = await openContext(chromium, {{
+  cdpEndpoint: "http://127.0.0.1:9222",
+  contextIndex: 0,
+  contextIndexProvided: true,
+}});
+assert.equal(attached.reviewPage, page);
+'''
+    )
+
+
 def test_existing_conversation_aliases_reject_empty_or_conflicting_values():
     run_node_assertion(
         f'''
