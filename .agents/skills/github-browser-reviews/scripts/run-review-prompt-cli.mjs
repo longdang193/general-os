@@ -116,7 +116,9 @@ export function parseArguments(argv) {
   if (!batchFile && !repository) usageError("Missing required argument: --repository");
   if (!batchFile && !commitSha) usageError("Missing required argument: --commit-sha");
   if (!batchFile && reviewUrls.length === 0) usageError("Missing required argument: --review-url");
-  if (existingConversationUrl) normalizeExistingConversationUrl(existingConversationUrl);
+  const normalizedExistingConversationUrl = existingConversationUrl === undefined
+    ? undefined
+    : normalizeExistingConversationUrl(existingConversationUrl);
 
   const contextIndex = contextIndexValue === undefined ? DEFAULT_CONTEXT_INDEX : Number(contextIndexValue);
   if (!Number.isInteger(contextIndex) || contextIndex < 0) usageError(`Invalid context index: ${contextIndexValue}`);
@@ -138,7 +140,7 @@ export function parseArguments(argv) {
     launchCdp,
     repository,
     reviewUrls,
-    existingConversationUrl: existingConversationUrl ? normalizeExistingConversationUrl(existingConversationUrl) : undefined,
+    existingConversationUrl: normalizedExistingConversationUrl,
     userDataDir: userDataDir ? resolve(userDataDir) : undefined,
   };
 }
@@ -213,6 +215,35 @@ export function validateReviewProvenance({ repository, commitSha, reviewUrls, pr
     reviewUrls: normalizedUrls,
     projectKey: deriveProjectKey(`${repositoryMatch[1]}/${repositoryMatch[2]}`),
   };
+}
+
+export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
+  if (typeof response !== "string" || !response.trim()) return false;
+  const normalizedResponse = response.toLowerCase();
+  if (typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase())) return true;
+  for (const reviewUrl of reviewUrls || []) {
+    try {
+      const segments = new URL(reviewUrl).pathname.split("/").filter(Boolean).slice(4);
+      const marker = decodeURIComponent(segments.join("/")).toLowerCase();
+      const filename = segments.at(-1)?.toLowerCase();
+      if (marker && normalizedResponse.includes(marker)) return true;
+      if (filename && normalizedResponse.includes(filename)) return true;
+    } catch {
+      continue;
+    }
+  }
+  return false;
+}
+
+function resolveExistingConversationUrl(review, index) {
+  const snake = review.existing_conversation_url;
+  const camel = review.existingConversationUrl;
+  const normalizedSnake = snake === undefined ? undefined : normalizeExistingConversationUrl(snake);
+  const normalizedCamel = camel === undefined ? undefined : normalizeExistingConversationUrl(camel);
+  if (normalizedSnake !== undefined && normalizedCamel !== undefined && normalizedSnake !== normalizedCamel) {
+    throw new Error(`Review ${index + 1} has conflicting existing conversation URL aliases`);
+  }
+  return normalizedSnake ?? normalizedCamel;
 }
 
 function canonicalProfilePath(userDataDir) {
@@ -408,9 +439,7 @@ export async function readBatchReviews(batchFile) {
       commitSha: provenance.commitSha,
       reviewUrls: provenance.reviewUrls,
       projectKey: provenance.projectKey,
-      existingConversationUrl: review.existing_conversation_url || review.existingConversationUrl
-        ? normalizeExistingConversationUrl(review.existing_conversation_url || review.existingConversationUrl)
-        : undefined,
+      existingConversationUrl: resolveExistingConversationUrl(review, index),
       reviewIndex: index,
     };
   }));
@@ -464,9 +493,7 @@ export function validateReviewBatch(reviews, { projectKey, repository } = {}) {
     return {
       ...review,
       ...provenance,
-      existingConversationUrl: review.existingConversationUrl || review.existing_conversation_url
-        ? normalizeExistingConversationUrl(review.existingConversationUrl || review.existing_conversation_url)
-        : undefined,
+      existingConversationUrl: resolveExistingConversationUrl(review, index),
     };
   });
 }
@@ -752,7 +779,7 @@ export async function openReviewContext(options) {
   const chromium = await loadPlaywright();
   const attached = await openContext(chromium, options);
   try {
-    await preflightAuthenticatedContext(attached.context);
+    await preflightAuthenticatedContext(attached.context, attached.reviewPage);
     return attached;
   } catch (error) {
     try {
@@ -999,6 +1026,11 @@ export async function runReviewTransaction(context, options) {
       result.failure_scope = "review";
       result.failure_stage = "completion";
       result.failure_reason = completion.failureReason || "Review completion was not confirmed";
+    } else if (!hasRevisionEvidence(completion.response, options)) {
+      result.status = "incomplete";
+      result.failure_scope = "review";
+      result.failure_stage = "completion";
+      result.failure_reason = "Review response completed without citing the requested revision or file marker";
     }
   } catch (error) {
     const transactionFailureReason = errorMessage(error);
@@ -1041,13 +1073,18 @@ export async function runReviewTransaction(context, options) {
           if (completion.response && outputDir) {
             await writeResponse(join(outputDir, "response.md"), `${completion.response}\n`);
           }
-          if (completion.status === "confirmed" && stage === "submission") {
+          if (completion.status === "confirmed" && hasRevisionEvidence(completion.response, options) && stage === "submission") {
             result.submission = "acknowledged";
             result.dispatch_state = "acknowledged";
             result.status = "completed";
             result.failure_scope = null;
             result.failure_stage = null;
             result.failure_reason = null;
+          } else if (completion.status === "confirmed" && !hasRevisionEvidence(completion.response, options)) {
+            result.status = "incomplete";
+            result.failure_scope = "review";
+            result.failure_stage = "completion";
+            result.failure_reason = "Review response completed without citing the requested revision or file marker";
           }
         } catch (preservationError) {
           result.failure_reason = appendFailureReason(transactionFailureReason, `evidence preservation failed: ${errorMessage(preservationError)}`);

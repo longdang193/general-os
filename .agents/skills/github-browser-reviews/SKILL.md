@@ -239,8 +239,9 @@ do not delete contents, clear cookies, copy credentials, or adopt the profile
 implicitly.
 
 The runner performs one non-submitting visible authentication preflight for the
-owned context. An explicit login wall blocks the batch before review pages
-are opened. It selects and visibly verifies the requested model and effort,
+owned context. In launch-owned TCP-CDP mode it reuses the bootstrap ChatGPT tab
+instead of opening a temporary second tab. An explicit login wall blocks the
+batch before review pages are opened. It selects and visibly verifies the requested model and effort,
 submits at most once, waits for a new stable visible assistant turn, writes
 `response.md` and a small `result.json`, and only then closes the owned browser
 context. While the response is visibly generating, completion observation polls
@@ -276,10 +277,11 @@ treated as possibly dispatched until visible acknowledgement proves otherwise.
 Only a definitely pre-dispatch failure skips the long completion observer. A
 visible terminal interruption returns immediately with partial evidence. If the
 final result artifact cannot be persisted, the runner reports `incomplete` and
-returns nonzero even when the response itself completed. The controller, not
-the runner, validates revision-specific review evidence and may classify the
-overall workflow as `verified`. The runner never retries or silently recovers a
-failed submission.
+returns nonzero even when the response itself completed. A technically complete
+response that cites neither the requested full SHA nor a pinned file marker is
+also recorded as `incomplete`; the controller still owns the final `verified`
+classification. The runner never retries or silently recovers a failed
+submission.
 
 For a multi-model review driven by a Node controller, validate the complete
 review list against one repository-derived project key before opening the

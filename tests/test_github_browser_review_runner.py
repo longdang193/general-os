@@ -69,6 +69,110 @@ assert.equal(evaluateReviewCompletion({{
     )
 
 
+def test_planning_only_response_does_not_count_as_review_completion():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ hasRevisionEvidence }} from {CLI_RUNNER.as_uri()!r};
+
+const provenance = {{
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+}};
+assert.equal(hasRevisionEvidence("I will inspect the pull request and report findings.", provenance), false);
+assert.equal(hasRevisionEvidence("Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", provenance), true);
+assert.equal(hasRevisionEvidence("Reviewed file.md; no findings.", provenance), true);
+'''
+    )
+
+
+def test_preflight_reuses_launch_owned_review_page_without_opening_second_tab():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ preflightAuthenticatedContext }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  closeCount: 0,
+  close: async () => {{ page.closeCount += 1; }},
+  url: () => "https://chatgpt.com/",
+  getByRole: () => ({{
+    first() {{ return this; }},
+    waitFor: async () => {{}},
+    isVisible: async () => true,
+  }}),
+}};
+const context = {{
+  newPage: async () => {{ throw new Error("unexpected second tab"); }},
+}};
+await preflightAuthenticatedContext(context, page);
+assert.equal(page.closeCount, 0);
+'''
+    )
+
+
+def test_existing_conversation_aliases_reject_empty_or_conflicting_values():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ validateReviewBatch }} from {CLI_RUNNER.as_uri()!r};
+
+const base = {{
+  model: "GPT-6",
+  effort: "High",
+  prompt: "Review https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+}};
+assert.throws(() => validateReviewBatch([{{ ...base, existing_conversation_url: "" }}], {{ projectKey: "owner-repo" }}), /non-empty/);
+assert.throws(() => validateReviewBatch([{{ ...base, existing_conversation_url: "https://chatgpt.com/c/one", existingConversationUrl: "https://chatgpt.com/c/two" }}], {{ projectKey: "owner-repo" }}), /conflicting/);
+'''
+    )
+
+
+def test_existing_conversation_completion_reports_actual_assistant_turn_index():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
+
+function pageFor() {{
+  const page = {{
+    index: 0,
+    url: () => "https://chatgpt.com/c/existing-review",
+    waitForTimeout: async () => {{ page.index += 1; }},
+    locator(selector) {{
+      return {{
+        first() {{ return this; }},
+        last() {{ return this; }},
+        count: async () => selector.includes("conversation-turn-error") || selector.includes("role=alert") ? 0 : 1,
+        isVisible: async () => false,
+        evaluateAll: async (callback, includeText) => callback([
+          {{ innerText: "Older", getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null }},
+          {{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567", getAttribute: (name) => name === "data-message-id" ? "assistant-2" : null }},
+        ], includeText),
+      }};
+    }},
+    getByRole(role, options) {{
+      return {{
+        first() {{ return this; }},
+        last() {{ return this; }},
+        isVisible: async () => role === "textbox" || options?.name === "Feedback",
+      }};
+    }},
+    getByText: () => ({{ first() {{ return this; }}, isVisible: async () => true }}),
+  }};
+  return page;
+}}
+
+const result = await waitForExistingReviewCompletion(pageFor(), {{ conversationUrl: "https://chatgpt.com/c/existing-review", timeoutMs: 1000 }});
+assert.equal(result.status, "confirmed");
+assert.equal(result.assistantTurnIndex, 1);
+'''
+    )
+
+
 def test_route_transitions_before_response_are_tolerated_but_later_change_is_not():
     run_node_assertion(
         f'''
@@ -116,13 +220,14 @@ const baseline = {{
   assistantTurnCount: 1,
   conversationId: "base",
 }};
+const checkpoints = [];
 const stable = await waitForReviewCompletion(pageFor([
   {{ url: "https://chatgpt.com/c/route-1", assistant: [["old", "Previous"]] }},
   {{ url: "https://chatgpt.com/c/route-2", assistant: [["old", "Previous"]] }},
   {{ url: "https://chatgpt.com/c/route-2", assistant: [["old", "Previous"], ["new", "Finished review"]] }},
   {{ url: "https://chatgpt.com/c/route-2", assistant: [["old", "Previous"], ["new", "Finished review"]] }},
   {{ url: "https://chatgpt.com/c/route-2", assistant: [["old", "Previous"], ["new", "Finished review"]] }},
-]), {{ baseline, timeoutMs: 1000 }});
+]), {{ baseline, timeoutMs: 1000, onSnapshot: async (snapshot) => checkpoints.push(snapshot) }});
 assert.equal(stable.status, "confirmed");
 assert.equal(stable.conversationId, "route-2");
 
@@ -130,9 +235,10 @@ const changed = await waitForReviewCompletion(pageFor([
   {{ url: "https://chatgpt.com/c/route-1", assistant: [["old", "Previous"]] }},
   {{ url: "https://chatgpt.com/c/route-1", assistant: [["old", "Previous"], ["new", "Finished review"]] }},
   {{ url: "https://chatgpt.com/c/route-2", assistant: [["old", "Previous"], ["new", "Finished review"]] }},
-]), {{ baseline, timeoutMs: 1000 }});
+]), {{ baseline, timeoutMs: 1000, onSnapshot: async (snapshot) => checkpoints.push(snapshot) }});
 assert.equal(changed.status, "incomplete");
 assert.match(changed.failureReason, /after response evidence was bound/);
+assert.equal(checkpoints.at(-1).conversationId, "route-1");
 '''
     )
 
@@ -272,7 +378,7 @@ const result = await runReviewTransaction({{}}, {{
       conversationId: "existing-review",
       assistantMessageId: "assistant-1",
       assistantTurnIndex: 0,
-      response: "Existing review",
+      response: "Existing review of file.md",
     }}),
     writeResult: async () => {{}},
     writeResponse: async () => {{}},
@@ -284,6 +390,53 @@ assert.equal(result.status, "completed");
 assert.equal(result.submission, "not_attempted");
 assert.equal(result.submission_attempted, false);
 assert.equal(result.conversation_url, "https://chatgpt.com/c/existing-review");
+'''
+    )
+
+
+def test_planning_only_transaction_remains_incomplete_after_technical_completion():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const page = {{ close: async () => {{}} }};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-planning-only",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/c/review",
+      conversationId: "review",
+      completion: {{
+        status: "confirmed",
+        currentUrl: "https://chatgpt.com/c/review",
+        conversationId: "review",
+        assistantMessageId: "assistant-1",
+        assistantTurnIndex: 0,
+        response: "I will inspect the pull request and report findings.",
+      }},
+    }}),
+    writeResult: async () => {{}},
+    writeResponse: async () => {{}},
+  }},
+}});
+
+assert.equal(result.completion, "confirmed");
+assert.equal(result.status, "incomplete");
+assert.match(result.failure_reason, /without citing/);
 '''
     )
 
@@ -376,7 +529,7 @@ const result = await runReviewTransaction({{}}, {{
           conversationId: "reused-review",
           assistantMessageId: "assistant-1",
           assistantTurnIndex: 0,
-          response: "Review",
+              response: "Reviewed file.md",
         }},
       }};
     }},

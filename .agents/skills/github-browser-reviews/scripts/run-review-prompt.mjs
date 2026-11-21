@@ -134,11 +134,12 @@ export async function captureVisibleEvidence(page) {
   };
 }
 
-export async function preflightAuthenticatedContext(context) {
+export async function preflightAuthenticatedContext(context, existingPage = null) {
   let page;
   let failure;
+  const ownsPage = !existingPage;
   try {
-    page = await context.newPage();
+    page = existingPage || await context.newPage();
     await openChatGPT(page);
   } catch (error) {
     failure = withFailureScope(error, "shared_context");
@@ -149,7 +150,7 @@ export async function preflightAuthenticatedContext(context) {
   }
 
   try {
-    if (page) await page.close();
+    if (ownsPage && page) await page.close();
   } catch (error) {
     failure ||= withFailureScope(error, "shared_context");
   }
@@ -433,7 +434,9 @@ export async function waitForReviewCompletion(page, {
   while (Date.now() <= deadline) {
     if (await readVisibleInterruption(page)) {
       const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
-      if (onSnapshot) await onSnapshot(interruptedSnapshot);
+      if (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId) {
+        if (onSnapshot) await onSnapshot(interruptedSnapshot);
+      }
       return {
         ...interruptedSnapshot,
         response: interruptedSnapshot.assistantText,
@@ -443,7 +446,6 @@ export async function waitForReviewCompletion(page, {
     }
 
     snapshot = await readCompletionSnapshot(page);
-    if (onSnapshot) await onSnapshot(snapshot);
     if (responseConversationId && snapshot.conversationId && snapshot.conversationId !== responseConversationId) {
       return {
         ...snapshot,
@@ -461,6 +463,7 @@ export async function waitForReviewCompletion(page, {
         : snapshot.assistantTurnCount;
     }
     if (!expectedConversationId && snapshot.conversationId) expectedConversationId = snapshot.conversationId;
+    if (onSnapshot) await onSnapshot(snapshot);
     generationObserved ||= snapshot.generating;
     const responseEvidenceObserved = snapshot.generating
       || snapshot.responseActionsReady
@@ -532,6 +535,14 @@ export async function waitForExistingReviewCompletion(page, {
 
   while (Date.now() <= deadline) {
     snapshot = await readCompletionSnapshot(page, { includeText: true });
+    if (snapshot.conversationId !== expectedConversationId) {
+      return {
+        ...snapshot,
+        response: snapshot.assistantText,
+        status: "incomplete",
+        failureReason: "existing conversation identity changed during verification",
+      };
+    }
     if (onSnapshot) await onSnapshot(snapshot);
     const sameMessage = !snapshot.assistantMessageId
       || !previousMessageId
@@ -553,7 +564,7 @@ export async function waitForExistingReviewCompletion(page, {
     }) && snapshot.responseActionsReady) {
       return {
         ...snapshot,
-        assistantTurnIndex: 0,
+        assistantTurnIndex: Math.max(0, snapshot.assistantTurnCount - 1),
         response: snapshot.assistantText,
         status: "confirmed",
       };
