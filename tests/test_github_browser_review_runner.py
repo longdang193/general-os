@@ -84,7 +84,8 @@ assert.equal(hasRevisionEvidence("I will inspect commit 0123456789abcdef01234567
 assert.equal(hasRevisionEvidence("I will inspect file.md and report findings.", provenance), false);
 assert.equal(hasRevisionEvidence("I will review https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md.", provenance), false);
 assert.equal(hasRevisionEvidence("Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", provenance), true);
-assert.equal(hasRevisionEvidence("Reviewed file.md; no findings.", provenance), true);
+assert.equal(hasRevisionEvidence("Reviewed file.md; no findings.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n## Summary\\nI will inspect file.md next.", provenance), false);
 '''
     )
 
@@ -261,9 +262,9 @@ const result = await runReviewTransaction({{}}, {{
       conversationId: "accepted",
     }}),
     waitForReviewCompletion: async (_page, {{ onSnapshot }}) => {{
-      await onSnapshot({{ currentUrl: "https://chatgpt.com/c/accepted", conversationId: "accepted", assistantMessageId: "assistant-1", assistantTurnCount: 2, assistantText: "Reviewed file.md; no findings." }});
-      await onSnapshot({{ currentUrl: "https://chatgpt.com/c/rejected", conversationId: "rejected", assistantMessageId: "assistant-2", assistantTurnCount: 2, assistantText: "Reviewed file.md; no findings." }});
-      return {{ status: "incomplete", currentUrl: "https://chatgpt.com/c/rejected", conversationId: "rejected", assistantMessageId: "assistant-2", assistantTurnIndex: 1, response: "Reviewed file.md; no findings.", failureReason: "conversation identity changed" }};
+      await onSnapshot({{ currentUrl: "https://chatgpt.com/c/accepted", conversationId: "accepted", assistantMessageId: "assistant-1", assistantTurnCount: 2, assistantText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings." }});
+      await onSnapshot({{ currentUrl: "https://chatgpt.com/c/rejected", conversationId: "rejected", assistantMessageId: "assistant-2", assistantTurnCount: 2, assistantText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings." }});
+      return {{ status: "incomplete", currentUrl: "https://chatgpt.com/c/rejected", conversationId: "rejected", assistantMessageId: "assistant-2", assistantTurnIndex: 1, response: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", failureReason: "conversation identity changed" }};
     }},
     writeResult: async () => {{}},
     writeResponse: async (_filePath, content) => responses.push(content),
@@ -273,7 +274,51 @@ const result = await runReviewTransaction({{}}, {{
 assert.equal(result.status, "incomplete");
 assert.equal(result.conversation_url, "https://chatgpt.com/c/accepted");
 assert.equal(result.conversation_id, "accepted");
-assert.equal(responses.at(-1), "Reviewed file.md; no findings.\\n");
+assert.equal(responses.at(-1), "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.\\n");
+'''
+    )
+
+
+def test_accepted_route_transition_replaces_initial_transaction_checkpoint():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const page = {{ isClosed: () => false, close: async () => {{}} }};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-accepted-route-transition",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/c/route-1",
+      conversationId: "route-1",
+    }}),
+    waitForReviewCompletion: async (_page, {{ onSnapshot }}) => {{
+      await onSnapshot({{ checkpointAccepted: true, currentUrl: "https://chatgpt.com/c/route-1", conversationId: "route-1", assistantMessageId: "assistant-1", assistantTurnCount: 2, assistantText: "Generating" }});
+      await onSnapshot({{ checkpointAccepted: true, currentUrl: "https://chatgpt.com/c/route-2", conversationId: "route-2", assistantMessageId: "assistant-2", assistantTurnCount: 2, assistantText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings." }});
+      return {{ status: "incomplete", checkpointAccepted: true, currentUrl: "https://chatgpt.com/c/route-2", conversationId: "route-2", assistantMessageId: "assistant-2", assistantTurnIndex: 1, response: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", failureReason: "bounded timeout" }};
+    }},
+    writeResult: async () => {{}},
+    writeResponse: async () => {{}},
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.conversation_url, "https://chatgpt.com/c/route-2");
+assert.equal(result.conversation_id, "route-2");
 '''
     )
 
@@ -539,7 +584,7 @@ const result = await runReviewTransaction({{}}, {{
       conversationId: "existing-review",
       assistantMessageId: "assistant-1",
       assistantTurnIndex: 0,
-          response: "Existing review of file.md; no findings.",
+          response: "Existing review of 0123456789abcdef0123456789abcdef01234567; no findings.",
     }}),
     writeResult: async () => {{}},
     writeResponse: async () => {{}},
@@ -690,7 +735,7 @@ const result = await runReviewTransaction({{}}, {{
           conversationId: "reused-review",
           assistantMessageId: "assistant-1",
           assistantTurnIndex: 0,
-              response: "Reviewed file.md; no findings.",
+              response: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.",
         }},
       }};
     }},

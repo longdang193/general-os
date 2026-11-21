@@ -223,19 +223,16 @@ export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   let revisionMarkerFound = typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase());
   for (const reviewUrl of reviewUrls || []) {
     try {
-      const segments = new URL(reviewUrl).pathname.split("/").filter(Boolean).slice(4);
+      const segments = new URL(reviewUrl).pathname.split("/").filter(Boolean).slice(3);
       const marker = decodeURIComponent(segments.join("/")).toLowerCase();
-      const filename = segments.at(-1)?.toLowerCase();
       if (marker && normalizedResponse.includes(marker)) revisionMarkerFound = true;
-      if (filename && normalizedResponse.includes(filename)) revisionMarkerFound = true;
     } catch {
       continue;
     }
   }
   if (!revisionMarkerFound) return false;
   return /\bno (?:actionable )?(?:findings?|issues?|defects?|vulnerabilities?|concerns?)\b|\b(?:changes requested|request changes|review complete|approved)\b/i.test(response)
-    || /(?:^|\n)\s*(?:#{1,6}\s*)?(?:findings?|conclusion|verdict|summary)\s*:?\s*(?:\n|$)/im.test(response)
-    || /(?:^|\n)\s*[-*]\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\bseverity\b)/im.test(response);
+    || /(?:^|\n)\s*(?:[-*]\s*)?(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:)/im.test(response);
 }
 
 function resolveExistingConversationUrl(review, index) {
@@ -953,7 +950,7 @@ export async function runReviewTransaction(context, options) {
   const persistSnapshot = async (snapshot) => {
     if (!snapshot) return;
     if (snapshot.checkpointAccepted === false) return;
-    if (result.conversation_id && snapshot.conversationId && snapshot.conversationId !== result.conversation_id) return;
+    if (snapshot.checkpointAccepted !== true && result.conversation_id && snapshot.conversationId && snapshot.conversationId !== result.conversation_id) return;
     lastAcceptedSnapshot = snapshot;
     if (snapshot.currentUrl) result.conversation_url = snapshot.currentUrl;
     if (snapshot.conversationId) result.conversation_id = snapshot.conversationId;
