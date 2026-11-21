@@ -231,8 +231,8 @@ export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
     }
   }
   if (!revisionMarkerFound) return false;
-  return /\bno (?:actionable )?(?:findings?|issues?|defects?|vulnerabilities?|concerns?)\b|\b(?:changes requested|request changes|review complete|approved)\b/i.test(response)
-    || /(?:^|\n)\s*(?:[-*]\s*)?(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:)/im.test(response);
+  return /\bno (?:actionable )?(?:findings?|issues?|defects?|vulnerabilities?|concerns?)\b(?!\s+(?:yet|pending|tbd|so far|to be|until|will|next)\b)|\b(?:changes requested|request changes|review complete|approved)\b/i.test(response)
+    || /(?:^|\n)\s*(?:[-*]\s*)?(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\b))/im.test(response);
 }
 
 function resolveExistingConversationUrl(review, index) {
@@ -883,8 +883,8 @@ async function isContextHealthy(context) {
 }
 
 async function classifyFailureScope(stage, error, context) {
-  if (error?.failureScope) return error.failureScope;
   if (!(await isContextHealthy(context))) return "shared_context";
+  if (error?.failureScope) return error.failureScope;
   if (/(?:browser|context|target).*(?:closed|close|disconnect)|(?:closed|close|disconnect).*(?:browser|context|target)/i.test(errorMessage(error))) {
     return "shared_context";
   }
@@ -1131,7 +1131,9 @@ export async function runReviewTransaction(context, options) {
       result.status = stage === "artifacts" || stage === "selection" ? "blocked" : "incomplete";
     }
     if (result.status !== "completed") {
-      result.failure_scope = await classifyFailureScope(stage, error, context);
+      result.failure_scope = options.reviewPage && isPageClosed(page)
+        ? "shared_context"
+        : await classifyFailureScope(stage, error, context);
       result.failure_stage = stage;
       result.failure_reason ||= transactionFailureReason;
       if (stage === "submission" && result.submission !== "acknowledged" && dispatchState !== "not_dispatched") {

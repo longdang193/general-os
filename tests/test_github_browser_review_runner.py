@@ -86,6 +86,9 @@ assert.equal(hasRevisionEvidence("I will review https://github.com/owner/repo/bl
 assert.equal(hasRevisionEvidence("Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", provenance), true);
 assert.equal(hasRevisionEvidence("Reviewed file.md; no findings.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n## Summary\\nI will inspect file.md next.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings yet; I will inspect file.md next.", provenance), false);
+assert.equal(hasRevisionEvidence("https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md\\nSeverity: pending until I inspect it.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High; reviewed the pinned file.", provenance), true);
 '''
     )
 
@@ -747,6 +750,47 @@ const result = await runReviewTransaction({{}}, {{
 assert.equal(receivedPage, page);
 assert.equal(page.closeCount, 0);
 assert.equal(result.status, "completed");
+'''
+    )
+
+
+def test_closed_shared_review_page_stops_batch_and_skips_following_review():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const reviewUrl = `https://github.com/owner/repo/blob/${{sha}}/file.md`;
+const page = {{ isClosed: () => true, close: async () => {{}} }};
+const base = {{
+  model: "GPT-6",
+  effort: "High",
+  prompt: `Review ${{reviewUrl}} at ${{sha}}`,
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [reviewUrl],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => {{
+      const error = new Error("Target page has been closed");
+      error.reviewPage = page;
+      error.failureScope = "review";
+      throw error;
+    }},
+    writeResult: async () => {{}},
+    writeResponse: async () => {{}},
+  }},
+}};
+const result = await runReviewBatch({{
+  attached: {{ context: {{ pages: () => [] }}, projectKey: "owner-repo", repository: "owner/repo", reviewPage: page }},
+  reviews: [{{ ...base, runOutputDir: "review-output/run-shared-page-first" }}, {{ ...base, runOutputDir: "review-output/run-shared-page-second" }}],
+  closeContextFn: async () => {{}},
+}});
+
+assert.equal(result.length, 2);
+assert.equal(result[0].failure_scope, "shared_context");
+assert.equal(result[1].status, "skipped");
+assert.equal(result[1].failure_scope, "shared_context");
 '''
     )
 
