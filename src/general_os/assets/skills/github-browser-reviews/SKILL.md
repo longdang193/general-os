@@ -141,11 +141,14 @@ For an explicitly authorized end-to-end prompt submission, use
 `scripts/run-review-prompt.mjs`. It navigates an existing authenticated page
 to ChatGPT, selects and verifies the model and effort, fills the prompt, and
 submits it once. `openReviewTab(context)` and
-`runReviewPromptInNewTab(context, options)` can create a tab from an existing
-authenticated Playwright context; they do not launch a browser or
+`runReviewPromptInNewTab(context, options)` can create or reuse a review page
+from an existing authenticated Playwright context; they do not launch a browser or
 authenticate. The submission helper never retries or reruns a review request;
 the completion helper only observes visible completion signals and returns the
-  final visible assistant turn for the caller to record.
+  final visible assistant turn for the caller to record. When
+  `existingConversationUrl` is supplied, the helper opens that conversation
+  in the supplied/reused review page and runs the read-only observer instead; it never calls the
+  submission path.
 
 ### Helper execution boundary
 
@@ -203,6 +206,14 @@ to the same full SHA and repository, and every GitHub blob URL in the prompt
 must match that declared set. The CLI rejects unknown flags, missing
 provenance, and invalid/default profile paths before browser setup.
 
+For read-only verification of an already completed review, add
+`--existing-conversation-url https://chatgpt.com/c/<id>`. The runner navigates
+only to that conversation, observes the stable visible response, and never
+selects a model, fills a prompt, or submits a message. Its result records
+`submission: "not_attempted"` and keeps the supplied conversation URL in
+request provenance. Batch entries may use the equivalent
+`existing_conversation_url` field.
+
 The owned profile must end in the canonical, case-normalized project key
 derived from the repository (`owner-repository`), and `--project-key` must
 match that derived value. Use one dedicated profile per project, for example
@@ -228,7 +239,7 @@ do not delete contents, clear cookies, copy credentials, or adopt the profile
 implicitly.
 
 The runner performs one non-submitting visible authentication preflight for the
-owned context. An explicit login wall blocks the batch before fresh review tabs
+owned context. An explicit login wall blocks the batch before review pages
 are opened. It selects and visibly verifies the requested model and effort,
 submits at most once, waits for a new stable visible assistant turn, writes
 `response.md` and a small `result.json`, and only then closes the owned browser
@@ -236,14 +247,22 @@ context. While the response is visibly generating, completion observation polls
 cheap visible state and defers full assistant-text extraction until generation
 stops and stability can be checked.
 
-Completion evidence stays bound to the same review page and requires a new
-stable assistant turn. Conversation identity is a continuity signal rather
-than an immutable SPA invariant: when a known baseline conversation changes
-once after an acknowledged submission, the runner accepts that same-page
-transition while it establishes the new conversation's response evidence. A
-second transition, missing new turn, interruption, or unstable response
-returns `incomplete`. If the baseline conversation is unknown, the first
-post-dispatch conversation identity is bound. An ambiguous send
+After dispatch, the runner checkpoints the current conversation URL, ID,
+assistant message, and response text while the page is still available. If the
+page or context closes during cleanup, the final result uses that last durable
+checkpoint instead of querying the closed page. Current visible completion
+markers include `Response complete` and `Feedback`, while stable assistant text
+and composer readiness remain required.
+
+Submitted-review completion evidence stays bound to the same review page and
+requires a new stable assistant turn. Read-only existing-conversation
+verification instead requires a stable current assistant turn. Conversation
+identity is a continuity signal rather
+than an immutable SPA invariant: the runner tolerates route transitions before
+response evidence appears, then binds the conversation identity when the new
+response is first observed. A later transition, missing new turn, interruption,
+or unstable response returns `incomplete`. If the baseline conversation is
+unknown, the first post-dispatch conversation identity is bound. An ambiguous send
 acknowledgement uses a short bounded observation window, preserves
 `possibly_dispatched`, and never resubmits; confirmed or visibly active
 generations retain the normal completion window.
@@ -300,7 +319,7 @@ accepts a manifest:
 
 Pass it as `--batch-file <reviews.json>` instead of the single-review flags.
 The runner validates every entry before opening the browser, reuses one
-  authenticated context for sequential fresh-tab transactions, allocates a
+  authenticated context for sequential review-page transactions, allocates a
  separate `run-*` directory per review, persists response and result artifacts
  before page cleanup, closes the shared context once through the batch owner,
  prints a JSON summary, and returns nonzero if any review is not `completed` or

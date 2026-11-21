@@ -15,6 +15,7 @@ import {
   preflightAuthenticatedContext,
   AMBIGUOUS_DISPATCH_TIMEOUT_MS,
   COMPLETION_TIMEOUT_MS,
+  normalizeExistingConversationUrl,
   waitForReviewCompletion,
 } from "./run-review-prompt.mjs";
 import {
@@ -42,10 +43,11 @@ const VALUE_ARGUMENTS = new Set([
   "--project-key",
   "--repository",
   "--review-url",
+  "--existing-conversation-url",
   "--batch-file",
   "--user-data-dir",
 ]);
-const USAGE = "Usage: node run-review-prompt-cli.mjs (--launch-cdp --user-data-dir <path> --project-key <owner-repository> | --user-data-dir <path> --project-key <owner-repository> | --cdp-endpoint <url>) (--model <GPT-5.6-Sol|GPT-6> --effort <Instant|Medium|High> --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>...) | --batch-file <path>) [--cdp-port <port>] [--output-dir <path>] [--context-index <number>]";
+const USAGE = "Usage: node run-review-prompt-cli.mjs (--launch-cdp --user-data-dir <path> --project-key <owner-repository> | --user-data-dir <path> --project-key <owner-repository> | --cdp-endpoint <url>) (--model <GPT-5.6-Sol|GPT-6> --effort <Instant|Medium|High> --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... [--existing-conversation-url <url>]) | --batch-file <path>) [--cdp-port <port>] [--output-dir <path>] [--context-index <number>]";
 const FLAG_ARGUMENTS = new Set(["--launch-cdp"]);
 const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/i;
 const GITHUB_BLOB_URL_PATTERN = /https:\/\/github\.com\/[^\s<>"']+/gi;
@@ -88,6 +90,7 @@ export function parseArguments(argv) {
   const projectKey = argumentsByName.get("--project-key");
   const repository = argumentsByName.get("--repository");
   const reviewUrls = argumentsByName.get("--review-url") || [];
+  const existingConversationUrl = argumentsByName.get("--existing-conversation-url");
   const batchFile = argumentsByName.get("--batch-file");
   const contextIndexValue = argumentsByName.get("--context-index");
   const launchCdp = argumentsByName.has("--launch-cdp");
@@ -102,7 +105,7 @@ export function parseArguments(argv) {
   if (!launchCdp && cdpPortValue !== undefined) usageError("--cdp-port requires --launch-cdp");
   if (userDataDir) argumentsByName.set("--user-data-dir", validateProjectProfilePath(userDataDir));
   if (!cdpEndpoint && contextIndexValue !== undefined) usageError("--context-index requires --cdp-endpoint");
-  if (batchFile && (model || effort || promptFile || repository || commitSha || reviewUrls.length > 0)) {
+  if (batchFile && (model || effort || promptFile || repository || commitSha || reviewUrls.length > 0 || existingConversationUrl)) {
     usageError("Single-review arguments cannot be combined with --batch-file");
   }
   if (!batchFile && !model) usageError("Missing required argument: --model");
@@ -113,6 +116,7 @@ export function parseArguments(argv) {
   if (!batchFile && !repository) usageError("Missing required argument: --repository");
   if (!batchFile && !commitSha) usageError("Missing required argument: --commit-sha");
   if (!batchFile && reviewUrls.length === 0) usageError("Missing required argument: --review-url");
+  if (existingConversationUrl) normalizeExistingConversationUrl(existingConversationUrl);
 
   const contextIndex = contextIndexValue === undefined ? DEFAULT_CONTEXT_INDEX : Number(contextIndexValue);
   if (!Number.isInteger(contextIndex) || contextIndex < 0) usageError(`Invalid context index: ${contextIndexValue}`);
@@ -134,6 +138,7 @@ export function parseArguments(argv) {
     launchCdp,
     repository,
     reviewUrls,
+    existingConversationUrl: existingConversationUrl ? normalizeExistingConversationUrl(existingConversationUrl) : undefined,
     userDataDir: userDataDir ? resolve(userDataDir) : undefined,
   };
 }
@@ -321,6 +326,7 @@ export function createResult(options) {
       repository: options.repository || null,
       commit_sha: options.commitSha || null,
       review_urls: Array.isArray(options.reviewUrls) ? [...options.reviewUrls] : [],
+      existing_conversation_url: options.existingConversationUrl || null,
     },
   };
 }
@@ -402,6 +408,9 @@ export async function readBatchReviews(batchFile) {
       commitSha: provenance.commitSha,
       reviewUrls: provenance.reviewUrls,
       projectKey: provenance.projectKey,
+      existingConversationUrl: review.existing_conversation_url || review.existingConversationUrl
+        ? normalizeExistingConversationUrl(review.existing_conversation_url || review.existingConversationUrl)
+        : undefined,
       reviewIndex: index,
     };
   }));
@@ -452,7 +461,13 @@ export function validateReviewBatch(reviews, { projectKey, repository } = {}) {
     if (provenance.projectKey !== expectedProjectKey) {
       throw new Error(`Review ${index + 1} project key does not match the attached project: ${provenance.projectKey}`);
     }
-    return { ...review, ...provenance };
+    return {
+      ...review,
+      ...provenance,
+      existingConversationUrl: review.existingConversationUrl || review.existing_conversation_url
+        ? normalizeExistingConversationUrl(review.existingConversationUrl || review.existing_conversation_url)
+        : undefined,
+    };
   });
 }
 
@@ -691,6 +706,7 @@ export async function openContext(chromium, options, dependencies = {}) {
         browser,
         context,
         ownsContext: false,
+        reviewPage: context.pages().length === 1 ? context.pages()[0] : null,
         chromeProcess: launched.process,
         cdpEndpoint: launched.endpoint,
         profileLease,
@@ -843,6 +859,14 @@ function appendFailureReason(currentReason, suffix) {
   return `${currentReason || "Review transaction failed"}; ${suffix}`;
 }
 
+function isPageClosed(page) {
+  try {
+    return typeof page?.isClosed === "function" && page.isClosed();
+  } catch {
+    return true;
+  }
+}
+
 function markCleanupFailure(result, cleanupReason) {
   result.cleanup_status = "failed";
   result.cleanup_warning = cleanupReason;
@@ -871,11 +895,31 @@ export async function runReviewTransaction(context, options) {
   let dispatchState = "not_dispatched";
   let stage = "artifacts";
   let resultPersisted = false;
+  let checkpointResponse = null;
 
   const persist = async () => {
     if (!outputDir) throw new Error("Review output directory was not allocated");
     await persistResult(outputDir, result);
     resultPersisted = true;
+  };
+
+  const persistSnapshot = async (snapshot) => {
+    if (!snapshot) return;
+    if (snapshot.currentUrl) result.conversation_url = snapshot.currentUrl;
+    if (snapshot.conversationId) result.conversation_id = snapshot.conversationId;
+    if (snapshot.assistantMessageId) result.assistant_message_id = snapshot.assistantMessageId;
+    if (snapshot.assistantTurnCount !== undefined && snapshot.assistantTurnCount !== null) {
+      result.assistant_turn_index = Math.max(0, snapshot.assistantTurnCount - 1);
+    }
+    if (snapshot.assistantText?.trim() && snapshot.assistantText !== checkpointResponse && outputDir) {
+      checkpointResponse = snapshot.assistantText;
+      await writeResponse(join(outputDir, "response.md"), `${checkpointResponse}\n`).catch((error) => {
+        result.failure_reason = appendFailureReason(result.failure_reason, `response checkpoint failed: ${errorMessage(error)}`);
+      });
+    }
+    await persist().catch((error) => {
+      result.failure_reason = appendFailureReason(result.failure_reason, `result checkpoint failed: ${errorMessage(error)}`);
+    });
   };
 
   try {
@@ -891,11 +935,17 @@ export async function runReviewTransaction(context, options) {
     await persist();
 
     stage = "selection";
-    const review = await runPrompt(context, {
+    const runPromptOptions = {
       effort: options.effort,
       model: options.model,
       prompt: options.prompt,
-      beforeSubmit: async () => {
+    };
+    if (options.reviewPage) runPromptOptions.reviewPage = options.reviewPage;
+    if (options.existingConversationUrl) {
+      runPromptOptions.existingConversationUrl = options.existingConversationUrl;
+      runPromptOptions.onSnapshot = persistSnapshot;
+    } else {
+      runPromptOptions.beforeSubmit = async () => {
         stage = "submission";
         result.submission_attempted = true;
         result.submission = "attempted";
@@ -905,30 +955,40 @@ export async function runReviewTransaction(context, options) {
           stage = "artifacts";
           throw error;
         }
-      },
-    });
+      };
+    }
+    const review = await runPrompt(context, runPromptOptions);
     page = review.page;
     reviewBaseline = review;
-    if (review.promptSubmitted !== true) {
+    if (!options.existingConversationUrl && review.promptSubmitted !== true) {
       stage = "submission";
       throw new Error("Review prompt submission was not confirmed by the helper");
     }
-    result.model_verified = review.model;
-    result.effort_verified = review.effort;
-    result.submission = review.submission;
+    if (options.existingConversationUrl && review.readOnlyVerification !== true) {
+      stage = "completion";
+      throw new Error("Existing conversation verification was not confirmed by the helper");
+    }
+    result.model_verified = review.modelVerified ?? (options.existingConversationUrl ? null : review.model);
+    result.effort_verified = review.effortVerified ?? (options.existingConversationUrl ? null : review.effort);
+    result.submission = options.existingConversationUrl ? "not_attempted" : review.submission;
     dispatchState = review.dispatchState || "acknowledged";
     result.dispatch_state = dispatchState;
+    result.conversation_url = review.currentUrl || result.conversation_url;
+    result.conversation_id = review.conversationId || result.conversation_id;
     result.completion = "waiting";
     stage = "artifacts";
     await persist();
 
     stage = "completion";
-    const completion = await waitForCompletion(page, { baseline: review });
+    const completion = review.completion || await waitForCompletion(page, {
+      baseline: review,
+      onSnapshot: persistSnapshot,
+    });
     result.completion = completion.status;
-    result.conversation_url = completion.currentUrl || null;
-    result.conversation_id = completion.conversationId || null;
-    result.assistant_message_id = completion.assistantMessageId || null;
-    result.assistant_turn_index = completion.assistantTurnIndex ?? null;
+    result.conversation_url = completion.currentUrl || result.conversation_url || null;
+    result.conversation_id = completion.conversationId || result.conversation_id || null;
+    result.assistant_message_id = completion.assistantMessageId || result.assistant_message_id || null;
+    result.assistant_turn_index = completion.assistantTurnIndex ?? result.assistant_turn_index ?? null;
 
     if (completion.response) {
       stage = "artifacts";
@@ -950,7 +1010,8 @@ export async function runReviewTransaction(context, options) {
       page = error.reviewPage;
       reviewBaseline = error.reviewBaseline;
     }
-    if (page) {
+    const pageOpen = page && !isPageClosed(page);
+    if (pageOpen) {
       const baseline = error.reviewBaseline || reviewBaseline;
       let currentUrl = null;
       try {
@@ -958,8 +1019,8 @@ export async function runReviewTransaction(context, options) {
       } catch {
         currentUrl = null;
       }
-      result.conversation_url = baseline?.conversationUrl || currentUrl;
-      result.conversation_id = baseline?.conversationId || null;
+      result.conversation_url ||= currentUrl || baseline?.conversationUrl || null;
+      result.conversation_id ||= baseline?.conversationId || null;
       if (dispatchState !== "not_dispatched" && baseline && result.completion !== "confirmed") {
         try {
           const timeoutMs = dispatchState === "possibly_dispatched" && result.submission !== "acknowledged"
@@ -970,6 +1031,7 @@ export async function runReviewTransaction(context, options) {
             timeoutMs,
             initialTimeoutMs: timeoutMs,
             completionTimeoutMs: COMPLETION_TIMEOUT_MS,
+            onSnapshot: persistSnapshot,
           });
           result.completion = completion.status;
           result.conversation_url = completion.currentUrl || result.conversation_url;
@@ -992,7 +1054,7 @@ export async function runReviewTransaction(context, options) {
         }
       }
     }
-    if (page && !result.visible_evidence) {
+    if (pageOpen && !result.visible_evidence) {
       result.visible_evidence = await captureVisibleEvidence(page).catch(() => null);
     }
     if (result.status !== "completed") {
@@ -1026,7 +1088,7 @@ export async function runReviewTransaction(context, options) {
 
     try {
       if (page) {
-        await closePage(page);
+        if (!options.reviewPage) await closePage(page);
         result.cleanup_status = "completed";
         if (result.completion === "confirmed" && !result.failure_stage) result.status = "completed";
       }
@@ -1073,6 +1135,7 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         ...review,
         reviewIndex: review.reviewIndex ?? index,
         outputDir,
+        reviewPage: attached.reviewPage,
       });
       results.push(result);
       const dispatchMayHaveStarted = result.dispatch_state == null
@@ -1205,6 +1268,7 @@ export async function main(argv, dependencies = {}) {
       prompt,
       promptFile: options.promptFile,
       ...provenance,
+      existingConversationUrl: options.existingConversationUrl,
     }];
   }
   if (!options.batchFile && !reviews[0].prompt.trim()) usageError("Prompt file must not be empty");
@@ -1283,6 +1347,8 @@ export async function main(argv, dependencies = {}) {
         repository: reviews[0].repository,
         commitSha: reviews[0].commitSha,
         reviewUrls: reviews[0].reviewUrls,
+        existingConversationUrl: reviews[0].existingConversationUrl,
+        reviewPage: attached.reviewPage,
         runId: reviews[0].runId,
         runOutputDir: reviews[0].runOutputDir,
       });
