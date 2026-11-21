@@ -69,6 +69,45 @@ assert.equal(evaluateReviewCompletion({{
     )
 
 
+def test_completion_waits_for_accepted_review_evidence():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => 0,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => selector.includes("data-response-body")
+        ? callback([{{ innerText: "I will inspect the pinned files and report findings.", getAttribute: (name) => name === "data-response-body" ? "assistant-new" : null }}], includeText)
+        : selector.includes("data-user-message-bubble")
+          ? callback([{{ innerText: "Review the pinned change.", getAttribute: () => null }}], includeText)
+          : callback([], includeText),
+    }};
+  }},
+  getByRole(role) {{
+    return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }};
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+let acceptanceChecks = 0;
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "assistant-old", assistantTurnCount: 0, conversationId: "review", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 20,
+  acceptSnapshot: () => {{ acceptanceChecks += 1; return false; }},
+}});
+assert.equal(result.status, "incomplete");
+assert.ok(acceptanceChecks > 0);
+'''
+    )
+
+
 def test_planning_only_response_does_not_count_as_review_completion():
     run_node_assertion(
         f'''
@@ -91,6 +130,8 @@ assert.equal(hasRevisionEvidence("https://github.com/owner/repo/blob/0123456789a
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High; reviewed the pinned file.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nCould not access the pinned file; this review is not approved yet.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI don't have access to the pinned file, so I found no issues.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI will report no findings if the review is clean.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High if the suspected issue is confirmed; I will inspect it next.", provenance), false);
 '''
     )
 
@@ -116,6 +157,33 @@ const context = {{
 }};
 await preflightAuthenticatedContext(context, page);
 assert.equal(page.closeCount, 0);
+'''
+    )
+
+
+def test_owned_profile_context_reuses_bootstrap_page_for_review():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp }} from "node:fs/promises";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
+import {{ openContext, closeContext }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(tmpdir(), "github-review-profile-"));
+const profile = join(root, "github-review", "owner-repo");
+const page = {{}};
+const context = {{ pages: () => [page], close: async () => {{}} }};
+const chromium = {{
+  launchPersistentContext: async () => context,
+}};
+const attached = await openContext(chromium, {{
+  userDataDir: profile,
+  projectKey: "owner-repo",
+  repository: "owner/repo",
+}});
+assert.equal(attached.reviewPage, page);
+await closeContext(attached);
 '''
     )
 
@@ -310,7 +378,9 @@ const page = {{
       isVisible: async () => false,
       evaluateAll: async (callback, includeText) => selector.includes("assistant")
         ? callback([{{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", getAttribute: (name) => name === "data-message-id" ? "assistant-new" : null }}], includeText)
-          : callback([]),
+          : selector.includes("data-user-message-bubble")
+            ? callback([{{ innerText: "Review the pinned change.", getAttribute: () => null }}])
+            : callback([]),
     }};
   }},
   getByRole(role) {{ return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }}; }},
@@ -322,6 +392,39 @@ const result = await waitForReviewCompletion(page, {{
 }});
 assert.equal(result.status, "confirmed");
 assert.equal(result.conversationId, "new-route");
+'''
+    )
+
+
+def test_completion_rejects_unanchored_zero_baseline_route_handoff():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/new-route",
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => 0,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => selector.includes("assistant")
+        ? callback([{{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", getAttribute: (name) => name === "data-message-id" ? "assistant-new" : null }}], includeText)
+        : callback([]),
+    }};
+  }},
+  getByRole(role) {{ return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }}; }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "assistant-base", assistantTurnCount: 0, conversationId: "bootstrap-route", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 20,
+}});
+assert.equal(result.status, "incomplete");
+assert.equal(result.checkpointAccepted, false);
 '''
     )
 

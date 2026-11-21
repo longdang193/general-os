@@ -483,6 +483,7 @@ export async function waitForReviewCompletion(page, {
   initialTimeoutMs = null,
   completionTimeoutMs = timeoutMs,
   onSnapshot,
+  acceptSnapshot = () => true,
 } = {}) {
   if (!baseline) throw new Error("baseline is required for completion observation");
 
@@ -545,8 +546,7 @@ export async function waitForReviewCompletion(page, {
     if (conversationChanged) {
       const newAssistantTurnObserved = snapshot.assistantTurnCount > baselineAssistantTurnCount
         && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
-      const newConversationAnchorObserved = newAssistantTurnObserved
-        && (submittedTurnObserved || (!baseline.submittedUserTurnId && baselineAssistantTurnCount === 0));
+      const newConversationAnchorObserved = newAssistantTurnObserved && submittedTurnObserved;
       if (!newConversationAnchorObserved) {
         if (conversationTransitionDeadline !== null && Date.now() <= conversationTransitionDeadline) {
           await page.waitForTimeout(backoffMs);
@@ -561,8 +561,6 @@ export async function waitForReviewCompletion(page, {
           failureReason: "conversation identity changed before submitted user turn identity was bound",
         };
       }
-      submittedTurnObserved = true;
-      submittedTurnAnchorObserved = true;
       expectedConversationId = snapshot.conversationId;
       const newAssistantTurn = snapshot.assistantMessageId
         && snapshot.assistantMessageId !== baseline.assistantMessageId;
@@ -606,7 +604,7 @@ export async function waitForReviewCompletion(page, {
       generationObserved,
       stableSampleCount,
       submittedTurnObserved,
-    })) {
+    }) && await acceptSnapshot(snapshot)) {
       return {
         ...snapshot,
         assistantTurnIndex: snapshot.assistantTurnCount - 1,

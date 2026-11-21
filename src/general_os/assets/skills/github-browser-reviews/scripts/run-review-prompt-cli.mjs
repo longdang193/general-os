@@ -221,6 +221,11 @@ export function validateReviewProvenance({ repository, commitSha, reviewUrls, pr
 export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (typeof response !== "string" || !response.trim()) return false;
   if (/(?:could not|unable to|failed to|cannot|can't)\s+(?:access|review|inspect|load|read)|\b(?:don't|do not)\s+have access\b|\bnot able to access\b|\baccess(?:ing)?(?: the| to)?\s+[^.\n]{0,40}\bfailed\b|\b(?:not|never|not yet|pending)\s+approved\b/i.test(response)) return false;
+  const provisionalLanguage = /\b(?:i|we)\s+(?:will|'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:if|when|once|until)\b[^.\n]{0,120}\b(?:confirm(?:ed)?|inspect|review|check|verify|findings?|severity|report)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet)\b/i;
+  const severityPattern = /(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\b))/i;
+  const conclusiveSeverity = response.split(/\r?\n/).some((line) => severityPattern.test(line)
+    && !/\b(?:if|when|once|until|will|'ll|pending|tentative|provisional|to be confirmed|not yet)\b/i.test(line));
+  if (provisionalLanguage.test(response) && !conclusiveSeverity) return false;
   const normalizedResponse = response.toLowerCase();
   let revisionMarkerFound = typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase());
   for (const reviewUrl of reviewUrls || []) {
@@ -234,7 +239,7 @@ export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   }
   if (!revisionMarkerFound) return false;
   return /\bno (?:actionable )?(?:findings?|issues?|defects?|vulnerabilities?|concerns?)\b(?!\s+(?:yet|pending|tbd|so far|to be|until|will|next)\b)|\b(?:changes requested|request changes|review complete|approved)\b/i.test(response)
-    || /(?:^|\n)\s*(?:[-*]\s*)?(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\b))/im.test(response);
+    || conclusiveSeverity;
 }
 
 function resolveExistingConversationUrl(review, index) {
@@ -800,6 +805,7 @@ export async function openContext(chromium, options, dependencies = {}) {
       browser: null,
       context,
       ownsContext: true,
+      reviewPage: await findBootstrapReviewPage(context),
       profileLease,
       profilePath,
       projectKey: derivedProjectKey,
@@ -1077,6 +1083,7 @@ export async function runReviewTransaction(context, options) {
     const completion = review.completion || await waitForCompletion(page, {
       baseline: review,
       onSnapshot: persistSnapshot,
+      acceptSnapshot: (snapshot) => hasRevisionEvidence(snapshot.assistantText, options),
     });
     const rejectedCompletion = completion.checkpointAccepted === false
       || (lastAcceptedSnapshot && completion.conversationId && completion.conversationId !== lastAcceptedSnapshot.conversationId);
@@ -1143,6 +1150,7 @@ export async function runReviewTransaction(context, options) {
             initialTimeoutMs: timeoutMs,
             completionTimeoutMs: COMPLETION_TIMEOUT_MS,
             onSnapshot: persistSnapshot,
+            acceptSnapshot: (snapshot) => hasRevisionEvidence(snapshot.assistantText, options),
           });
           result.completion = completion.status;
            const rejectedCompletion = completion.checkpointAccepted === false

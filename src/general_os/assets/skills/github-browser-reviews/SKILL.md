@@ -239,8 +239,8 @@ do not delete contents, clear cookies, copy credentials, or adopt the profile
 implicitly.
 
 The runner performs one non-submitting visible authentication preflight for the
-owned context. In launch-owned TCP-CDP mode it reuses the bootstrap ChatGPT tab
-instead of opening a temporary second tab. An explicit login wall blocks the
+owned context. It reuses the bootstrap ChatGPT tab instead of opening a
+temporary second tab. An explicit login wall blocks the
 batch before review pages are opened. It selects and visibly verifies the requested model and effort,
 submits at most once, waits for a new stable visible assistant turn, writes
 `response.md` and a small `result.json`, and only then closes the owned browser
