@@ -194,6 +194,44 @@ assert.match(result.failureReason, /association|submitted user turn/i);
     )
 
 
+def test_current_chatgpt_message_markers_are_read_as_assistant_and_user_turns():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/current-markers",
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => selector.includes("conversation-turn-error") || selector.includes("role=alert") ? 0 : 1,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => selector.includes("data-response-body")
+        ? callback([{{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", getAttribute: (name) => name === "data-response-body" ? "assistant-current" : null }}], includeText)
+        : selector.includes("data-user-message-bubble")
+          ? callback([{{ innerText: "Review the pinned change.", getAttribute: () => null }}], includeText)
+          : callback([], includeText),
+    }};
+  }},
+  getByRole(role) {{
+    return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }};
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "old", assistantTurnCount: 0, conversationId: "current-markers", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 20,
+}});
+assert.equal(result.status, "confirmed");
+assert.equal(result.assistantMessageId, "assistant-current");
+'''
+    )
+
+
 def test_rejected_completion_snapshot_does_not_replace_last_accepted_checkpoint():
     run_node_assertion(
         f'''

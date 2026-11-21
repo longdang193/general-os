@@ -6,10 +6,10 @@ export const COMPOSER_READINESS_TIMEOUT_MS = 30000;
 export const SUBMISSION_ACK_TIMEOUT_MS = 10000;
 export const SUBMISSION_ACK_POLL_MS = 50;
 export const AMBIGUOUS_DISPATCH_TIMEOUT_MS = 15000;
-export const ASSISTANT_TURN_SELECTOR = '[data-message-author-role="assistant"]:visible:not([data-message-author-role="assistant"] [data-message-author-role="assistant"])';
+export const ASSISTANT_TURN_SELECTOR = '[data-message-author-role="assistant"]:visible:not([data-message-author-role="assistant"] [data-message-author-role="assistant"]), [data-response-body]:visible';
 const ASSISTANT_FALLBACK_SELECTOR = 'main [class*="MarkdownRoot-"]:visible:not(.rich-text-user-turn)';
 const ASSISTANT_TURN_SELECTORS = [ASSISTANT_TURN_SELECTOR, ASSISTANT_FALLBACK_SELECTOR];
-const USER_TURN_SELECTOR = '[data-message-author-role="user"]:visible:not([data-message-author-role="user"] [data-message-author-role="user"])';
+const USER_TURN_SELECTOR = '[data-message-author-role="user"]:visible:not([data-message-author-role="user"] [data-message-author-role="user"]), [data-user-message-bubble="true"]:visible';
 export const INTERRUPTION_PATTERN = /(?:something went wrong|network error|response interrupted|stopped responding)/i;
 export const INTERRUPTION_UI_SELECTOR = '[data-testid="conversation-turn-error"]:visible, [data-testid="response-error"]:visible, [data-testid="error-message"]:visible';
 const GENERIC_ALERT_SELECTOR = '[role="alert"]:visible';
@@ -232,7 +232,7 @@ async function readVisibleAssistantMessage(page, { includeText = true } = {}) {
     let snapshots;
     if (typeof turns.evaluateAll === "function") {
       snapshots = await turns.evaluateAll((elements, readText) => elements.map((element) => ({
-        assistantMessageId: ["data-message-id", "data-turn-id", "data-testid", "id"]
+        assistantMessageId: ["data-message-id", "data-turn-id", "data-chatgpt-selection-message-id", "data-response-body", "data-testid", "id"]
           .map((attribute) => element.getAttribute(attribute))
           .find(Boolean) || null,
         assistantText: readText ? (element.innerText || "").trim() : "",
