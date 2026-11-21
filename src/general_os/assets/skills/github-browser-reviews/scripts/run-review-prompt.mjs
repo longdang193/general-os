@@ -558,8 +558,7 @@ export async function waitForReviewCompletion(page, {
       };
     }
     if (conversationChanged) {
-      const newAssistantTurnObserved = snapshot.assistantTurnCount > baselineAssistantTurnCount
-        && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
+      const newAssistantTurnObserved = Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
       const newConversationAnchorObserved = newAssistantTurnObserved
         && (submittedTurnObserved || acknowledgedSubmissionAssistantTurn);
       if (!newConversationAnchorObserved) {
@@ -594,10 +593,10 @@ export async function waitForReviewCompletion(page, {
     const responseEvidenceObserved = snapshot.generating
       || snapshot.responseActionsReady
       || snapshot.assistantTurnCount > baselineAssistantTurnCount
-      || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
+      || (conversationChanged && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId));
     const responseTurnObserved = snapshot.generating
       || snapshot.assistantTurnCount > baselineAssistantTurnCount
-      || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
+      || (conversationChanged && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId));
     if (!responseConversationId && responseTurnObserved && snapshot.conversationId && submittedTurnObserved) {
       responseConversationId = snapshot.conversationId;
       expectedConversationId = responseConversationId;

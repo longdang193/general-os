@@ -417,6 +417,96 @@ assert.equal(result.conversationId, "new-route");
     )
 
 
+def test_completion_allows_local_route_handoff_when_user_turn_appears_after_response():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+function pageFor(snapshots) {{
+  const page = {{
+    index: 0,
+    current() {{ return snapshots[Math.min(this.index, snapshots.length - 1)]; }},
+    url() {{ return this.current().url; }},
+    waitForTimeout() {{ this.index += 1; }},
+    locator(selector) {{
+      const current = () => this.current();
+      return {{
+        first() {{ return this; }},
+        last() {{ return this; }},
+        count: async () => selector.includes("conversation-turn-error") || selector.includes("role=alert") ? 0 : 1,
+        isVisible: async () => false,
+        evaluateAll: async (callback, includeText) => callback(
+          selector.includes("assistant")
+            ? current().assistant.map(([id, text]) => ({{ innerText: text, getAttribute: (name) => name === "data-message-id" ? id : null }}))
+            : selector.includes("data-user-message-bubble") && current().user
+              ? [{{ innerText: current().user, getAttribute: () => null }}]
+              : [],
+          includeText,
+        ),
+      }};
+    }},
+    getByRole(role) {{ return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }}; }},
+    getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+  }};
+  return page;
+}}
+
+const response = "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.";
+const result = await waitForReviewCompletion(pageFor([
+  {{ url: "https://chatgpt.com/c/local-chatgpt:abc", assistant: [], user: null }},
+  {{ url: "https://chatgpt.com/c/real-route", assistant: [["assistant-new", response]], user: null }},
+  {{ url: "https://chatgpt.com/c/real-route", assistant: [["assistant-new", response]], user: "Review the pinned change." }},
+  {{ url: "https://chatgpt.com/c/real-route", assistant: [["assistant-new", response]], user: "Review the pinned change." }},
+]), {{
+  baseline: {{ assistantMessageId: null, assistantTurnCount: 0, conversationId: "local-chatgpt:abc", submissionConversationId: "local-chatgpt:abc", dispatchState: "acknowledged", submission: "acknowledged", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 1000,
+}});
+assert.equal(result.status, "confirmed");
+assert.equal(result.conversationId, "real-route");
+'''
+    )
+
+
+def test_completion_allows_route_handoff_when_bootstrap_has_one_assistant_turn():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/real-route",
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => selector.includes("conversation-turn-error") || selector.includes("role=alert") ? 0 : 1,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => callback(
+        selector.includes("assistant")
+          ? [{{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", getAttribute: (name) => name === "data-message-id" ? "assistant-new" : null }}]
+          : selector.includes("data-user-message-bubble")
+            ? [{{ innerText: "Review the pinned change.", getAttribute: () => null }}]
+            : [],
+        includeText,
+      ),
+    }};
+  }},
+  getByRole(role) {{ return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }}; }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "assistant-bootstrap", assistantTurnCount: 1, conversationId: "local-chatgpt:abc", submissionConversationId: "local-chatgpt:abc", dispatchState: "acknowledged", submission: "acknowledged", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 20,
+}});
+assert.equal(result.status, "confirmed");
+assert.equal(result.conversationId, "real-route");
+'''
+    )
+
+
 def test_completion_rejects_unanchored_zero_baseline_route_handoff():
     run_node_assertion(
         f'''
