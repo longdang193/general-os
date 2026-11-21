@@ -9,6 +9,7 @@ export const AMBIGUOUS_DISPATCH_TIMEOUT_MS = 15000;
 export const ASSISTANT_TURN_SELECTOR = '[data-message-author-role="assistant"]:visible:not([data-message-author-role="assistant"] [data-message-author-role="assistant"])';
 const ASSISTANT_FALLBACK_SELECTOR = 'main [class*="MarkdownRoot-"]:visible:not(.rich-text-user-turn)';
 const ASSISTANT_TURN_SELECTORS = [ASSISTANT_TURN_SELECTOR, ASSISTANT_FALLBACK_SELECTOR];
+const USER_TURN_SELECTOR = '[data-message-author-role="user"]:visible:not([data-message-author-role="user"] [data-message-author-role="user"])';
 export const INTERRUPTION_PATTERN = /(?:something went wrong|network error|response interrupted|stopped responding)/i;
 export const INTERRUPTION_UI_SELECTOR = '[data-testid="conversation-turn-error"]:visible, [data-testid="response-error"]:visible, [data-testid="error-message"]:visible';
 const GENERIC_ALERT_SELECTOR = '[role="alert"]:visible';
@@ -273,6 +274,18 @@ async function readVisibleAssistantMessage(page, { includeText = true } = {}) {
   };
 }
 
+async function hasSubmittedUserTurn(page, prompt) {
+  if (!prompt) return true;
+  try {
+    const turns = page.locator(USER_TURN_SELECTOR);
+    const snapshots = await turns.evaluateAll((elements) => elements.map((element) => element.innerText || ""));
+    const expectedPrompt = normalizePromptText(prompt);
+    return snapshots.some((text) => normalizePromptText(text).includes(expectedPrompt));
+  } catch {
+    return false;
+  }
+}
+
 export async function isPromptVisibleInComposer(composer, prompt) {
   const expectedPrompt = normalizePromptText(prompt);
 
@@ -328,6 +341,7 @@ export function evaluateReviewCompletion({
   interrupted,
   responseActionsReady,
   stableSampleCount,
+  submittedTurnObserved = true,
 }) {
   return !generating
     && composerReady
@@ -337,7 +351,8 @@ export function evaluateReviewCompletion({
     && Boolean(assistantMessageId)
     && assistantTurnCount > baselineAssistantTurnCount
     && Boolean(assistantText.trim())
-    && stableSampleCount >= 2;
+    && stableSampleCount >= 2
+    && submittedTurnObserved;
 }
 
 export async function submitPrompt(page, composer, prompt, { beforeSubmit } = {}) {
@@ -441,6 +456,7 @@ export async function waitForReviewCompletion(page, {
         ...interruptedSnapshot,
         response: interruptedSnapshot.assistantText,
         status: "interrupted",
+        checkpointAccepted: !expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId,
         failureReason: "visible response interruption",
       };
     }
@@ -451,6 +467,7 @@ export async function waitForReviewCompletion(page, {
         ...snapshot,
         response: snapshot.assistantText,
         status: "incomplete",
+        checkpointAccepted: false,
         failureReason: "conversation identity changed after response evidence was bound",
       };
     }
@@ -463,7 +480,8 @@ export async function waitForReviewCompletion(page, {
         : snapshot.assistantTurnCount;
     }
     if (!expectedConversationId && snapshot.conversationId) expectedConversationId = snapshot.conversationId;
-    if (onSnapshot) await onSnapshot(snapshot);
+    const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt);
+    if (onSnapshot && submittedTurnObserved) await onSnapshot({ ...snapshot, checkpointAccepted: true });
     generationObserved ||= snapshot.generating;
     const responseEvidenceObserved = snapshot.generating
       || snapshot.responseActionsReady
@@ -472,7 +490,7 @@ export async function waitForReviewCompletion(page, {
     const responseTurnObserved = snapshot.generating
       || snapshot.assistantTurnCount > baselineAssistantTurnCount
       || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
-    if (!responseConversationId && responseTurnObserved && snapshot.conversationId) {
+    if (!responseConversationId && responseTurnObserved && snapshot.conversationId && submittedTurnObserved) {
       responseConversationId = snapshot.conversationId;
       expectedConversationId = responseConversationId;
     }
@@ -497,12 +515,14 @@ export async function waitForReviewCompletion(page, {
       expectedConversationId,
       generationObserved,
       stableSampleCount,
+      submittedTurnObserved,
     })) {
       return {
         ...snapshot,
         assistantTurnIndex: snapshot.assistantTurnCount - 1,
         response: snapshot.assistantText,
         status: "confirmed",
+        checkpointAccepted: true,
       };
     }
 
@@ -511,11 +531,15 @@ export async function waitForReviewCompletion(page, {
   }
 
   const finalSnapshot = await readCompletionSnapshot(page, { includeText: true });
-  if (onSnapshot) await onSnapshot(finalSnapshot);
+  const finalSubmittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt);
+  const finalCheckpointAccepted = (!expectedConversationId || finalSnapshot.conversationId === expectedConversationId)
+    && finalSubmittedTurnObserved;
+  if (onSnapshot && finalCheckpointAccepted) await onSnapshot({ ...finalSnapshot, checkpointAccepted: true });
   return {
     ...finalSnapshot,
     response: finalSnapshot.assistantText,
     status: "incomplete",
+    checkpointAccepted: finalCheckpointAccepted,
     failureReason: "bounded completion timeout or ambiguous response association",
   };
 }
@@ -540,6 +564,7 @@ export async function waitForExistingReviewCompletion(page, {
         ...snapshot,
         response: snapshot.assistantText,
         status: "incomplete",
+        checkpointAccepted: false,
         failureReason: "existing conversation identity changed during verification",
       };
     }
@@ -567,17 +592,20 @@ export async function waitForExistingReviewCompletion(page, {
         assistantTurnIndex: Math.max(0, snapshot.assistantTurnCount - 1),
         response: snapshot.assistantText,
         status: "confirmed",
+        checkpointAccepted: true,
       };
     }
     await page.waitForTimeout(COMPLETION_INITIAL_BACKOFF_MS);
   }
 
   const finalSnapshot = await readCompletionSnapshot(page, { includeText: true });
-  if (onSnapshot) await onSnapshot(finalSnapshot);
+  const finalCheckpointAccepted = finalSnapshot.conversationId === expectedConversationId;
+  if (onSnapshot && finalCheckpointAccepted) await onSnapshot({ ...finalSnapshot, checkpointAccepted: true });
   return {
     ...finalSnapshot,
     response: finalSnapshot.assistantText,
     status: "incomplete",
+    checkpointAccepted: finalCheckpointAccepted,
     failureReason: "bounded existing conversation verification timeout",
   };
 }
@@ -591,6 +619,7 @@ export async function runReviewPrompt(page, { beforeSubmit, model, effort, promp
     assistantTurnCount: baselineAssistant.assistantTurnCount,
     conversationId: extractConversationIdentity(page.url()),
     conversationUrl: page.url(),
+    submittedPrompt: normalizePromptText(prompt),
   };
   let submission;
   try {
@@ -605,7 +634,11 @@ export async function runReviewPrompt(page, { beforeSubmit, model, effort, promp
   return { ...baseline, ...submission, model, effort, promptSubmitted: true };
 }
 
-export async function runReviewPromptInNewTab(context, options) {
+export async function runReviewPromptInNewTab(context, options = {}) {
+  const hasExistingConversationUrl = Object.prototype.hasOwnProperty.call(options, "existingConversationUrl");
+  const existingConversationUrl = hasExistingConversationUrl
+    ? normalizeExistingConversationUrl(options.existingConversationUrl)
+    : null;
   const ownsPage = !options.reviewPage;
   const page = options.reviewPage || await openReviewTab(context);
   try {
@@ -613,11 +646,10 @@ export async function runReviewPromptInNewTab(context, options) {
       await page.goto(CHATGPT_URL, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
     }
     if (!ownsPage) await openChatGPT(page);
-    if (options.existingConversationUrl) {
-      const conversationUrl = normalizeExistingConversationUrl(options.existingConversationUrl);
-      await page.goto(conversationUrl, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
+    if (existingConversationUrl) {
+      await page.goto(existingConversationUrl, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
       const completion = await waitForExistingReviewCompletion(page, {
-        conversationUrl,
+        conversationUrl: existingConversationUrl,
         onSnapshot: options.onSnapshot,
       });
       return {
@@ -638,8 +670,8 @@ export async function runReviewPromptInNewTab(context, options) {
   } catch (error) {
     if (error && typeof error === "object") {
       error.reviewPage = page;
-      if (options.existingConversationUrl && !error.reviewBaseline) {
-        const conversationUrl = normalizeExistingConversationUrl(options.existingConversationUrl);
+      if (existingConversationUrl && !error.reviewBaseline) {
+        const conversationUrl = existingConversationUrl;
         error.reviewBaseline = {
           conversationUrl,
           conversationId: extractConversationIdentity(conversationUrl),

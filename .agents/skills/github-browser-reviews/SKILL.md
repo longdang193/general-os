@@ -249,14 +249,17 @@ cheap visible state and defers full assistant-text extraction until generation
 stops and stability can be checked.
 
 After dispatch, the runner checkpoints the current conversation URL, ID,
-assistant message, and response text while the page is still available. If the
-page or context closes during cleanup, the final result uses that last durable
-checkpoint instead of querying the closed page. Current visible completion
+assistant message, and response text while the page is still available. Only
+identity-accepted snapshots become checkpoints; rejected route/conversation
+snapshots remain diagnostic-only. If the page or context closes during cleanup,
+the final result uses that last durable checkpoint instead of querying the
+closed page. Current visible completion
 markers include `Response complete` and `Feedback`, while stable assistant text
 and composer readiness remain required.
 
-Submitted-review completion evidence stays bound to the same review page and
-requires a new stable assistant turn. Read-only existing-conversation
+Submitted-review completion evidence stays bound to the same review page,
+requires a new stable assistant turn, and must remain continuous with the
+submitted user turn. Read-only existing-conversation
 verification instead requires a stable current assistant turn. Conversation
 identity is a continuity signal rather
 than an immutable SPA invariant: the runner tolerates route transitions before
@@ -278,8 +281,10 @@ Only a definitely pre-dispatch failure skips the long completion observer. A
 visible terminal interruption returns immediately with partial evidence. If the
 final result artifact cannot be persisted, the runner reports `incomplete` and
 returns nonzero even when the response itself completed. A technically complete
-response that cites neither the requested full SHA nor a pinned file marker is
-also recorded as `incomplete`; the controller still owns the final `verified`
+  response must cite the requested full SHA or a pinned file marker and contain
+  a review outcome (for example, a no-findings conclusion or structured
+  findings); planning text alone is recorded as `incomplete`. The controller
+  still owns the final `verified`
 classification. The runner never retries or silently recovers a failed
 submission.
 
@@ -360,6 +365,9 @@ SHA, and pinned review URL provenance.
   an explicit CDP endpoint
   exposes multiple browser contexts, `--context-index` is required; the runner
   never silently chooses context `0`.
+  Launch-owned TCP-CDP mode waits for exactly one bootstrap page; zero pages
+  time out and multiple pages fail closed as ambiguous instead of opening a
+  second review tab.
 
 Model-menu interaction uses a five-second UI action/transition timeout. Initial
 model-menu opening remains ten seconds, completion observation remains bounded

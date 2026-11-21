@@ -220,19 +220,22 @@ export function validateReviewProvenance({ repository, commitSha, reviewUrls, pr
 export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (typeof response !== "string" || !response.trim()) return false;
   const normalizedResponse = response.toLowerCase();
-  if (typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase())) return true;
+  let revisionMarkerFound = typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase());
   for (const reviewUrl of reviewUrls || []) {
     try {
       const segments = new URL(reviewUrl).pathname.split("/").filter(Boolean).slice(4);
       const marker = decodeURIComponent(segments.join("/")).toLowerCase();
       const filename = segments.at(-1)?.toLowerCase();
-      if (marker && normalizedResponse.includes(marker)) return true;
-      if (filename && normalizedResponse.includes(filename)) return true;
+      if (marker && normalizedResponse.includes(marker)) revisionMarkerFound = true;
+      if (filename && normalizedResponse.includes(filename)) revisionMarkerFound = true;
     } catch {
       continue;
     }
   }
-  return false;
+  if (!revisionMarkerFound) return false;
+  return /\bno (?:actionable )?(?:findings?|issues?|defects?|vulnerabilities?|concerns?)\b|\b(?:changes requested|request changes|review complete|approved)\b/i.test(response)
+    || /(?:^|\n)\s*(?:#{1,6}\s*)?(?:findings?|conclusion|verdict|summary)\s*:?\s*(?:\n|$)/im.test(response)
+    || /(?:^|\n)\s*[-*]\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\bseverity\b)/im.test(response);
 }
 
 function resolveExistingConversationUrl(review, index) {
@@ -733,7 +736,7 @@ export async function openContext(chromium, options, dependencies = {}) {
         browser,
         context,
         ownsContext: false,
-        reviewPage: context.pages().length === 1 ? context.pages()[0] : null,
+        reviewPage: await findBootstrapReviewPage(context),
         chromeProcess: launched.process,
         cdpEndpoint: launched.endpoint,
         profileLease,
@@ -772,6 +775,17 @@ export async function openContext(chromium, options, dependencies = {}) {
     }
     const detail = error instanceof Error ? `: ${error.message}` : "";
     throw new Error(`Could not launch the Playwright browser profile${detail}`);
+  }
+}
+
+export async function findBootstrapReviewPage(context, { timeoutMs = 5000, pollIntervalMs = 50 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const pages = context.pages();
+    if (pages.length === 1) return pages[0];
+    if (pages.length > 1) throw new Error(`Ambiguous bootstrap page selection: expected one ChatGPT page, found ${pages.length}`);
+    if (Date.now() >= deadline) throw new Error("ChatGPT bootstrap page was not available");
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, pollIntervalMs));
   }
 }
 
@@ -908,6 +922,10 @@ function markCleanupFailure(result, cleanupReason) {
 }
 
 export async function runReviewTransaction(context, options) {
+  const hasExistingConversationUrl = Object.prototype.hasOwnProperty.call(options || {}, "existingConversationUrl");
+  options = hasExistingConversationUrl
+    ? { ...options, existingConversationUrl: normalizeExistingConversationUrl(options.existingConversationUrl) }
+    : options;
   const dependencies = options.dependencies || {};
   const runPrompt = dependencies.runReviewPromptInNewTab || runReviewPromptInNewTab;
   const waitForCompletion = dependencies.waitForReviewCompletion || waitForReviewCompletion;
@@ -923,6 +941,7 @@ export async function runReviewTransaction(context, options) {
   let stage = "artifacts";
   let resultPersisted = false;
   let checkpointResponse = null;
+  let lastAcceptedSnapshot = null;
 
   const persist = async () => {
     if (!outputDir) throw new Error("Review output directory was not allocated");
@@ -932,6 +951,9 @@ export async function runReviewTransaction(context, options) {
 
   const persistSnapshot = async (snapshot) => {
     if (!snapshot) return;
+    if (snapshot.checkpointAccepted === false) return;
+    if (result.conversation_id && snapshot.conversationId && snapshot.conversationId !== result.conversation_id) return;
+    lastAcceptedSnapshot = snapshot;
     if (snapshot.currentUrl) result.conversation_url = snapshot.currentUrl;
     if (snapshot.conversationId) result.conversation_id = snapshot.conversationId;
     if (snapshot.assistantMessageId) result.assistant_message_id = snapshot.assistantMessageId;
@@ -1011,22 +1033,30 @@ export async function runReviewTransaction(context, options) {
       baseline: review,
       onSnapshot: persistSnapshot,
     });
+    const rejectedCompletion = completion.checkpointAccepted === false
+      || (lastAcceptedSnapshot && completion.conversationId && completion.conversationId !== lastAcceptedSnapshot.conversationId);
+    const completionSnapshot = rejectedCompletion && lastAcceptedSnapshot
+      ? { ...completion, ...lastAcceptedSnapshot, response: lastAcceptedSnapshot.assistantText || null }
+      : completion;
     result.completion = completion.status;
-    result.conversation_url = completion.currentUrl || result.conversation_url || null;
-    result.conversation_id = completion.conversationId || result.conversation_id || null;
-    result.assistant_message_id = completion.assistantMessageId || result.assistant_message_id || null;
-    result.assistant_turn_index = completion.assistantTurnIndex ?? result.assistant_turn_index ?? null;
+    result.conversation_url = completionSnapshot.currentUrl || result.conversation_url || null;
+    result.conversation_id = completionSnapshot.conversationId || result.conversation_id || null;
+    result.assistant_message_id = completionSnapshot.assistantMessageId || result.assistant_message_id || null;
+    result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? result.assistant_turn_index ?? null;
 
-    if (completion.response) {
+    if (completionSnapshot.response && !rejectedCompletion) {
       stage = "artifacts";
-      await writeResponse(join(outputDir, "response.md"), `${completion.response}\n`);
+      await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
+    } else if (completionSnapshot.response && rejectedCompletion && lastAcceptedSnapshot) {
+      stage = "artifacts";
+      await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
     }
     if (completion.status !== "confirmed") {
       result.status = "incomplete";
       result.failure_scope = "review";
       result.failure_stage = "completion";
       result.failure_reason = completion.failureReason || "Review completion was not confirmed";
-    } else if (!hasRevisionEvidence(completion.response, options)) {
+    } else if (!hasRevisionEvidence(completionSnapshot.response, options)) {
       result.status = "incomplete";
       result.failure_scope = "review";
       result.failure_stage = "completion";
@@ -1066,21 +1096,26 @@ export async function runReviewTransaction(context, options) {
             onSnapshot: persistSnapshot,
           });
           result.completion = completion.status;
-          result.conversation_url = completion.currentUrl || result.conversation_url;
-          result.conversation_id = completion.conversationId || result.conversation_id;
-          result.assistant_message_id = completion.assistantMessageId || null;
-          result.assistant_turn_index = completion.assistantTurnIndex ?? null;
-          if (completion.response && outputDir) {
-            await writeResponse(join(outputDir, "response.md"), `${completion.response}\n`);
+           const rejectedCompletion = completion.checkpointAccepted === false
+             || (lastAcceptedSnapshot && completion.conversationId && completion.conversationId !== lastAcceptedSnapshot.conversationId);
+           const completionSnapshot = rejectedCompletion && lastAcceptedSnapshot
+             ? { ...completion, ...lastAcceptedSnapshot, response: lastAcceptedSnapshot.assistantText || null }
+             : completion;
+           result.conversation_url = completionSnapshot.currentUrl || result.conversation_url;
+           result.conversation_id = completionSnapshot.conversationId || result.conversation_id;
+           result.assistant_message_id = completionSnapshot.assistantMessageId || null;
+           result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? null;
+           if (completionSnapshot.response && outputDir) {
+             await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
           }
-          if (completion.status === "confirmed" && hasRevisionEvidence(completion.response, options) && stage === "submission") {
+           if (completion.status === "confirmed" && hasRevisionEvidence(completionSnapshot.response, options) && stage === "submission") {
             result.submission = "acknowledged";
             result.dispatch_state = "acknowledged";
             result.status = "completed";
             result.failure_scope = null;
             result.failure_stage = null;
             result.failure_reason = null;
-          } else if (completion.status === "confirmed" && !hasRevisionEvidence(completion.response, options)) {
+           } else if (completion.status === "confirmed" && !hasRevisionEvidence(completionSnapshot.response, options)) {
             result.status = "incomplete";
             result.failure_scope = "review";
             result.failure_stage = "completion";

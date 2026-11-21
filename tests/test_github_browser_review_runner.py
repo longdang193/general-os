@@ -80,6 +80,9 @@ const provenance = {{
   reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
 }};
 assert.equal(hasRevisionEvidence("I will inspect the pull request and report findings.", provenance), false);
+assert.equal(hasRevisionEvidence("I will inspect commit 0123456789abcdef0123456789abcdef01234567 and report findings.", provenance), false);
+assert.equal(hasRevisionEvidence("I will inspect file.md and report findings.", provenance), false);
+assert.equal(hasRevisionEvidence("I will review https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md.", provenance), false);
 assert.equal(hasRevisionEvidence("Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", provenance), true);
 assert.equal(hasRevisionEvidence("Reviewed file.md; no findings.", provenance), true);
 '''
@@ -127,6 +130,126 @@ const base = {{
 }};
 assert.throws(() => validateReviewBatch([{{ ...base, existing_conversation_url: "" }}], {{ projectKey: "owner-repo" }}), /non-empty/);
 assert.throws(() => validateReviewBatch([{{ ...base, existing_conversation_url: "https://chatgpt.com/c/one", existingConversationUrl: "https://chatgpt.com/c/two" }}], {{ projectKey: "owner-repo" }}), /conflicting/);
+'''
+    )
+
+
+def test_direct_library_read_only_values_are_validated_before_browser_interaction():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewPromptInNewTab }} from {RUNNER.as_uri()!r};
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+let newPageCalls = 0;
+const context = {{ newPage: async () => {{ newPageCalls += 1; throw new Error("browser interaction should not start"); }} }};
+for (const existingConversationUrl of ["", null, "https://example.com/c/not-chatgpt"]) {{
+  await assert.rejects(
+    runReviewPromptInNewTab(context, {{ existingConversationUrl }}),
+    /existing conversation URL/i,
+  );
+}}
+assert.equal(newPageCalls, 0);
+await assert.rejects(
+  runReviewTransaction({{}}, {{ existingConversationUrl: "" }}),
+  /existing conversation URL/i,
+);
+'''
+    )
+
+
+def test_completion_requires_continuity_with_submitted_user_turn():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/unrelated",
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => selector.includes("conversation-turn-error") || selector.includes("role=alert") ? 0 : 1,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => selector.includes("data-message-author-role=assistant")
+        ? callback([{{ innerText: "Older", getAttribute: (name) => name === "data-message-id" ? "old" : null }}, {{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", getAttribute: (name) => name === "data-message-id" ? "new" : null }}], includeText)
+        : callback([], includeText),
+    }};
+  }},
+  getByRole(role) {{
+    return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }};
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "old", assistantTurnCount: 1, conversationId: null, submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 20,
+}});
+assert.equal(result.status, "incomplete");
+assert.match(result.failureReason, /association|submitted user turn/i);
+'''
+    )
+
+
+def test_rejected_completion_snapshot_does_not_replace_last_accepted_checkpoint():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const page = {{ isClosed: () => false, close: async () => {{}} }};
+const responses = [];
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-rejected-checkpoint",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/c/accepted",
+      conversationId: "accepted",
+    }}),
+    waitForReviewCompletion: async (_page, {{ onSnapshot }}) => {{
+      await onSnapshot({{ currentUrl: "https://chatgpt.com/c/accepted", conversationId: "accepted", assistantMessageId: "assistant-1", assistantTurnCount: 2, assistantText: "Reviewed file.md; no findings." }});
+      await onSnapshot({{ currentUrl: "https://chatgpt.com/c/rejected", conversationId: "rejected", assistantMessageId: "assistant-2", assistantTurnCount: 2, assistantText: "Reviewed file.md; no findings." }});
+      return {{ status: "incomplete", currentUrl: "https://chatgpt.com/c/rejected", conversationId: "rejected", assistantMessageId: "assistant-2", assistantTurnIndex: 1, response: "Reviewed file.md; no findings.", failureReason: "conversation identity changed" }};
+    }},
+    writeResult: async () => {{}},
+    writeResponse: async (_filePath, content) => responses.push(content),
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.conversation_url, "https://chatgpt.com/c/accepted");
+assert.equal(result.conversation_id, "accepted");
+assert.equal(responses.at(-1), "Reviewed file.md; no findings.\\n");
+'''
+    )
+
+
+def test_bootstrap_page_selection_fails_closed_on_zero_or_multiple_pages():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ findBootstrapReviewPage }} from {CLI_RUNNER.as_uri()!r};
+
+const page = {{}};
+assert.equal(await findBootstrapReviewPage({{ pages: () => [page] }}), page);
+await assert.rejects(findBootstrapReviewPage({{ pages: () => [] }}, {{ timeoutMs: 0 }}), /bootstrap page/);
+await assert.rejects(findBootstrapReviewPage({{ pages: () => [page, {{}}] }}), /Ambiguous/);
 '''
     )
 
@@ -378,7 +501,7 @@ const result = await runReviewTransaction({{}}, {{
       conversationId: "existing-review",
       assistantMessageId: "assistant-1",
       assistantTurnIndex: 0,
-      response: "Existing review of file.md",
+          response: "Existing review of file.md; no findings.",
     }}),
     writeResult: async () => {{}},
     writeResponse: async () => {{}},
@@ -529,7 +652,7 @@ const result = await runReviewTransaction({{}}, {{
           conversationId: "reused-review",
           assistantMessageId: "assistant-1",
           assistantTurnIndex: 0,
-              response: "Reviewed file.md",
+              response: "Reviewed file.md; no findings.",
         }},
       }};
     }},
