@@ -225,7 +225,7 @@ export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   const severityPattern = /(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\b))/i;
   const conclusiveSeverity = response.split(/\r?\n/).some((line) => severityPattern.test(line)
     && !/\b(?:if|when|once|until|will|'ll|pending|tentative|provisional|to be confirmed|not yet)\b/i.test(line));
-  if (provisionalLanguage.test(response) && !conclusiveSeverity) return false;
+  if (provisionalLanguage.test(response)) return false;
   const normalizedResponse = response.toLowerCase();
   let revisionMarkerFound = typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase());
   for (const reviewUrl of reviewUrls || []) {
@@ -799,24 +799,38 @@ export async function openContext(chromium, options, dependencies = {}) {
       throw error;
     }
   }
+  let context;
   try {
-    const context = await chromium.launchPersistentContext(profilePath, { headless: false });
+    context = await chromium.launchPersistentContext(profilePath, { headless: false });
+    const reviewPage = await findBootstrapReviewPage(context);
     return {
       browser: null,
       context,
       ownsContext: true,
-      reviewPage: await findBootstrapReviewPage(context),
+      reviewPage,
       profileLease,
       profilePath,
       projectKey: derivedProjectKey,
       repository: options.repository,
     };
   } catch (error) {
-    try {
-      await releaseProfileLease(profileLease);
-    } catch (cleanupError) {
-      error.cleanupError = cleanupError;
-      error.message = `${errorMessage(error)}; profile lease cleanup failed: ${errorMessage(cleanupError)}`;
+    let contextClosed = !context;
+    if (context) {
+      try {
+        await context.close();
+        contextClosed = true;
+      } catch (cleanupError) {
+        error.cleanupError = cleanupError;
+        error.message = `${errorMessage(error)}; browser context cleanup failed: ${errorMessage(cleanupError)}`;
+      }
+    }
+    if (contextClosed) {
+      try {
+        await releaseProfileLease(profileLease);
+      } catch (cleanupError) {
+        error.cleanupError = cleanupError;
+        error.message = `${errorMessage(error)}; profile lease cleanup failed: ${errorMessage(cleanupError)}`;
+      }
     }
     const detail = error instanceof Error ? `: ${error.message}` : "";
     throw new Error(`Could not launch the Playwright browser profile${detail}`);

@@ -128,6 +128,7 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n## 
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings yet; I will inspect file.md next.", provenance), false);
 assert.equal(hasRevisionEvidence("https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md\\nSeverity: pending until I inspect it.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High; reviewed the pinned file.", provenance), true);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High\\nI will inspect the pinned file and report findings next.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nCould not access the pinned file; this review is not approved yet.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI don't have access to the pinned file, so I found no issues.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI will report no findings if the review is clean.", provenance), false);
@@ -498,11 +499,44 @@ const result = await waitForReviewCompletion(pageFor([
   {{ url: "https://chatgpt.com/c/new-route", assistant: [["assistant-new", "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings."]] }},
   {{ url: "https://chatgpt.com/c/new-route", assistant: [["assistant-new", "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings."]] }},
 ]), {{
-  baseline: {{ assistantMessageId: null, assistantTurnCount: 0, conversationId: null, dispatchState: "acknowledged", submission: "acknowledged", submittedPrompt: "Review the pinned change." }},
+  baseline: {{ assistantMessageId: null, assistantTurnCount: 0, conversationId: null, submissionConversationId: "new-route", dispatchState: "acknowledged", submission: "acknowledged", submittedPrompt: "Review the pinned change." }},
   timeoutMs: 1000,
 }});
 assert.equal(result.status, "confirmed");
 assert.equal(result.conversationId, "new-route");
+'''
+    )
+
+
+def test_acknowledged_empty_baseline_rejects_unattributed_conversation():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/stale-route",
+  waitForTimeout: async () => {{ }},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => 0,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => selector.includes("assistant")
+        ? callback([{{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", getAttribute: (name) => name === "data-message-id" ? "assistant-stale" : null }}], includeText)
+        : callback([]),
+    }};
+  }},
+  getByRole(role) {{ return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }}; }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: null, assistantTurnCount: 0, conversationId: null, submissionConversationId: "submitted-route", dispatchState: "acknowledged", submission: "acknowledged", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 20,
+}});
+assert.equal(result.status, "incomplete");
+assert.equal(result.checkpointAccepted, false);
 '''
     )
 
@@ -734,6 +768,29 @@ const page = {{}};
 assert.equal(await findBootstrapReviewPage({{ pages: () => [page] }}), page);
 await assert.rejects(findBootstrapReviewPage({{ pages: () => [] }}, {{ timeoutMs: 0 }}), /bootstrap page/);
 await assert.rejects(findBootstrapReviewPage({{ pages: () => [page, {{}}] }}), /Ambiguous/);
+'''
+    )
+
+
+def test_owned_profile_context_closes_before_releasing_lease_on_bootstrap_failure():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp }} from "node:fs/promises";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
+import {{ existsSync }} from "node:fs";
+import {{ openContext }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(tmpdir(), "github-review-profile-"));
+const profile = join(root, "github-review", "owner-repo");
+const lockPath = join(profile, ".codex-review-profile.lock");
+let closeCount = 0;
+const context = {{ pages: () => [{{}}, {{}}], close: async () => {{ closeCount += 1; assert.equal(existsSync(lockPath), true); }} }};
+const chromium = {{ launchPersistentContext: async () => context }};
+await assert.rejects(openContext(chromium, {{ userDataDir: profile, projectKey: "owner-repo", repository: "owner/repo" }}), /Could not launch/);
+assert.equal(closeCount, 1);
+assert.equal(existsSync(lockPath), false);
 '''
     )
 

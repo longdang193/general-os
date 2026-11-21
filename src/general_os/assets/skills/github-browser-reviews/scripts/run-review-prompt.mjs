@@ -454,6 +454,7 @@ export async function submitPrompt(page, composer, prompt, { beforeSubmit } = {}
   return {
     currentUrl,
     conversationId: extractConversationIdentity(currentUrl),
+    submissionConversationId: extractConversationIdentity(currentUrl),
     dispatchState: "acknowledged",
     submission: "acknowledged",
   };
@@ -502,6 +503,7 @@ export async function waitForReviewCompletion(page, {
   let submittedUserTurnId = baseline.submittedUserTurnId || null;
   let submittedTurnAnchorObserved = Boolean(submittedUserTurnId);
   let conversationTransitionDeadline = null;
+  const submissionConversationId = baseline.submissionConversationId || null;
   const submissionAcknowledged = baseline.submission === "acknowledged"
     || baseline.dispatchState === "acknowledged";
 
@@ -536,11 +538,13 @@ export async function waitForReviewCompletion(page, {
     let submittedTurnObserved = submittedTurnAnchorObserved
       || await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
     submittedTurnAnchorObserved ||= submittedTurnObserved;
-    const acknowledgedNewAssistantTurn = submissionAcknowledged
+    const acknowledgedSubmissionAssistantTurn = submissionAcknowledged
       && baselineAssistantTurnCount === 0
+      && submissionConversationId
+      && snapshot.conversationId === submissionConversationId
       && snapshot.assistantTurnCount > baselineAssistantTurnCount
       && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
-    if (acknowledgedNewAssistantTurn) {
+    if (acknowledgedSubmissionAssistantTurn) {
       submittedTurnObserved = true;
       submittedTurnAnchorObserved = true;
     }
@@ -557,7 +561,7 @@ export async function waitForReviewCompletion(page, {
       const newAssistantTurnObserved = snapshot.assistantTurnCount > baselineAssistantTurnCount
         && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
       const newConversationAnchorObserved = newAssistantTurnObserved
-        && (submittedTurnObserved || (submissionAcknowledged && baselineAssistantTurnCount === 0));
+        && (submittedTurnObserved || acknowledgedSubmissionAssistantTurn);
       if (!newConversationAnchorObserved) {
         if (submissionAcknowledged && baselineAssistantTurnCount === 0) {
           await page.waitForTimeout(backoffMs);
