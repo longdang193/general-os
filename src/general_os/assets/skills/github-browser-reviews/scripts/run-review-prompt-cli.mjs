@@ -219,6 +219,7 @@ export function validateReviewProvenance({ repository, commitSha, reviewUrls, pr
 
 export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (typeof response !== "string" || !response.trim()) return false;
+  if (/(?:could not|unable to|failed to|cannot|can't)\s+(?:access|review|inspect|load|read)|\b(?:not|never|not yet|pending)\s+approved\b/i.test(response)) return false;
   const normalizedResponse = response.toLowerCase();
   let revisionMarkerFound = typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase());
   for (const reviewUrl of reviewUrls || []) {

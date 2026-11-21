@@ -274,15 +274,44 @@ async function readVisibleAssistantMessage(page, { includeText = true } = {}) {
   };
 }
 
-async function hasSubmittedUserTurn(page, prompt) {
+async function hasSubmittedUserTurn(page, prompt, submittedUserTurnId = null) {
   if (!prompt) return true;
   try {
     const turns = page.locator(USER_TURN_SELECTOR);
-    const snapshots = await turns.evaluateAll((elements) => elements.map((element) => element.innerText || ""));
+    const snapshots = await turns.evaluateAll((elements) => elements.map((element) => ({
+      id: element.getAttribute("data-message-id")
+        || element.getAttribute("data-user-message-id")
+        || element.getAttribute("data-testid")
+        || element.id
+        || null,
+      text: element.innerText || "",
+    })));
     const expectedPrompt = normalizePromptText(prompt);
-    return snapshots.some((text) => normalizePromptText(text).includes(expectedPrompt));
+    if (submittedUserTurnId) return snapshots.some((snapshot) => snapshot.id === submittedUserTurnId);
+    return snapshots.some((snapshot) => normalizePromptText(snapshot.text).includes(expectedPrompt));
   } catch {
     return false;
+  }
+}
+
+async function readSubmittedUserTurnId(page, prompt) {
+  if (!prompt) return null;
+  try {
+    const turns = page.locator(USER_TURN_SELECTOR);
+    const expectedPrompt = normalizePromptText(prompt);
+    const snapshots = await turns.evaluateAll((elements) => elements.map((element) => ({
+      id: element.getAttribute("data-message-id")
+        || element.getAttribute("data-user-message-id")
+        || element.getAttribute("data-testid")
+        || element.id
+        || null,
+      text: element.innerText || "",
+    })));
+    return snapshots
+      .filter((snapshot) => snapshot.id && normalizePromptText(snapshot.text).includes(expectedPrompt))
+      .at(-1)?.id || null;
+  } catch {
+    return null;
   }
 }
 
@@ -449,14 +478,16 @@ export async function waitForReviewCompletion(page, {
   while (Date.now() <= deadline) {
     if (await readVisibleInterruption(page)) {
       const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
-      if (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId) {
+      const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, baseline.submittedUserTurnId);
+      if (submittedTurnObserved && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId)) {
         if (onSnapshot) await onSnapshot(interruptedSnapshot);
       }
       return {
         ...interruptedSnapshot,
         response: interruptedSnapshot.assistantText,
         status: "interrupted",
-        checkpointAccepted: !expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId,
+        checkpointAccepted: submittedTurnObserved
+          && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId),
         failureReason: "visible response interruption",
       };
     }
@@ -480,7 +511,7 @@ export async function waitForReviewCompletion(page, {
         : snapshot.assistantTurnCount;
     }
     if (!expectedConversationId && snapshot.conversationId) expectedConversationId = snapshot.conversationId;
-    const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt);
+      const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, baseline.submittedUserTurnId);
     if (onSnapshot && submittedTurnObserved) await onSnapshot({ ...snapshot, checkpointAccepted: true });
     generationObserved ||= snapshot.generating;
     const responseEvidenceObserved = snapshot.generating
@@ -531,7 +562,7 @@ export async function waitForReviewCompletion(page, {
   }
 
   const finalSnapshot = await readCompletionSnapshot(page, { includeText: true });
-  const finalSubmittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt);
+  const finalSubmittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, baseline.submittedUserTurnId);
   const finalCheckpointAccepted = (!expectedConversationId || finalSnapshot.conversationId === expectedConversationId)
     && finalSubmittedTurnObserved;
   if (onSnapshot && finalCheckpointAccepted) await onSnapshot({ ...finalSnapshot, checkpointAccepted: true });
@@ -631,7 +662,14 @@ export async function runReviewPrompt(page, { beforeSubmit, model, effort, promp
     throw error;
   }
 
-  return { ...baseline, ...submission, model, effort, promptSubmitted: true };
+  return {
+    ...baseline,
+    ...submission,
+    submittedUserTurnId: await readSubmittedUserTurnId(page, prompt),
+    model,
+    effort,
+    promptSubmitted: true,
+  };
 }
 
 export async function runReviewPromptInNewTab(context, options = {}) {

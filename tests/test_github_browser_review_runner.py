@@ -89,6 +89,7 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n## 
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings yet; I will inspect file.md next.", provenance), false);
 assert.equal(hasRevisionEvidence("https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md\\nSeverity: pending until I inspect it.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High; reviewed the pinned file.", provenance), true);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nCould not access the pinned file; this review is not approved yet.", provenance), false);
 '''
     )
 
@@ -194,6 +195,79 @@ const result = await waitForReviewCompletion(page, {{
 }});
 assert.equal(result.status, "incomplete");
 assert.match(result.failureReason, /association|submitted user turn/i);
+'''
+    )
+
+
+def test_completion_rejects_stale_same_prompt_conversation():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/stale",
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => selector.includes("conversation-turn-error") || selector.includes("role=alert") ? 0 : 1,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => selector.includes("data-message-author-role=assistant")
+        ? callback([{{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", getAttribute: (name) => name === "data-message-id" ? "assistant-old" : null }}], includeText)
+        : selector.includes("data-user-message-bubble")
+          ? callback([{{ innerText: "Review the pinned change.", getAttribute: (name) => name === "data-message-id" ? "user-old" : null }}], includeText)
+          : callback([], includeText),
+    }};
+  }},
+  getByRole(role) {{ return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }}; }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "assistant-base", assistantTurnCount: 1, conversationId: null, submittedPrompt: "Review the pinned change.", submittedUserTurnId: "user-new" }},
+  timeoutMs: 20,
+}});
+assert.equal(result.status, "incomplete");
+assert.match(result.failureReason, /association|submitted user turn/i);
+'''
+    )
+
+
+def test_interrupted_unrelated_conversation_checkpoint_is_rejected():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/unrelated",
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      count: async () => selector.includes("conversation-turn-error") ? 1 : 0,
+      isVisible: async () => selector.includes("conversation-turn-error"),
+      innerText: async () => "Response interrupted",
+      evaluateAll: async (callback) => selector.includes("data-message-author-role=assistant")
+        ? callback([{{ innerText: "Unrelated response", getAttribute: (name) => name === "data-message-id" ? "assistant-old" : null }}])
+        : selector.includes("data-user-message-bubble")
+          ? callback([{{ innerText: "Review the pinned change.", getAttribute: (name) => name === "data-message-id" ? "user-old" : null }}])
+          : callback([]),
+    }};
+  }},
+  getByRole: () => ({{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => false }}),
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+let checkpoints = 0;
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: null, assistantTurnCount: 0, conversationId: null, submittedPrompt: "Review the pinned change.", submittedUserTurnId: "user-new" }},
+  timeoutMs: 20,
+  onSnapshot: async () => {{ checkpoints += 1; }},
+}});
+assert.equal(result.status, "interrupted");
+assert.equal(result.checkpointAccepted, false);
+assert.equal(checkpoints, 0);
 '''
     )
 
