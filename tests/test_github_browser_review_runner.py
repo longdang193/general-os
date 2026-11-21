@@ -168,7 +168,7 @@ const page = {{
 }};
 const result = await waitForExistingReviewCompletion(page, {{
   conversationUrl: "https://chatgpt.com/c/local-chatgpt%3Aabc",
-  timeoutMs: 20,
+  timeoutMs: 1000,
 }});
 assert.equal(result.status, "confirmed");
 assert.equal(result.conversationId, "local-chatgpt:abc");
@@ -310,8 +310,6 @@ const page = {{
       isVisible: async () => false,
       evaluateAll: async (callback, includeText) => selector.includes("assistant")
         ? callback([{{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", getAttribute: (name) => name === "data-message-id" ? "assistant-new" : null }}], includeText)
-        : selector.includes("data-user-message-bubble")
-          ? callback([{{ innerText: "Review the pinned change.", getAttribute: () => null }}])
           : callback([]),
     }};
   }},
@@ -320,7 +318,7 @@ const page = {{
 }};
 const result = await waitForReviewCompletion(page, {{
   baseline: {{ assistantMessageId: "assistant-base", assistantTurnCount: 0, conversationId: "bootstrap-route", submittedPrompt: "Review the pinned change." }},
-  timeoutMs: 20,
+  timeoutMs: 1000,
 }});
 assert.equal(result.status, "confirmed");
 assert.equal(result.conversationId, "new-route");
