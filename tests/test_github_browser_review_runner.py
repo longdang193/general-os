@@ -208,6 +208,8 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHig
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings expected; review has not started.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I need to inspect the pinned file before I can conclude.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI haven't reviewed the pinned file yet; no findings.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to read the pinned file before I can conclude.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to examine the pinned file before I can conclude.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe provisional gate was too strict.", provenance), true);
 '''
     )
@@ -1680,6 +1682,73 @@ assert.equal(result.conversation_url, "https://chatgpt.com/c/real-review");
 assert.equal(result.conversation_id, "real-review");
 assert.equal(result.assistant_message_id, null);
 assert.deepEqual(writes, []);
+'''
+    )
+
+
+def test_exception_recovery_promotes_confirmed_completion_after_completion_stage_error():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const writes = [];
+let completionCalls = 0;
+const page = {{
+  isClosed: () => false,
+  url: () => "https://chatgpt.com/c/recovered-review",
+  close: async () => {{}},
+}};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-completion-recovery",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [`https://github.com/owner/repo/blob/${{sha}}/file.md`],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: page.url(),
+      conversationId: "recovered-review",
+    }}),
+    waitForReviewCompletion: async () => {{
+      completionCalls += 1;
+      if (completionCalls === 1) {{
+        const error = new Error("page observer failed during completion");
+        error.reviewPage = page;
+        error.reviewBaseline = {{ conversationUrl: page.url(), conversationId: "recovered-review" }};
+        throw error;
+      }}
+      return {{
+        status: "confirmed",
+        checkpointAccepted: true,
+        responseTurnObserved: true,
+        currentUrl: page.url(),
+        conversationId: "recovered-review",
+        assistantMessageId: "assistant-recovered",
+        assistantTurnIndex: 0,
+        response: `Reviewed ${{sha}}; no findings.`,
+      }};
+    }},
+    writeResult: async () => {{}},
+    writeResponse: async (_path, content) => writes.push(content),
+  }},
+}});
+
+assert.equal(result.status, "completed");
+assert.equal(result.completion, "confirmed");
+assert.equal(result.conversation_id, "recovered-review");
+assert.equal(result.failure_stage, null);
+assert.deepEqual(writes, [`Reviewed ${{sha}}; no findings.\\n`]);
 '''
     )
 
