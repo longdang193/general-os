@@ -323,6 +323,14 @@ async function hasSubmittedUserTurn(page, prompt, submittedUserTurnId = null) {
   }
 }
 
+async function readVisibleUserTurnCount(page) {
+  try {
+    return await page.locator(USER_TURN_SELECTOR).count();
+  } catch {
+    return null;
+  }
+}
+
 export async function readSubmittedUserTurnId(page, prompt, { timeoutMs = SUBMITTED_TURN_ID_TIMEOUT_MS } = {}) {
   if (!prompt) return null;
   const deadline = Date.now() + timeoutMs;
@@ -374,6 +382,7 @@ async function readCompletionSnapshot(page, { includeText } = {}) {
   const assistantMessage = await readVisibleAssistantMessage(page, {
     includeText: includeText ?? !generating,
   });
+  const userTurnCount = await readVisibleUserTurnCount(page);
   const assistantUrl = page.url();
   const responseAction = page.getByRole("button", { name: /^(Regenerate response|Rate response|Feedback)$/i }).last();
   const composer = page.getByRole("textbox", { name: "Ask ChatGPT" }).first();
@@ -411,6 +420,7 @@ async function readCompletionSnapshot(page, { includeText } = {}) {
   const routeStable = initialUrl === assistantUrl && assistantUrl === currentUrl && currentUrl === finalUrl;
   return {
     ...(routeStable ? assistantMessage : { assistantMessageId: null, assistantText: "", assistantTurnCount: 0 }),
+    userTurnCount: routeStable ? userTurnCount : null,
     composerReady: routeStable && await composer.isVisible() && !generating,
     conversationId: routeStable ? extractConversationIdentity(finalUrl) : null,
     currentUrl: finalUrl,
@@ -726,7 +736,9 @@ export async function waitForReviewCompletion(page, {
     }
     previousAssistantTurnCount = snapshot.assistantTurnCount;
 
-    if (evaluateReviewCompletion({
+    const latestUserTurnAnswered = snapshot.userTurnCount === null
+      || snapshot.userTurnCount <= snapshot.assistantTurnCount;
+    if (latestUserTurnAnswered && evaluateReviewCompletion({
       ...snapshot,
       baselineAssistantTurnCount,
       expectedConversationId,
@@ -854,7 +866,9 @@ export async function waitForExistingReviewCompletion(page, {
     }
     previousMessageId = snapshot.assistantMessageId;
 
-    if (evaluateReviewCompletion({
+    const latestUserTurnAnswered = snapshot.userTurnCount === null
+      || snapshot.userTurnCount <= snapshot.assistantTurnCount;
+    if (latestUserTurnAnswered && evaluateReviewCompletion({
       ...snapshot,
       assistantTurnCount: 1,
       baselineAssistantTurnCount: 0,

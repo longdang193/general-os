@@ -2733,6 +2733,56 @@ assert.equal(result[1].failure_scope, "shared_context");
     )
 
 
+def test_existing_conversation_completion_rejects_stale_assistant_when_new_user_turn_pending():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/existing-review",
+  waitForTimeout: async () => {{ }},
+  locator(selector) {{
+    const isUserTurn = selector.includes("data-message-author-role=\\\"user\\\"")
+      || selector.includes("data-user-message-bubble");
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => selector.includes("conversation-turn-error") || selector.includes("role=alert")
+        ? 0
+        : isUserTurn ? 2 : 1,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => callback(
+        isUserTurn
+          ? [
+            {{ innerText: "older review request", getAttribute: () => "user-old" }},
+            {{ innerText: "new pending review request", getAttribute: () => "user-new" }},
+          ]
+          : [{{ innerText: "older completed response", getAttribute: () => "assistant-old" }}],
+        includeText,
+      ),
+    }};
+  }},
+  getByRole(role, options) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      isVisible: async () => role === "textbox" || options?.name === "Feedback",
+    }};
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => true }}),
+}};
+
+const result = await waitForExistingReviewCompletion(page, {{
+  conversationUrl: "https://chatgpt.com/c/existing-review",
+  timeoutMs: 10,
+}});
+assert.equal(result.status, "incomplete");
+assert.match(result.failureReason, /bounded existing conversation verification timeout/);
+''',
+    )
+
+
 def test_existing_conversation_completion_accepts_current_visible_markers():
     run_node_assertion(
         f'''
