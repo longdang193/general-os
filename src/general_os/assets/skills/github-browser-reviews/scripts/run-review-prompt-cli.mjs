@@ -687,12 +687,16 @@ export async function waitForChromeCdpEndpoint(
   const activePortPath = join(profilePath, "DevToolsActivePort");
   const deadline = Date.now() + timeoutMs;
   let lastError;
+  let discoveredPort;
+  let attemptedEndpoint;
   while (Date.now() <= deadline) {
     try {
       const [portLine] = (await readFileImpl(activePortPath, "utf8")).trim().split(/\r?\n/);
       const port = Number(portLine);
       if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Invalid Chrome DevTools port: ${portLine}`);
+      discoveredPort = port;
       const endpoint = `http://127.0.0.1:${port}`;
+      attemptedEndpoint = endpoint;
       await waitForEndpoint(endpoint, { timeoutMs, pollIntervalMs });
       return endpoint;
     } catch (error) {
@@ -700,7 +704,10 @@ export async function waitForChromeCdpEndpoint(
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, pollIntervalMs));
   }
-  throw new Error(`Timed out waiting for Chrome DevTools port file ${activePortPath}: ${errorMessage(lastError)}`);
+  throw new Error(
+    `Timed out waiting for Chrome DevTools port file ${activePortPath}`
+    + ` (profile ${profilePath}, port ${discoveredPort ?? "unknown"}, endpoint ${attemptedEndpoint ?? "unknown"}): ${errorMessage(lastError)}`,
+  );
 }
 
 export async function waitForProcessExit(child, { timeoutMs = PROCESS_EXIT_TIMEOUT_MS } = {}) {

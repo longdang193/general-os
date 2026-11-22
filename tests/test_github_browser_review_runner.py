@@ -2882,6 +2882,30 @@ await rm(profile, {{ recursive: true, force: true }});
     )
 
 
+def test_cdp_startup_timeout_reports_profile_port_and_endpoint():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForChromeCdpEndpoint }} from {CLI_RUNNER.as_uri()!r};
+
+await assert.rejects(
+  waitForChromeCdpEndpoint("C:/profiles/review", {{
+    readFileImpl: async () => "45678\\nprofile-owned-browser\\n",
+    waitForEndpoint: async () => {{ throw new Error("HTTP 404"); }},
+    timeoutMs: 1,
+    pollIntervalMs: 0,
+  }}),
+  (error) => {{
+    assert.match(error.message, /C:\\/profiles\\/review/);
+    assert.match(error.message, /port 45678/);
+    assert.match(error.message, /endpoint http:\\/\\/127\\.0\\.0\\.1:45678/);
+    return true;
+  }},
+);
+'''
+    )
+
+
 def test_closed_page_preserves_last_conversation_checkpoint():
     run_node_assertion(
         f'''

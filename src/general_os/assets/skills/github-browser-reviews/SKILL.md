@@ -442,22 +442,27 @@ $profile = "$env:USERPROFILE\.codex\profiles\github-review\$projectKey"
 
 & "$env:ProgramFiles\Google\Chrome\Application\chrome.exe" `
   --user-data-dir="$profile" `
-  --remote-debugging-port=9222 `
+  --remote-debugging-port=0 `
   --remote-debugging-address=127.0.0.1 `
   https://chatgpt.com/
 ```
 
-Verify the same endpoint that will be passed to the CLI before attaching:
+Read the profile-owned port and verify the same endpoint that will be passed to
+the CLI before attaching:
 
 ```powershell
-Invoke-RestMethod http://localhost:9222/json/version
-Invoke-RestMethod http://localhost:9222/json/list
+$port = [int](Get-Content "$profile\DevToolsActivePort" | Select-Object -First 1)
+$endpoint = "http://127.0.0.1:$port"
+Invoke-RestMethod "$endpoint/json/version"
+Invoke-RestMethod "$endpoint/json/list"
 ```
 
-Then use `--cdp-endpoint http://localhost:9222` with the normal repository,
-full-SHA, and pinned-URL provenance arguments. This is an operator-owned
-fallback, not a second normal browser lifecycle owner; do not use it for a
-pipe-backed Playwright MCP browser.
+Then use `--cdp-endpoint $endpoint` with the normal repository, full-SHA, and
+pinned-URL provenance arguments. Do not replace the profile-owned endpoint with
+another loopback address based only on a successful CDP response: a fixed-port
+collision can expose an unrelated browser. This is an operator-owned fallback,
+not a second normal browser lifecycle owner; do not use it for a pipe-backed
+Playwright MCP browser.
 
 ### 3. Open the review
 
