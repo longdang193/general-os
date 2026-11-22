@@ -2394,6 +2394,67 @@ await rm(outputDir, {{ recursive: true, force: true }});
     )
 
 
+def test_recovery_failure_preserves_checkpoint_diagnostic():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, readFile, rm, writeFile }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const outputDir = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "review-recovery-preservation-"));
+let writeCount = 0;
+let observerCalls = 0;
+const page = {{ close: async () => {{}} }};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: outputDir,
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/c/review",
+      conversationId: "review",
+    }}),
+    waitForReviewCompletion: async (_page, options) => {{
+      observerCalls += 1;
+      await options.onSnapshot({{
+        checkpointAccepted: true,
+        responseTurnObserved: false,
+        currentUrl: "https://chatgpt.com/c/review",
+        conversationId: "review",
+      }});
+      throw new Error(observerCalls === 1 ? "primary observer failed" : "recovery observer failed");
+    }},
+    writeResult: async (directory, value) => {{
+      writeCount += 1;
+      if (writeCount === 3) throw new Error("disk full");
+      await writeFile(join(directory, "result.json"), JSON.stringify(value));
+    }},
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.match(result.failure_reason, /result checkpoint failed: disk full/i);
+assert.match(result.failure_reason, /evidence preservation failed: recovery observer failed/i);
+const persisted = JSON.parse(await readFile(join(outputDir, "result.json"), "utf8"));
+assert.match(persisted.failure_reason, /result checkpoint failed: disk full/i);
+assert.match(persisted.failure_reason, /evidence preservation failed: recovery observer failed/i);
+await rm(outputDir, {{ recursive: true, force: true }});
+''',
+    )
+
+
 def test_read_only_interruption_is_classified_as_completion_failure():
     run_node_assertion(
         f'''

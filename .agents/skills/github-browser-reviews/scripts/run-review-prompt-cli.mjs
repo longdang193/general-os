@@ -1306,7 +1306,10 @@ export async function runReviewTransaction(context, options) {
             result.failure_reason = "Review response completed without citing the requested revision or file marker";
           }
         } catch (preservationError) {
-          result.failure_reason = appendFailureReason(transactionFailureReason, `evidence preservation failed: ${errorMessage(preservationError)}`);
+          result.failure_reason = appendFailureReason(
+            result.failure_reason || transactionFailureReason,
+            `evidence preservation failed: ${errorMessage(preservationError)}`,
+          );
         }
       }
     }
