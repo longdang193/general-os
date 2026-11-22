@@ -37,6 +37,8 @@ function withFailureScope(error, failureScope) {
     wrapped.submissionAttempted = error.submissionAttempted === true;
     wrapped.dispatchState = error.dispatchState || null;
     wrapped.visibleEvidence = error.visibleEvidence || null;
+    wrapped.code = error.code;
+    wrapped.interruptionSnapshot = error.interruptionSnapshot;
   }
   return wrapped;
 }

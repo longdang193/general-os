@@ -571,6 +571,62 @@ await assert.rejects(
     )
 
 
+def test_read_only_interruption_metadata_survives_error_wrapper():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewPromptInNewTab }} from {RUNNER.as_uri()!r};
+
+const assistantElement = {{
+  innerText: "Review for 0123456789abcdef0123456789abcdef01234567: no findings.",
+  getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+}};
+const emptyLocator = {{
+  first() {{ return this; }},
+  last() {{ return this; }},
+  nth() {{ return this; }},
+  count: async () => 0,
+  isVisible: async () => false,
+  evaluateAll: async () => [],
+  innerText: async () => "",
+  waitFor: async () => {{}},
+}};
+const assistantLocator = {{
+  ...emptyLocator,
+  count: async () => 1,
+  evaluateAll: async (callback, includeText) => callback([assistantElement], includeText),
+  getByRole: () => emptyLocator,
+  getByText: () => emptyLocator,
+}};
+const page = {{
+  url: () => "https://chatgpt.com/c/existing-review",
+  goto: async () => {{}},
+  close: async () => {{}},
+  locator: () => assistantLocator,
+  getByRole: (role) => role === "textbox" ? {{ ...emptyLocator, isVisible: async () => true }} : emptyLocator,
+  getByText: () => emptyLocator,
+}};
+const interruptionSignal = new AbortController();
+interruptionSignal.abort();
+const context = {{ newPage: async () => page }};
+
+await assert.rejects(
+  runReviewPromptInNewTab(context, {{
+    existingConversationUrl: "https://chatgpt.com/c/existing-review",
+    signal: interruptionSignal.signal,
+  }}),
+  (error) => {{
+    assert.equal(error.code, "REVIEW_INTERRUPTED");
+    assert.equal(error.interruptionSnapshot.currentUrl, "https://chatgpt.com/c/existing-review");
+    assert.equal(error.interruptionSnapshot.conversationId, "existing-review");
+    assert.equal(error.interruptionSnapshot.checkpointAccepted, true);
+    return true;
+  }},
+);
+''',
+    )
+
+
 def test_completion_requires_continuity_with_submitted_user_turn():
     run_node_assertion(
         f'''
