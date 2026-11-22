@@ -501,7 +501,7 @@ export function isResponseContentReady(response) {
   const normalized = text.replace(/[\u2019\u2018]/g, "'");
   const nonEmptyLines = normalized.split(/\r?\n/).filter((line) => line.trim());
   const planningLanguage = /\b(?:i|we)(?:\s+(?:will|shall|am going to|are going to)|\s*'ll)\s+(?:read|inspect|review|trace|report|focus|keep|return|narrow|verify|check|assess)\b|\b(?:i|we)(?:\s+am|\s*'m|\s+are)\s+(?:currently\s+)?(?:reading|inspecting|reviewing|tracing|narrowing|focusing|checking|looking)\b|\b(?:first pass|narrowing the review)\b/i.test(normalized);
-  const concreteOutcome = /\b(?:review complete|no findings|no issues|no problems|clean|approved|changes requested|found|identified|conclusion)\b|(?:^|\n)\s*(?:#{1,6}\s+|[-*]\s+|\d+[.)]\s+|\[P[0-3]\])/im.test(normalized);
+  const concreteOutcome = /\b(?:review complete|no (?:actionable )?(?:findings|issues|problems|defects|vulnerabilities|concerns)|clean|approved|changes requested|found|identified|conclusion)\b|(?:^|\n)\s*(?:#{1,6}\s+|[-*]\s+|\d+[.)]\s+|\[P[0-3]\])/im.test(normalized);
   const planningOnly = normalized.length <= 600
     && nonEmptyLines.length <= 4
     && planningLanguage
@@ -598,9 +598,10 @@ export async function waitForReviewCompletion(page, {
 } = {}) {
   if (!baseline) throw new Error("baseline is required for completion observation");
 
+  const configuredInitialDeadline = Date.now() + (initialTimeoutMs ?? timeoutMs);
   const initialDeadline = Number.isFinite(deadlineAt)
-    ? deadlineAt
-    : Date.now() + (initialTimeoutMs ?? timeoutMs);
+    ? Math.min(deadlineAt, configuredInitialDeadline)
+    : configuredInitialDeadline;
   let deadline = initialDeadline;
   let ambiguityActive = initialTimeoutMs !== null && initialTimeoutMs !== undefined;
   let backoffMs = COMPLETION_INITIAL_BACKOFF_MS;
@@ -780,7 +781,7 @@ export async function waitForReviewCompletion(page, {
     if (ambiguityActive && responseEvidenceObserved) {
       const promotedDeadline = Date.now() + completionTimeoutMs;
       deadline = Number.isFinite(deadlineAt)
-        ? Math.min(deadline, promotedDeadline)
+        ? Math.min(deadlineAt, promotedDeadline)
         : promotedDeadline;
       ambiguityActive = false;
     }

@@ -67,6 +67,10 @@ assert.equal(
 assert.equal(isResponseContentReady("Reviewed completion logic"), false);
 assert.equal(isResponseContentReady("No findings."), true);
 assert.equal(
+  isResponseContentReady("0123456789abcdef0123456789abcdef01234567\\nNo actionable findings."),
+  true,
+);
+assert.equal(
   isResponseContentReady("792b035\\n\\n## Findings\\n\\n[P1] The completion state can remain waiting after the response is visible."),
   true,
 );
@@ -159,6 +163,46 @@ assert.ok(checkpoints.length >= 1);
 assert.equal(checkpoints.every((snapshot) => snapshot.responseTurnObserved === false), true);
 assert.equal(result.checkpointAccepted, true);
 '''
+    )
+
+
+def test_ambiguous_dispatch_keeps_its_short_initial_deadline():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+let now = 1000;
+const realDateNow = Date.now;
+Date.now = () => now;
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForTimeout: async (delay) => {{ now += delay || 1; }},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => 0,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => callback([], includeText),
+    }};
+  }},
+  getByRole: () => ({{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => false }}),
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+try {{
+  const result = await waitForReviewCompletion(page, {{
+    baseline: {{ assistantMessageId: "assistant-old", assistantTurnCount: 1, conversationId: "review", submittedPrompt: "Review the pinned change." }},
+    initialTimeoutMs: 15_000,
+    completionTimeoutMs: 900_000,
+    deadlineAt: 901_000,
+  }});
+  assert.equal(result.status, "incomplete");
+  assert.ok(now < 901_000);
+}} finally {{
+  Date.now = realDateNow;
+}}
+''' ,
     )
 
 
