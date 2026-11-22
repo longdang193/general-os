@@ -517,12 +517,16 @@ export async function waitForReviewCompletion(page, {
     if (await readVisibleInterruption(page)) {
       const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
       const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
+      const responseTurnObserved = interruptedSnapshot.generating
+        || interruptedSnapshot.assistantTurnCount > baselineAssistantTurnCount
+        || Boolean(interruptedSnapshot.assistantMessageId && interruptedSnapshot.assistantMessageId !== baseline.assistantMessageId);
       if (submittedTurnObserved && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId)) {
-        if (onSnapshot) await onSnapshot(interruptedSnapshot);
+        if (onSnapshot) await onSnapshot({ ...interruptedSnapshot, responseTurnObserved });
       }
       return {
         ...interruptedSnapshot,
         response: interruptedSnapshot.assistantText,
+        responseTurnObserved,
         status: "interrupted",
         checkpointAccepted: submittedTurnObserved
           && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId),
@@ -624,9 +628,9 @@ export async function waitForReviewCompletion(page, {
       || (conversationChanged && (handoffResponseProgressed
         || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId)));
     const responseEvidenceObserved = responseTurnObserved
-      || snapshot.responseActionsReady
-    if (onSnapshot && submittedTurnObserved && responseTurnObserved) {
-      await onSnapshot({ ...snapshot, checkpointAccepted: true });
+      || snapshot.responseActionsReady;
+    if (onSnapshot && submittedTurnObserved) {
+      await onSnapshot({ ...snapshot, checkpointAccepted: true, responseTurnObserved });
     }
     if (!responseConversationId && responseTurnObserved && snapshot.conversationId && submittedTurnObserved) {
       responseConversationId = snapshot.conversationId;
@@ -663,6 +667,7 @@ export async function waitForReviewCompletion(page, {
         response: snapshot.assistantText,
         status: "confirmed",
         checkpointAccepted: true,
+        responseTurnObserved: true,
       };
     }
 
@@ -678,12 +683,14 @@ export async function waitForReviewCompletion(page, {
     || finalSnapshot.assistantTurnCount > baselineAssistantTurnCount
     || Boolean(finalSnapshot.assistantMessageId && finalSnapshot.assistantMessageId !== baseline.assistantMessageId);
   const finalCheckpointAccepted = (!expectedConversationId || finalSnapshot.conversationId === expectedConversationId)
-    && finalSubmittedTurnObserved
-    && finalResponseTurnObserved;
-  if (onSnapshot && finalCheckpointAccepted) await onSnapshot({ ...finalSnapshot, checkpointAccepted: true });
+    && finalSubmittedTurnObserved;
+  if (onSnapshot && finalCheckpointAccepted) {
+    await onSnapshot({ ...finalSnapshot, checkpointAccepted: true, responseTurnObserved: finalResponseTurnObserved });
+  }
   return {
     ...finalSnapshot,
     response: finalSnapshot.assistantText,
+    responseTurnObserved: finalResponseTurnObserved,
     status: "incomplete",
     checkpointAccepted: finalCheckpointAccepted,
     failureReason: "bounded completion timeout or ambiguous response association",

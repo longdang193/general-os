@@ -120,15 +120,16 @@ const page = {{
   getByRole() {{ return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => false }}; }},
   getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
 }};
-let checkpoints = 0;
+const checkpoints = [];
 const result = await waitForReviewCompletion(page, {{
   baseline: {{ assistantMessageId: "assistant-old", assistantTurnCount: 1, conversationId: "review", submittedPrompt: "Review the pinned change.", submittedUserTurnId: "submitted-user" }},
   timeoutMs: 0,
-  onSnapshot: async () => {{ checkpoints += 1; }},
+  onSnapshot: async (snapshot) => checkpoints.push(snapshot),
 }});
 assert.equal(result.status, "incomplete");
-assert.equal(checkpoints, 0);
-assert.equal(result.checkpointAccepted, false);
+assert.ok(checkpoints.length >= 1);
+assert.equal(checkpoints.every((snapshot) => snapshot.responseTurnObserved === false), true);
+assert.equal(result.checkpointAccepted, true);
 '''
     )
 
@@ -202,6 +203,9 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSev
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nConfidence: High", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nRisk: Low", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHigh — confidence in the review plan.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHigh — possible issue; needs investigation.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHigh — risk level only.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings expected; review has not started.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe provisional gate was too strict.", provenance), true);
 '''
     )
@@ -1542,6 +1546,69 @@ const result = await runReviewTransaction({{}}, {{
 assert.equal(result.completion, "confirmed");
 assert.equal(result.status, "incomplete");
 assert.match(result.failure_reason, /without citing/);
+'''
+    )
+
+
+def test_pre_response_interruption_persists_identity_without_stale_response():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const writes = [];
+const page = {{ close: async () => {{}} }};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-pre-response-interruption",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/c/bootstrap",
+      conversationId: "bootstrap",
+    }}),
+    waitForReviewCompletion: async (_page, {{ onSnapshot }}) => {{
+      await onSnapshot({{
+        checkpointAccepted: true,
+        responseTurnObserved: false,
+        currentUrl: "https://chatgpt.com/c/real-review",
+        conversationId: "real-review",
+        assistantMessageId: "old-assistant",
+        assistantTurnCount: 1,
+        assistantText: "Old response from before submission",
+      }});
+      return {{
+        status: "interrupted",
+        checkpointAccepted: true,
+        responseTurnObserved: false,
+        currentUrl: "https://chatgpt.com/c/real-review",
+        conversationId: "real-review",
+        assistantMessageId: "old-assistant",
+        assistantTurnIndex: 0,
+        response: "Old response from before submission",
+        failureReason: "visible response interruption",
+      }};
+    }},
+    writeResult: async () => {{}},
+    writeResponse: async (_path, content) => writes.push(content),
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.conversation_url, "https://chatgpt.com/c/real-review");
+assert.equal(result.conversation_id, "real-review");
+assert.deepEqual(writes, []);
 '''
     )
 

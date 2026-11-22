@@ -221,11 +221,11 @@ export function validateReviewProvenance({ repository, commitSha, reviewUrls, pr
 export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (typeof response !== "string" || !response.trim()) return false;
   if (/(?:could not|unable to|failed to|cannot|can't)\s+(?:access|review|inspect|load|read)|\b(?:don't|do not)\s+have access\b|\bnot able to access\b|\baccess(?:ing)?(?: the| to)?\s+[^.\n]{0,40}\bfailed\b|\b(?:not|never|not yet|pending)\s+approved\b/i.test(response)) return false;
-  const provisionalLanguage = /\b(?:i|we)\s+(?:will|'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:if|when|once|until)\b[^.\n]{0,120}\b(?:confirm(?:ed)?|inspect|review|check|verify|findings?|severity|report)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet)\b/i;
+  const provisionalLanguage = /\b(?:i|we)\s+(?:will|'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:if|when|once|until)\b[^.\n]{0,120}\b(?:confirm(?:ed)?|inspect|review|check|verify|findings?|severity|report)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification))\b/i;
   const severityPattern = /(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\b)\s*[-:—;]\s*\S|^\s*(?:(?:[-*]|\d+[.)])\s+)?(?:critical|high|medium|low)\b(?=\s*(?:[-:—]|$)))/i;
   const conclusiveSeverity = response.split(/\r?\n/).some((line) => severityPattern.test(line)
     && !/\b(?:if|when|once|until|will|'ll|pending|tentative|provisional|to be confirmed|not yet)\b/i.test(line)
-    && !/\b(?:confidence|review plan|planning|approach|strategy)\b/i.test(line));
+    && !/\b(?:confidence|risk\s+(?:level|assessment|score|rating)|review plan|planning|approach|strategy|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification))\b/i.test(line));
   const normalizedResponse = response.toLowerCase();
   let revisionMarkerFound = typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase());
   for (const reviewUrl of reviewUrls || []) {
@@ -1025,9 +1025,11 @@ export async function runReviewTransaction(context, options) {
     if (!snapshot) return;
     if (snapshot.checkpointAccepted === false) return;
     if (snapshot.checkpointAccepted !== true && result.conversation_id && snapshot.conversationId && snapshot.conversationId !== result.conversation_id) return;
+    if (snapshot.currentUrl) result.conversation_url = snapshot.currentUrl;
+    if (snapshot.conversationId) result.conversation_id = snapshot.conversationId;
+    const responseTurnObserved = snapshot.responseTurnObserved !== false;
     const responseText = snapshot.assistantText?.trim();
-    if (!responseText) return;
-    if (responseText !== checkpointResponse && outputDir) {
+    if (responseTurnObserved && responseText && responseText !== checkpointResponse && outputDir) {
       try {
         await writeResponse(join(outputDir, "response.md"), `${responseText}\n`);
       } catch (error) {
@@ -1037,10 +1039,8 @@ export async function runReviewTransaction(context, options) {
       checkpointResponse = responseText;
     }
     lastAcceptedSnapshot = snapshot;
-    if (snapshot.currentUrl) result.conversation_url = snapshot.currentUrl;
-    if (snapshot.conversationId) result.conversation_id = snapshot.conversationId;
-    if (snapshot.assistantMessageId) result.assistant_message_id = snapshot.assistantMessageId;
-    if (snapshot.assistantTurnCount !== undefined && snapshot.assistantTurnCount !== null) {
+    if (responseTurnObserved && snapshot.assistantMessageId) result.assistant_message_id = snapshot.assistantMessageId;
+    if (responseTurnObserved && snapshot.assistantTurnCount !== undefined && snapshot.assistantTurnCount !== null) {
       result.assistant_turn_index = Math.max(0, snapshot.assistantTurnCount - 1);
     }
     await persist().catch((error) => {
@@ -1128,10 +1128,10 @@ export async function runReviewTransaction(context, options) {
       result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? result.assistant_turn_index ?? null;
     }
 
-    if (completionSnapshot?.response && !rejectedCompletion) {
+    if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && !rejectedCompletion) {
       stage = "artifacts";
       await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
-    } else if (completionSnapshot?.response && rejectedCompletion && lastAcceptedSnapshot) {
+    } else if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && rejectedCompletion && lastAcceptedSnapshot) {
       stage = "artifacts";
       await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
     }
