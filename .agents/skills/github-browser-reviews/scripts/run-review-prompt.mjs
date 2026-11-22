@@ -449,7 +449,9 @@ export async function submitPrompt(page, composer, prompt, { beforeSubmit, signa
   throwIfAborted(signal);
   let dispatchState = "not_dispatched";
   try {
-    if (await sendButton.isVisible()) {
+    const sendButtonVisible = await sendButton.isVisible();
+    throwIfAborted(signal);
+    if (sendButtonVisible) {
       dispatchState = "possibly_dispatched";
       await sendButton.click({ timeout: UI_ACTION_TIMEOUT_MS });
     } else {
@@ -799,6 +801,7 @@ export async function waitForExistingReviewCompletion(page, {
         failureReason: "existing conversation identity changed during verification",
       };
     }
+    routeTransitionDeadline = null;
     if (snapshot.interrupted) {
       if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: true });
       return {

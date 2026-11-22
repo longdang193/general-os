@@ -602,6 +602,20 @@ await assert.rejects(
 );
 assert.equal(beforeSubmitCount, 1);
 assert.equal(clickCount, 0);
+
+const visibilitySignal = new AbortController();
+const visibilityPage = {{
+  getByRole: () => ({{
+    first() {{ return this; }},
+    isVisible: async () => {{ visibilitySignal.abort(); return true; }},
+    click: async () => {{ clickCount += 1; }},
+  }}),
+}};
+await assert.rejects(
+  submitPrompt(visibilityPage, composer, "review prompt", {{ signal: visibilitySignal.signal }}),
+  (error) => error.code === "REVIEW_INTERRUPTED",
+);
+assert.equal(clickCount, 0);
 ''',
     )
 
@@ -664,6 +678,80 @@ const result = await waitForExistingReviewCompletion(page, {{
 }});
 assert.equal(result.status, "confirmed");
 assert.equal(result.conversationId, "existing-review");
+''',
+    )
+
+
+def test_read_only_route_transition_grace_resets_after_recovery():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const snapshots = [
+  {{ url: "https://chatgpt.com/", text: "", ready: false }},
+  {{ url: "https://chatgpt.com/c/existing-review", text: "", ready: false }},
+  {{ url: "https://chatgpt.com/", text: "", ready: false }},
+  {{ url: "https://chatgpt.com/c/existing-review", text: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", ready: true }},
+];
+let now = 0;
+const originalNow = Date.now;
+Date.now = () => now;
+const page = {{
+  index: 0,
+  current() {{ return snapshots[Math.min(this.index, snapshots.length - 1)]; }},
+  url() {{ return this.current().url; }},
+  waitForTimeout() {{
+    now += this.index === 1 ? 39999 : 1;
+    this.index += 1;
+  }},
+  locator(selector) {{
+    const interruptionSelector = selector.includes("conversation-turn-error")
+      || selector.includes("response-error")
+      || selector.includes("error-message")
+      || selector.includes("role=alert");
+    const locator = {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      nth() {{ return this; }},
+      count: async () => interruptionSelector ? 0 : 1,
+      isVisible: async () => !interruptionSelector && page.current().ready,
+      evaluateAll: async (callback, includeText) => callback([{{
+        innerText: includeText ? page.current().text : "",
+        getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+      }}], includeText),
+      innerText: async () => "",
+      getByRole: () => locator,
+      getByText: () => locator,
+    }};
+    return locator;
+  }},
+  getByRole(role, options) {{
+    const completionAction = typeof options?.name === "string"
+      && /Feedback|Regenerate response|Rate response/.test(options.name);
+    const locator = {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      nth() {{ return this; }},
+      isVisible: async () => role === "textbox" || completionAction && page.current().ready,
+      getByRole: () => locator,
+      getByText: () => locator,
+    }};
+    return locator;
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => page.current().ready }}),
+}};
+
+try {{
+  const result = await waitForExistingReviewCompletion(page, {{
+    conversationUrl: "https://chatgpt.com/c/existing-review",
+    timeoutMs: 100000,
+  }});
+  assert.equal(result.status, "confirmed");
+  assert.equal(result.conversationId, "existing-review");
+}} finally {{
+  Date.now = originalNow;
+}}
 ''',
     )
 
