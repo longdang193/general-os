@@ -472,29 +472,6 @@ await closeContext(attached);
     )
 
 
-def test_bootstrap_page_closes_restored_profile_pages_after_startup_settles():
-    run_node_assertion(
-        f'''
-import assert from "node:assert/strict";
-import {{ findBootstrapReviewPage }} from {CLI_RUNNER.as_uri()!r};
-
-const bootstrapPage = {{}};
-const restoredPage = {{ closeCount: 0, close: async () => {{ restoredPage.closeCount += 1; }} }};
-let pageReads = 0;
-const context = {{
-  pages: () => {{
-    pageReads += 1;
-    return pageReads < 2 ? [bootstrapPage] : [bootstrapPage, restoredPage];
-  }},
-}};
-
-const result = await findBootstrapReviewPage(context, {{ settleMs: 1, pollIntervalMs: 0 }});
-assert.equal(result, bootstrapPage);
-assert.equal(restoredPage.closeCount, 1);
-''',
-    )
-
-
 def test_attached_cdp_context_does_not_adopt_existing_pages():
     run_node_assertion(
         f'''
@@ -1235,17 +1212,16 @@ assert.equal(responses.length, 0);
     )
 
 
-def test_bootstrap_page_selection_fails_closed_on_zero_pages_and_closes_restored_pages():
+def test_bootstrap_page_selection_fails_closed_on_zero_or_multiple_pages():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
 import {{ findBootstrapReviewPage }} from {CLI_RUNNER.as_uri()!r};
 
 const page = {{}};
-const restoredPage = {{ close: async () => {{}} }};
 assert.equal(await findBootstrapReviewPage({{ pages: () => [page] }}), page);
 await assert.rejects(findBootstrapReviewPage({{ pages: () => [] }}, {{ timeoutMs: 0 }}), /bootstrap page/);
-assert.equal(await findBootstrapReviewPage({{ pages: () => [page, restoredPage] }}), page);
+await assert.rejects(findBootstrapReviewPage({{ pages: () => [page, {{}}] }}), /Ambiguous/);
 '''
     )
 
@@ -2031,6 +2007,87 @@ assert.equal(result.conversation_id, "created-review");
 assert.equal(persisted.at(-1).conversation_url, "https://chatgpt.com/c/created-review");
 assert.equal(persisted.at(-1).conversation_id, "created-review");
 '''
+    )
+
+
+def test_signal_cleanup_aborts_observation_before_closing_context():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ installTerminationCleanup }} from {CLI_RUNNER.as_uri()!r};
+
+let closeCount = 0;
+let signalCode = null;
+const cleanup = installTerminationCleanup({{}}, async () => {{ closeCount += 1; }}, (code) => {{ signalCode = code; }});
+process.emit("SIGINT");
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(signalCode, 130);
+assert.equal(closeCount, 0);
+await cleanup.closeOnce();
+assert.equal(closeCount, 1);
+cleanup();
+''',
+    )
+
+
+def test_interrupted_completion_persists_last_conversation_checkpoint():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const persisted = [];
+const responses = [];
+const page = {{ isClosed: () => false, url: () => "https://chatgpt.com/c/last-review", close: async () => {{}} }};
+const interruptionSnapshot = {{
+  currentUrl: "https://chatgpt.com/c/last-review",
+  conversationId: "last-review",
+  assistantMessageId: "assistant-1",
+  assistantTurnCount: 1,
+  assistantTurnIndex: 0,
+  assistantText: "Review for 0123456789abcdef0123456789abcdef01234567: no findings.",
+  response: "Review for 0123456789abcdef0123456789abcdef01234567: no findings.",
+  responseTurnObserved: true,
+  checkpointAccepted: true,
+}};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-signal-checkpoint",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  abortSignal: new AbortController().signal,
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/",
+      conversationId: null,
+    }}),
+    waitForReviewCompletion: async () => {{
+      const error = new Error("Review completion observation interrupted by termination signal");
+      error.code = "REVIEW_INTERRUPTED";
+      error.interruptionSnapshot = interruptionSnapshot;
+      throw error;
+    }},
+    writeResult: async (_outputDir, value) => persisted.push(JSON.parse(JSON.stringify(value))),
+    writeResponse: async (_path, content) => responses.push(content),
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.conversation_url, "https://chatgpt.com/c/last-review");
+assert.equal(result.conversation_id, "last-review");
+assert.equal(persisted.at(-1).conversation_url, "https://chatgpt.com/c/last-review");
+assert.equal(responses.at(-1), `${{interruptionSnapshot.assistantText}}\\n`);
+''',
     )
 
 

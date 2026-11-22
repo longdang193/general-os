@@ -28,7 +28,6 @@ const DEFAULT_CONTEXT_INDEX = 0;
 const DEFAULT_CDP_PORT = 9222;
 const CDP_STARTUP_TIMEOUT_MS = 15000;
 const CDP_POLL_INTERVAL_MS = 100;
-const BOOTSTRAP_SETTLE_MS = 250;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const DEFAULT_OUTPUT_DIR = "review-output";
 const PROFILE_LEASE_SUFFIX = ".codex-review-profile.lock";
@@ -874,24 +873,12 @@ export async function openContext(chromium, options, dependencies = {}) {
   }
 }
 
-export async function findBootstrapReviewPage(
-  context,
-  { timeoutMs = 5000, pollIntervalMs = 50, settleMs = BOOTSTRAP_SETTLE_MS } = {},
-) {
+export async function findBootstrapReviewPage(context, { timeoutMs = 5000, pollIntervalMs = 50 } = {}) {
   const deadline = Date.now() + timeoutMs;
   while (true) {
     const pages = context.pages();
-    if (pages.length > 0) {
-      const bootstrapPage = pages[0];
-      await new Promise((resolveDelay) => setTimeout(resolveDelay, settleMs));
-      const settledPages = context.pages();
-      if (settledPages.includes(bootstrapPage)) {
-        for (const extraPage of settledPages) {
-          if (extraPage !== bootstrapPage) await extraPage.close();
-        }
-        return bootstrapPage;
-      }
-    }
+    if (pages.length === 1) return pages[0];
+    if (pages.length > 1) throw new Error(`Ambiguous bootstrap page selection: expected one ChatGPT page, found ${pages.length}`);
     if (Date.now() >= deadline) throw new Error("ChatGPT bootstrap page was not available");
     await new Promise((resolveDelay) => setTimeout(resolveDelay, pollIntervalMs));
   }
@@ -961,7 +948,7 @@ export async function closeContext(attached) {
   attached.closed = true;
 }
 
-export function installTerminationCleanup(attached, closeAttachedContext = closeContext) {
+export function installTerminationCleanup(attached, closeAttachedContext = closeContext, onSignal = null) {
   if (!attached) return () => {};
 
   const handlers = new Map();
@@ -974,7 +961,15 @@ export function installTerminationCleanup(attached, closeAttachedContext = close
   for (const signal of ["SIGINT", "SIGTERM"]) {
     const handler = () => {
       signalCode = signal === "SIGINT" ? 130 : 143;
-      closeOnce().catch(() => {});
+      if (onSignal) {
+        try {
+          onSignal(signalCode);
+        } catch {
+          closeOnce().catch(() => {});
+        }
+      } else {
+        closeOnce().catch(() => {});
+      }
     };
     handlers.set(signal, handler);
     process.once(signal, handler);
@@ -1125,6 +1120,7 @@ export async function runReviewTransaction(context, options) {
         }
       };
     }
+    runPromptOptions.signal = options.abortSignal;
     const review = await runPrompt(context, runPromptOptions);
     page = review.page;
     reviewBaseline = review;
@@ -1154,6 +1150,7 @@ export async function runReviewTransaction(context, options) {
       baseline: review,
       onSnapshot: persistSnapshot,
       acceptSnapshot: (snapshot) => hasRevisionEvidence(snapshot.assistantText, options),
+      signal: options.abortSignal,
     });
     const rejectedCompletion = completion.checkpointAccepted === false
       || (lastAcceptedSnapshot && completion.conversationId && completion.conversationId !== lastAcceptedSnapshot.conversationId);
@@ -1200,6 +1197,17 @@ export async function runReviewTransaction(context, options) {
       page = error.reviewPage;
       reviewBaseline = error.reviewBaseline;
     }
+    if (error?.interruptionSnapshot) {
+      const interruptionSnapshot = error.interruptionSnapshot;
+      const interruptionConversationId = extractConversationIdentity(interruptionSnapshot.currentUrl || "");
+      if (interruptionConversationId && interruptionSnapshot.checkpointAccepted !== false) {
+        result.conversation_url = interruptionSnapshot.currentUrl;
+        result.conversation_id = interruptionConversationId;
+      }
+      if (interruptionSnapshot.checkpointAccepted !== false) {
+        await persistSnapshot(interruptionSnapshot);
+      }
+    }
     const pageOpen = page && !isPageClosed(page);
     if (pageOpen) {
       const baseline = error.reviewBaseline || reviewBaseline;
@@ -1217,7 +1225,10 @@ export async function runReviewTransaction(context, options) {
         result.conversation_url ||= currentUrl || baseline?.conversationUrl || null;
         result.conversation_id ||= baseline?.conversationId || null;
       }
-      if ((dispatchState !== "not_dispatched" || options.existingConversationUrl) && baseline && result.completion !== "confirmed") {
+      if (error.code !== "REVIEW_INTERRUPTED"
+        && (dispatchState !== "not_dispatched" || options.existingConversationUrl)
+        && baseline
+        && result.completion !== "confirmed") {
         try {
           const timeoutMs = dispatchState === "possibly_dispatched" && result.submission !== "acknowledged"
             ? AMBIGUOUS_DISPATCH_TIMEOUT_MS
@@ -1334,7 +1345,7 @@ export async function runReviewTransaction(context, options) {
   };
 }
 
-export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
+export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, abortSignal, runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
   const results = [];
   let cleanupError;
   let requestedCount = reviews?.length || 0;
@@ -1353,6 +1364,7 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         reviewIndex: review.reviewIndex ?? index,
         outputDir,
         reviewPage: attached.reviewPage,
+        abortSignal,
       });
       results.push(result);
       const dispatchMayHaveStarted = result.dispatch_state == null
@@ -1514,6 +1526,7 @@ export async function main(argv, dependencies = {}) {
   let attached;
   let removeTerminationCleanup = () => {};
   let terminationCode = null;
+  const reviewAbortController = new AbortController();
 
   try {
     try {
@@ -1532,7 +1545,7 @@ export async function main(argv, dependencies = {}) {
       throw error;
     }
     attached = await openContextForReview(contextOptions);
-    removeTerminationCleanup = installCleanup(attached, closeAttachedContext);
+    removeTerminationCleanup = installCleanup(attached, closeAttachedContext, () => reviewAbortController.abort());
     if (options.batchFile) {
       result = summarizeBatchResults(await runBatch({
         attached,
@@ -1540,6 +1553,7 @@ export async function main(argv, dependencies = {}) {
         reviews,
         projectKey: contextOptions.projectKey,
         repository: contextOptions.repository,
+        abortSignal: reviewAbortController.signal,
         closeContextFn: removeTerminationCleanup.closeOnce,
       }));
       try {
@@ -1568,6 +1582,7 @@ export async function main(argv, dependencies = {}) {
         reviewPage: attached.reviewPage,
         runId: reviews[0].runId,
         runOutputDir: reviews[0].runOutputDir,
+        abortSignal: reviewAbortController.signal,
       });
     }
   } catch (error) {

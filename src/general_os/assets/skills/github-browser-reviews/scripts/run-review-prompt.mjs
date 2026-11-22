@@ -505,6 +505,7 @@ export async function waitForReviewCompletion(page, {
   completionTimeoutMs = timeoutMs,
   onSnapshot,
   acceptSnapshot = () => true,
+  signal,
 } = {}) {
   if (!baseline) throw new Error("baseline is required for completion observation");
 
@@ -533,6 +534,22 @@ export async function waitForReviewCompletion(page, {
     || baseline.dispatchState === "acknowledged";
 
   while (Date.now() <= deadline) {
+    if (signal?.aborted) {
+      const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
+      const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
+      const responseTurnObserved = interruptedSnapshot.generating
+        || interruptedSnapshot.assistantTurnCount > baselineAssistantTurnCount
+        || Boolean(interruptedSnapshot.assistantMessageId && interruptedSnapshot.assistantMessageId !== baseline.assistantMessageId);
+      const checkpointAccepted = submittedTurnObserved
+        && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId);
+      const snapshot = { ...interruptedSnapshot, checkpointAccepted, responseTurnObserved };
+      if (onSnapshot && checkpointAccepted) await onSnapshot(snapshot);
+      const error = new Error("Review completion observation interrupted by termination signal");
+      error.code = "REVIEW_INTERRUPTED";
+      error.reviewBaseline = baseline;
+      error.interruptionSnapshot = snapshot;
+      throw error;
+    }
     if (await readVisibleInterruption(page)) {
       const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
       const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
@@ -720,6 +737,7 @@ export async function waitForExistingReviewCompletion(page, {
   conversationUrl,
   timeoutMs = COMPLETION_TIMEOUT_MS,
   onSnapshot,
+  signal,
 } = {}) {
   const expectedConversationUrl = normalizeExistingConversationUrl(conversationUrl);
   const expectedConversationId = extractConversationIdentity(expectedConversationUrl);
@@ -730,6 +748,16 @@ export async function waitForExistingReviewCompletion(page, {
   let snapshot;
 
   while (Date.now() <= deadline) {
+    if (signal?.aborted) {
+      const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
+      const checkpointAccepted = interruptedSnapshot.conversationId === expectedConversationId;
+      const snapshot = { ...interruptedSnapshot, checkpointAccepted };
+      if (onSnapshot && checkpointAccepted) await onSnapshot(snapshot);
+      const error = new Error("Existing conversation verification interrupted by termination signal");
+      error.code = "REVIEW_INTERRUPTED";
+      error.interruptionSnapshot = snapshot;
+      throw error;
+    }
     snapshot = await readCompletionSnapshot(page, { includeText: true });
     if (snapshot.conversationId !== expectedConversationId) {
       return {
@@ -843,6 +871,7 @@ export async function runReviewPromptInNewTab(context, options = {}) {
       const completion = await waitForExistingReviewCompletion(page, {
         conversationUrl: existingConversationUrl,
         onSnapshot: options.onSnapshot,
+        signal: options.signal,
       });
       return {
         page,
