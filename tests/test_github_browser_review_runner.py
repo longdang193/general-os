@@ -2250,6 +2250,28 @@ await rm(outputDir, {{ recursive: true, force: true }});
     )
 
 
+def test_page_cleanup_failure_preserves_checkpoint_diagnostic():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ markCleanupFailure }} from {CLI_RUNNER.as_uri()!r};
+
+const result = {{
+  status: "completed",
+  cleanup_status: "completed",
+  cleanup_warning: null,
+  failure_scope: null,
+  failure_stage: null,
+  failure_reason: "result checkpoint failed: disk full",
+}};
+markCleanupFailure(result, "page close failed");
+assert.equal(result.status, "incomplete");
+assert.equal(result.failure_stage, "cleanup");
+assert.equal(result.failure_reason, "result checkpoint failed: disk full; cleanup failed: page close failed");
+''',
+    )
+
+
 def test_repeated_checkpoint_failures_are_deduplicated():
     run_node_assertion(
         f'''

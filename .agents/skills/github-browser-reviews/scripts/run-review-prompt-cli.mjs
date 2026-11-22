@@ -1025,17 +1025,15 @@ function isPageClosed(page) {
   }
 }
 
-function markCleanupFailure(result, cleanupReason) {
+export function markCleanupFailure(result, cleanupReason) {
   result.cleanup_status = "failed";
   result.cleanup_warning = cleanupReason;
   result.failure_scope = "shared_context";
   if (result.status === "completed" || !result.failure_stage) {
     result.status = "incomplete";
     result.failure_stage = "cleanup";
-    result.failure_reason = cleanupReason;
-  } else {
-    result.failure_reason = appendFailureReason(result.failure_reason, `cleanup failed: ${cleanupReason}`);
   }
+  result.failure_reason = appendFailureReason(result.failure_reason, `cleanup failed: ${cleanupReason}`);
 }
 
 export async function runReviewTransaction(context, options) {
