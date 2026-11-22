@@ -1237,13 +1237,9 @@ export async function runReviewTransaction(context, options) {
         currentUrl = null;
       }
       const currentConversationId = extractConversationIdentity(currentUrl || "");
-      if (currentConversationId && !extractConversationIdentity(result.conversation_url || "")) {
-        result.conversation_url = currentUrl;
-        result.conversation_id = currentConversationId;
-      } else {
-        result.conversation_url ||= currentUrl || baseline?.conversationUrl || null;
-        result.conversation_id ||= baseline?.conversationId || null;
-      }
+      recordVisibleConversation(result, { currentUrl, conversationId: currentConversationId });
+      result.conversation_url ||= baseline?.conversationUrl || null;
+      result.conversation_id ||= baseline?.conversationId || null;
       if (error.code !== "REVIEW_INTERRUPTED"
         && (dispatchState !== "not_dispatched" || options.existingConversationUrl)
         && baseline

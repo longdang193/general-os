@@ -2093,6 +2093,59 @@ assert.equal(responses.at(-1), `${{interruptionSnapshot.assistantText}}\\n`);
     )
 
 
+def test_rejected_interruption_route_stays_last_visible_only():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const page = {{ isClosed: () => false, url: () => "https://chatgpt.com/c/new-route", close: async () => {{}} }};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-rejected-signal-route",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/",
+      conversationId: null,
+    }}),
+    waitForReviewCompletion: async () => {{
+      const error = new Error("Review completion observation interrupted by termination signal");
+      error.code = "REVIEW_INTERRUPTED";
+      error.interruptionSnapshot = {{
+        currentUrl: "https://chatgpt.com/c/new-route",
+        conversationId: "new-route",
+        assistantText: "unbound route response",
+        responseTurnObserved: true,
+        checkpointAccepted: false,
+      }};
+      throw error;
+    }},
+    writeResult: async () => {{}},
+    writeResponse: async () => {{}},
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.conversation_url, "https://chatgpt.com/");
+assert.equal(result.conversation_id, null);
+assert.equal(result.last_visible_conversation_url, "https://chatgpt.com/c/new-route");
+assert.equal(result.last_visible_conversation_id, "new-route");
+''',
+    )
+
+
 def test_launch_owned_review_page_is_reused_and_not_closed_per_transaction():
     run_node_assertion(
         f'''
