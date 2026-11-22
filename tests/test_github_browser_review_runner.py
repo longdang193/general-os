@@ -32,7 +32,7 @@ assert.equal(evaluateReviewCompletion({{
   assistantText: "## Review\\n\\nNo findings.",
   assistantTurnCount: 2,
   baselineAssistantTurnCount: 1,
-  composerReady: true,
+  composerReady: false,
   conversationId: "conversation-2",
   expectedConversationId: "conversation-2",
   generationObserved: false,
@@ -42,6 +42,34 @@ assert.equal(evaluateReviewCompletion({{
   stableSampleCount: 2,
   allowStableTextFallback: true,
 }}), true);
+'''
+    )
+
+
+def test_response_content_ready_rejects_planning_only_interim_text():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ isResponseContentReady }} from {RUNNER.as_uri()!r};
+
+assert.equal(
+  isResponseContentReady("I\u2019ll inspect the commit-pinned file and report findings."),
+  false,
+);
+assert.equal(
+  isResponseContentReady("I\u2019ll review the file at the pinned commit and report only actionable findings."),
+  false,
+);
+assert.equal(
+  isResponseContentReady("The first pass already shows the key design tension. I\u2019m narrowing the review to the transaction wait/recovery path."),
+  false,
+);
+assert.equal(isResponseContentReady("Reviewed completion logic"), false);
+assert.equal(isResponseContentReady("No findings."), true);
+assert.equal(
+  isResponseContentReady("792b035\\n\\n## Findings\\n\\n[P1] The completion state can remain waiting after the response is visible."),
+  true,
+);
 '''
     )
 
@@ -70,7 +98,7 @@ assert.equal(evaluateReviewCompletion({{
     )
 
 
-def test_stable_text_fallback_requires_composer_readiness_without_terminal_marker():
+def test_stable_text_fallback_still_requires_multiple_stable_samples():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -87,7 +115,7 @@ assert.equal(evaluateReviewCompletion({{
   generating: false,
   interrupted: false,
   responseActionsReady: false,
-  stableSampleCount: 2,
+  stableSampleCount: 1,
   submittedTurnObserved: true,
   allowStableTextFallback: true,
 }}), false);
@@ -134,7 +162,7 @@ assert.equal(result.checkpointAccepted, true);
     )
 
 
-def test_completion_waits_for_accepted_review_evidence():
+def test_completion_separates_lifecycle_from_review_evidence():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -150,7 +178,7 @@ const page = {{
       count: async () => 0,
       isVisible: async () => false,
       evaluateAll: async (callback, includeText) => selector.includes("data-response-body")
-        ? callback([{{ innerText: "I will inspect the pinned files and report findings.", getAttribute: (name) => name === "data-response-body" ? "assistant-new" : null }}], includeText)
+        ? callback([{{ innerText: "The response completed, but the requested revision marker is absent.", getAttribute: (name) => name === "data-response-body" ? "assistant-new" : null }}], includeText)
         : selector.includes("data-user-message-bubble")
           ? callback([{{ innerText: "Review the pinned change.", getAttribute: () => null }}], includeText)
           : callback([], includeText),
@@ -165,10 +193,11 @@ let acceptanceChecks = 0;
 const result = await waitForReviewCompletion(page, {{
   baseline: {{ assistantMessageId: "assistant-old", assistantTurnCount: 0, conversationId: "review", submittedPrompt: "Review the pinned change." }},
   timeoutMs: 20,
-  acceptSnapshot: () => {{ acceptanceChecks += 1; return false; }},
+  acceptSnapshot: () => {{ acceptanceChecks += 1; return true; }},
 }});
-assert.equal(result.status, "incomplete");
+assert.equal(result.status, "confirmed");
 assert.ok(acceptanceChecks > 0);
+assert.equal(result.contentEvidenceUnconfirmed, false);
 '''
     )
 
@@ -193,6 +222,8 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n## 
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings yet; I will inspect file.md next.", provenance), false);
 assert.equal(hasRevisionEvidence("https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md\\nSeverity: pending until I inspect it.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High; reviewed the pinned file.", provenance), true);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nP1 - Retrying the job may duplicate the write.\\nReview complete.", provenance), true);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n[P1] The error path failed to read a cache entry and may return stale data.\\nReview complete.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n1. High — reviewed the pinned file.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — reviewed the pinned file.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High\\nI will inspect the pinned file and report findings next.", provenance), false);
@@ -214,6 +245,7 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo 
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to investigate the pinned file before I can conclude.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to compare the pinned file before I can conclude.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to look at the pinned file before I can conclude.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings; I may inspect the pinned file next.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe evidence gate was too strict.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHigh — parser defect.\\nI still need to analyze the remaining pinned file.", provenance), false);
 '''
@@ -326,6 +358,50 @@ assert.equal(evaluateReviewCompletion({{
     )
 
 
+def test_global_response_complete_marker_confirms_scoped_assistant_turn():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  evaluate: async () => ({{ userTurnCount: 1, assistantTurnCount: 1, latestAssistantFollowsLatestUser: true }}),
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    const assistant = selector.includes("assistant") || selector.includes("response-body");
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => assistant ? 1 : 0,
+      nth() {{
+        return {{
+          getByRole: () => ({{ last() {{ return this; }}, isVisible: async () => false }}),
+          getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+        }};
+      }},
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => assistant
+        ? callback([{{ innerText: includeText ? "Reviewed commit 792b035." : "", getAttribute: (name) => name === "data-message-id" ? "assistant-new" : null }}], includeText)
+        : callback([], includeText),
+    }};
+  }},
+  getByRole: () => ({{
+    first() {{ return this; }},
+    last() {{ return this; }},
+    isVisible: async () => false,
+  }}),
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => true }}),
+}};
+
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "assistant-old", assistantTurnCount: 0, conversationId: "review", submittedPrompt: "" }},
+  timeoutMs: 100,
+}});
+assert.equal(result.status, "confirmed");
+assert.equal(result.response, "Reviewed commit 792b035.");
+'''
+    )
 def test_completion_action_must_be_on_the_current_assistant_turn():
     run_node_assertion(
         f'''
@@ -1015,6 +1091,29 @@ assert.match(result.failureReason, /association|submitted user turn/i);
     )
 
 
+def test_submitted_user_turn_matching_tolerates_rendered_punctuation_spacing():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ readSubmittedUserTurnId }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  locator: () => ({{
+    evaluateAll: async (callback) => callback([{{
+      innerText: "@GitHub Review this exact file revision:https://github.com/example/repo/blob/abc/file.js",
+      getAttribute: (name) => name === "data-message-id" ? "submitted-user" : null,
+    }}]),
+  }}),
+  waitForTimeout: async () => {{}},
+}};
+
+assert.equal(
+  await readSubmittedUserTurnId(page, "@GitHub Review this exact file revision:\\nhttps://github.com/example/repo/blob/abc/file.js", {{ timeoutMs: 1 }}),
+  "submitted-user",
+);
+'''
+    )
+
 def test_submitted_user_turn_id_is_polled_through_spa_route_transition():
     run_node_assertion(
         f'''
@@ -1527,6 +1626,51 @@ assert.equal(responses.at(-1), "Reviewed 0123456789abcdef0123456789abcdef0123456
     )
 
 
+def test_longer_response_checkpoint_is_not_overwritten_by_shorter_completion_snapshot():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const fullResponse = `${{sha}}\\n\\n## Findings\\n\\n[P1] Completion can remain waiting after the response is visible.`;
+const shortResponse = `${{sha}}\\n\\nNo findings.`;
+const page = {{ isClosed: () => false, close: async () => {{}} }};
+const responses = [];
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-monotonic-response",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [`https://github.com/owner/repo/blob/${{sha}}/file.md`],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/c/monotonic",
+      conversationId: "monotonic",
+    }}),
+    waitForReviewCompletion: async (_page, {{ onSnapshot }}) => {{
+      await onSnapshot({{ currentUrl: "https://chatgpt.com/c/monotonic", conversationId: "monotonic", assistantMessageId: "assistant-1", assistantTurnCount: 2, assistantText: fullResponse }});
+      await onSnapshot({{ currentUrl: "https://chatgpt.com/c/monotonic", conversationId: "monotonic", assistantMessageId: "assistant-1", assistantTurnCount: 2, assistantText: shortResponse }});
+      return {{ status: "confirmed", currentUrl: "https://chatgpt.com/c/monotonic", conversationId: "monotonic", assistantMessageId: "assistant-1", assistantTurnIndex: 1, response: shortResponse }};
+    }},
+    writeResult: async () => {{}},
+    writeResponse: async (_filePath, content) => responses.push(content),
+  }},
+}});
+
+assert.equal(result.status, "completed");
+assert.deepEqual(responses, [`${{fullResponse}}\\n`]);
+'''
+    )
 def test_accepted_route_transition_replaces_initial_transaction_checkpoint():
     run_node_assertion(
         f'''
@@ -2455,6 +2599,57 @@ await rm(outputDir, {{ recursive: true, force: true }});
     )
 
 
+def test_completion_recovery_reuses_one_deadline_and_terminalizes_waiting():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, rm }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const outputDir = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "review-recovery-deadline-"));
+const page = {{ close: async () => {{}} }};
+const deadlines = [];
+let observerCalls = 0;
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: outputDir,
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/c/review",
+      conversationId: "review",
+    }}),
+    waitForReviewCompletion: async (_page, options) => {{
+      deadlines.push(options.deadlineAt);
+      observerCalls += 1;
+      throw new Error(observerCalls === 1 ? "primary observer failed" : "recovery observer failed");
+    }},
+  }},
+}});
+
+assert.equal(deadlines.length, 2);
+assert.equal(deadlines[0], deadlines[1]);
+assert.equal(result.status, "incomplete");
+assert.equal(result.completion, "incomplete");
+assert.notEqual(result.completion, "waiting");
+assert.match(result.failure_reason, /could not be confirmed after recovery/i);
+await rm(outputDir, {{ recursive: true, force: true }});
+''' ,
+    )
+
+
 def test_read_only_interruption_is_classified_as_completion_failure():
     run_node_assertion(
         f'''
@@ -3188,6 +3383,56 @@ assert.equal(result.status, "completed");
 '''
     )
 
+
+def test_batch_continues_after_lifecycle_settlement_with_content_evidence_failure():
+    run_node_assertion(
+        f'''import assert from "node:assert/strict";
+import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const reviewUrl = `https://github.com/owner/repo/blob/${{sha}}/file.md`;
+const reviews = ["GPT-5.6-Sol", "GPT-6"].map((model) => ({{
+  model,
+  effort: "High",
+  prompt: `Review ${{reviewUrl}} at ${{sha}}`,
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [reviewUrl],
+  runOutputDir: `review-output/run-${{model}}`,
+}}));
+let calls = 0;
+const results = await runReviewBatch({{
+  attached: {{ context: {{}}, projectKey: "owner-repo", repository: "owner/repo" }},
+  reviews,
+  runTransaction: async () => {{
+    calls += 1;
+    return calls === 1
+      ? {{
+          status: "incomplete",
+          completion: "confirmed",
+          cleanup_status: "completed",
+          submission: "acknowledged",
+          dispatch_state: "acknowledged",
+          failure_scope: "review",
+          content_evidence_unconfirmed: true,
+        }}
+      : {{
+          status: "completed",
+          completion: "confirmed",
+          cleanup_status: "completed",
+          submission: "acknowledged",
+          dispatch_state: "acknowledged",
+        }};
+  }},
+  closeContextFn: async () => {{}},
+}});
+
+assert.equal(calls, 2);
+assert.equal(results.length, 2);
+assert.equal(results[1].status, "completed");
+assert.notEqual(results[1].status, "skipped");
+'''
+    )
 
 def test_closed_shared_review_page_stops_batch_and_skips_following_review():
     run_node_assertion(

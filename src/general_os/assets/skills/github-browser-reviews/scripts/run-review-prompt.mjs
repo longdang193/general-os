@@ -48,6 +48,9 @@ function normalizeComposerText(value) {
 function normalizePromptText(value) {
   return normalizeComposerText(value).replace(/\s*`n\s*/g, "`n");
 }
+function normalizePromptForTurnComparison(value) {
+  return normalizePromptText(value).replace(/\s*([:;,])\s*/g, "$1");
+}
 function throwIfAborted(signal) {
   if (!signal?.aborted) return;
   const error = new Error("Review operation interrupted by termination signal");
@@ -315,9 +318,9 @@ async function hasSubmittedUserTurn(page, prompt, submittedUserTurnId = null) {
         || null,
       text: element.innerText || "",
     })));
-    const expectedPrompt = normalizePromptText(prompt);
+    const expectedPrompt = normalizePromptForTurnComparison(prompt);
     if (submittedUserTurnId) return snapshots.some((snapshot) => snapshot.id === submittedUserTurnId);
-    return snapshots.some((snapshot) => normalizePromptText(snapshot.text).includes(expectedPrompt));
+    return snapshots.some((snapshot) => normalizePromptForTurnComparison(snapshot.text).includes(expectedPrompt));
   } catch {
     return false;
   }
@@ -364,7 +367,7 @@ async function readVisibleConversationTurnState(page) {
 export async function readSubmittedUserTurnId(page, prompt, { timeoutMs = SUBMITTED_TURN_ID_TIMEOUT_MS } = {}) {
   if (!prompt) return null;
   const deadline = Date.now() + timeoutMs;
-  const expectedPrompt = normalizePromptText(prompt);
+  const expectedPrompt = normalizePromptForTurnComparison(prompt);
   let firstAttempt = true;
   while (firstAttempt || Date.now() <= deadline) {
     firstAttempt = false;
@@ -379,7 +382,7 @@ export async function readSubmittedUserTurnId(page, prompt, { timeoutMs = SUBMIT
         text: element.innerText || "",
       })));
       const submittedTurnId = snapshots
-        .filter((snapshot) => snapshot.id && normalizePromptText(snapshot.text).includes(expectedPrompt))
+        .filter((snapshot) => snapshot.id && normalizePromptForTurnComparison(snapshot.text).includes(expectedPrompt))
         .at(-1)?.id || null;
       if (submittedTurnId) return submittedTurnId;
     } catch {
@@ -443,6 +446,7 @@ async function readCompletionSnapshot(page, { includeText } = {}) {
   } catch {
     responseActionsReady = false;
   }
+  if (!responseActionsReady) responseActionsReady = responseCompleteVisible;
   if (!assistantTurnScopeAvailable && !responseActionsReady) responseActionsReady = await responseAction.isVisible() || responseCompleteVisible;
 
   const interrupted = await readVisibleInterruption(page);
@@ -487,8 +491,25 @@ export function evaluateReviewCompletion({
     && assistantTurnCount > baselineAssistantTurnCount
     && Boolean(assistantText.trim())
     && (responseActionsReady && stableSampleCount >= 1 && (generationObserved || assistantTurnCount > baselineAssistantTurnCount)
-      || allowStableTextFallback && composerReady && stableSampleCount >= 2)
+      || allowStableTextFallback && stableSampleCount >= 2)
     && submittedTurnObserved;
+}
+
+export function isResponseContentReady(response) {
+  const text = typeof response === "string" ? response.trim() : "";
+  if (!text) return false;
+  const normalized = text.replace(/[\u2019\u2018]/g, "'");
+  const nonEmptyLines = normalized.split(/\r?\n/).filter((line) => line.trim());
+  const planningLanguage = /\b(?:i|we)(?:\s+(?:will|shall|am going to|are going to)|\s*'ll)\s+(?:read|inspect|review|trace|report|focus|keep|return|narrow|verify|check|assess)\b|\b(?:i|we)(?:\s+am|\s*'m|\s+are)\s+(?:currently\s+)?(?:reading|inspecting|reviewing|tracing|narrowing|focusing|checking|looking)\b|\b(?:first pass|narrowing the review)\b/i.test(normalized);
+  const concreteOutcome = /\b(?:review complete|no findings|no issues|no problems|clean|approved|changes requested|found|identified|conclusion)\b|(?:^|\n)\s*(?:#{1,6}\s+|[-*]\s+|\d+[.)]\s+|\[P[0-3]\])/im.test(normalized);
+  const planningOnly = normalized.length <= 600
+    && nonEmptyLines.length <= 4
+    && planningLanguage
+    && !concreteOutcome;
+  const shortUnstructured = normalized.length <= 240
+    && nonEmptyLines.length <= 4
+    && !concreteOutcome;
+  return !planningOnly && !shortUnstructured;
 }
 
 export async function submitPrompt(page, composer, prompt, { beforeSubmit, signal } = {}) {
@@ -570,13 +591,16 @@ export async function waitForReviewCompletion(page, {
   timeoutMs = COMPLETION_TIMEOUT_MS,
   initialTimeoutMs = null,
   completionTimeoutMs = timeoutMs,
+  deadlineAt = null,
   onSnapshot,
   acceptSnapshot = () => true,
   signal,
 } = {}) {
   if (!baseline) throw new Error("baseline is required for completion observation");
 
-  const initialDeadline = Date.now() + (initialTimeoutMs ?? timeoutMs);
+  const initialDeadline = Number.isFinite(deadlineAt)
+    ? deadlineAt
+    : Date.now() + (initialTimeoutMs ?? timeoutMs);
   let deadline = initialDeadline;
   let ambiguityActive = initialTimeoutMs !== null && initialTimeoutMs !== undefined;
   let backoffMs = COMPLETION_INITIAL_BACKOFF_MS;
@@ -586,6 +610,7 @@ export async function waitForReviewCompletion(page, {
   let stableSampleCount = 0;
   let snapshot;
   let baselineAssistantTurnCount = baseline.assistantTurnCount;
+  let contentEvidenceUnconfirmed = false;
   let expectedConversationId = baseline.conversationId || null;
   let responseConversationId = null;
   let submittedUserTurnId = baseline.submittedUserTurnId || null;
@@ -753,7 +778,10 @@ export async function waitForReviewCompletion(page, {
       expectedConversationId = responseConversationId;
     }
     if (ambiguityActive && responseEvidenceObserved) {
-      deadline = Date.now() + completionTimeoutMs;
+      const promotedDeadline = Date.now() + completionTimeoutMs;
+      deadline = Number.isFinite(deadlineAt)
+        ? Math.min(deadline, promotedDeadline)
+        : promotedDeadline;
       ambiguityActive = false;
     }
     const sameAssistantTurn = previousAssistantTurnCount === null
@@ -768,7 +796,7 @@ export async function waitForReviewCompletion(page, {
     }
     previousAssistantTurnCount = snapshot.assistantTurnCount;
 
-    if (evaluateReviewCompletion({
+    const completionReady = evaluateReviewCompletion({
       ...snapshot,
       baselineAssistantTurnCount,
       expectedConversationId,
@@ -776,7 +804,15 @@ export async function waitForReviewCompletion(page, {
       stableSampleCount,
       submittedTurnObserved,
       allowStableTextFallback: true,
-    }) && await acceptSnapshot(snapshot)) {
+    });
+    if (completionReady) {
+      // Do not wait on revision evidence, but avoid settling a planning-only transient.
+      if (!(await acceptSnapshot(snapshot))) {
+        await page.waitForTimeout(backoffMs);
+        backoffMs = Math.min(backoffMs * 2, COMPLETION_MAX_BACKOFF_MS);
+        continue;
+      }
+      contentEvidenceUnconfirmed = false;
       return {
         ...snapshot,
         assistantTurnIndex: snapshot.assistantTurnCount - 1,
@@ -784,6 +820,10 @@ export async function waitForReviewCompletion(page, {
         status: "confirmed",
         checkpointAccepted: true,
         responseTurnObserved: true,
+        contentEvidenceUnconfirmed,
+        failureReason: contentEvidenceUnconfirmed
+          ? "content_evidence_unconfirmed: stable response did not satisfy revision evidence"
+          : undefined,
       };
     }
 
@@ -810,7 +850,10 @@ export async function waitForReviewCompletion(page, {
     responseTurnObserved: finalResponseTurnObserved,
     status: "incomplete",
     checkpointAccepted: finalCheckpointAccepted,
-    failureReason: "bounded completion timeout or ambiguous response association",
+    contentEvidenceUnconfirmed,
+    failureReason: contentEvidenceUnconfirmed
+      ? "content_evidence_unconfirmed: stable response did not satisfy revision evidence"
+      : "bounded completion timeout or ambiguous response association",
   };
 }
 

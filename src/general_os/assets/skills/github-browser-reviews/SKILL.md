@@ -253,9 +253,16 @@ assistant message, and response text while the page is still available. Only
 identity-accepted snapshots become checkpoints; rejected route/conversation
 snapshots remain diagnostic-only. If the page or context closes during cleanup,
 the final result uses that last durable checkpoint instead of querying the
-closed page. Current visible completion
-markers include `Response complete` and `Feedback`, while stable assistant text
-and composer readiness remain required.
+closed page. `response.md` is the latest accepted response checkpoint, not
+proof that the transaction is complete; `result.json` remains the lifecycle
+authority. Current visible completion markers include `Response complete` and
+`Feedback`. When those controls are unavailable, repeated stable assistant
+text can confirm completion after the new-turn, identity, interruption, and
+submitted-turn checks pass; composer readiness is not required for that
+fallback. If structural completion is observed but revision evidence is
+rejected, the bounded observer carries `content_evidence_unconfirmed: true`
+into the terminal `result.json` and settles the transaction as `incomplete`
+with a specific reason rather than a generic association timeout.
 
 Submitted-review completion evidence stays bound to the same review page,
 requires a new stable assistant turn, and must remain continuous with the
