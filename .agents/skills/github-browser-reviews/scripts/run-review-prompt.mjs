@@ -580,8 +580,12 @@ export async function waitForReviewCompletion(page, {
       const transitionFreshnessObserved = syntheticSubmissionRoute && handoffResponseProgressed;
       const newAssistantTurnObserved = transitionFreshnessObserved
         || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
+      const durableTurnAnchorObserved = Boolean(submittedUserTurnId)
+        || acknowledgedSubmissionAssistantTurn
+        || syntheticSubmissionRoute && submittedTurnObserved
+        || transitionFreshnessObserved;
       const newConversationAnchorObserved = newAssistantTurnObserved
-        && (submittedTurnObserved || acknowledgedSubmissionAssistantTurn || transitionFreshnessObserved);
+        && durableTurnAnchorObserved;
       if (transitionFreshnessObserved) {
         submittedTurnObserved = true;
         submittedTurnAnchorObserved = true;

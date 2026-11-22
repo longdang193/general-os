@@ -130,6 +130,7 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo 
 assert.equal(hasRevisionEvidence("https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md\\nSeverity: pending until I inspect it.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High; reviewed the pinned file.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n1. High — reviewed the pinned file.", provenance), true);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — reviewed the pinned file.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High\\nI will inspect the pinned file and report findings next.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nCould not access the pinned file; this review is not approved yet.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI don't have access to the pinned file, so I found no issues.", provenance), false);
@@ -137,6 +138,7 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI w
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High if the suspected issue is confirmed; I will inspect it next.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nConfidence: High", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nRisk: Low", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe provisional gate was too strict.", provenance), true);
 '''
     )
 
@@ -522,7 +524,7 @@ assert.match(result.failureReason, /association|submitted user turn/i);
     )
 
 
-def test_completion_allows_normal_route_handoff_after_new_turn_anchor_is_visible():
+def test_completion_rejects_normal_route_handoff_without_durable_turn_anchor():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -551,8 +553,8 @@ const result = await waitForReviewCompletion(page, {{
   baseline: {{ assistantMessageId: "assistant-base", assistantTurnCount: 0, conversationId: "bootstrap-route", submittedPrompt: "Review the pinned change." }},
   timeoutMs: 1000,
 }});
-assert.equal(result.status, "confirmed");
-assert.equal(result.conversationId, "new-route");
+assert.equal(result.status, "incomplete");
+assert.match(result.failureReason, /conversation identity changed|submitted user turn|timeout|association/i);
 '''
     )
 
