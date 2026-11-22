@@ -1949,6 +1949,7 @@ let endpointSeen = null;
 const launched = await launchDedicatedChrome(profile, {{
   spawnProcess: (_executable, args) => {{
     assert.equal(args.includes("--remote-debugging-port=0"), true);
+    assert.equal(args.includes("https://chatgpt.com/"), false);
     void writeFile(join(profile, "DevToolsActivePort"), "45678\\nprofile-owned-browser\\n");
     return chromeProcess;
   }},

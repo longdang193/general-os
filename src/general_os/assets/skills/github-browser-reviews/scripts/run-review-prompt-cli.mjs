@@ -748,7 +748,6 @@ export async function launchDedicatedChrome(
       "--remote-debugging-address=127.0.0.1",
       "--no-first-run",
       "--no-default-browser-check",
-      "https://chatgpt.com/",
     ],
     { detached: false, stdio: "ignore", windowsHide: true },
   );
