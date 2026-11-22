@@ -543,7 +543,7 @@ export async function waitForReviewCompletion(page, {
       const checkpointAccepted = submittedTurnObserved
         && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId);
       const snapshot = { ...interruptedSnapshot, checkpointAccepted, responseTurnObserved };
-      if (onSnapshot && checkpointAccepted) await onSnapshot(snapshot);
+      if (onSnapshot) await onSnapshot(snapshot);
       const error = new Error("Review completion observation interrupted by termination signal");
       error.code = "REVIEW_INTERRUPTED";
       error.reviewBaseline = baseline;
@@ -665,8 +665,13 @@ export async function waitForReviewCompletion(page, {
         || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId)));
     const responseEvidenceObserved = responseTurnObserved
       || snapshot.responseActionsReady;
-    if (onSnapshot && submittedTurnObserved) {
-      await onSnapshot({ ...snapshot, checkpointAccepted: true, responseTurnObserved });
+    if (onSnapshot) {
+      await onSnapshot({
+        ...snapshot,
+        checkpointAccepted: submittedTurnObserved
+          && (!expectedConversationId || snapshot.conversationId === expectedConversationId),
+        responseTurnObserved,
+      });
     }
     if (!responseConversationId && responseTurnObserved && snapshot.conversationId && submittedTurnObserved) {
       responseConversationId = snapshot.conversationId;
@@ -812,7 +817,7 @@ export async function waitForExistingReviewCompletion(page, {
 
   const finalSnapshot = await readCompletionSnapshot(page, { includeText: true });
   const finalCheckpointAccepted = finalSnapshot.conversationId === expectedConversationId;
-  if (onSnapshot && finalCheckpointAccepted) await onSnapshot({ ...finalSnapshot, checkpointAccepted: true });
+  if (onSnapshot) await onSnapshot({ ...finalSnapshot, checkpointAccepted: finalCheckpointAccepted });
   return {
     ...finalSnapshot,
     response: finalSnapshot.assistantText,

@@ -355,6 +355,8 @@ export function createResult(options) {
     completion: "not_started",
     conversation_url: existingConversationUrl,
     conversation_id: existingConversationId,
+    last_visible_conversation_url: existingConversationUrl,
+    last_visible_conversation_id: existingConversationId,
     assistant_message_id: null,
     assistant_turn_index: null,
     response_path: "response.md",
@@ -1008,6 +1010,13 @@ function appendFailureReason(currentReason, suffix) {
   return `${currentReason || "Review transaction failed"}; ${suffix}`;
 }
 
+function recordVisibleConversation(result, snapshot) {
+  const conversationId = snapshot?.conversationId || extractConversationIdentity(snapshot?.currentUrl || "");
+  if (!conversationId || !snapshot?.currentUrl) return;
+  result.last_visible_conversation_url = snapshot.currentUrl;
+  result.last_visible_conversation_id = conversationId;
+}
+
 function isPageClosed(page) {
   try {
     return typeof page?.isClosed === "function" && page.isClosed();
@@ -1060,8 +1069,19 @@ export async function runReviewTransaction(context, options) {
 
   const persistSnapshot = async (snapshot) => {
     if (!snapshot) return;
-    if (snapshot.checkpointAccepted === false) return;
-    if (snapshot.checkpointAccepted !== true && result.conversation_id && snapshot.conversationId && snapshot.conversationId !== result.conversation_id) return;
+    recordVisibleConversation(result, snapshot);
+    if (snapshot.checkpointAccepted === false) {
+      await persist().catch((error) => {
+        result.failure_reason = appendFailureReason(result.failure_reason, `result checkpoint failed: ${errorMessage(error)}`);
+      });
+      return;
+    }
+    if (snapshot.checkpointAccepted !== true && result.conversation_id && snapshot.conversationId && snapshot.conversationId !== result.conversation_id) {
+      await persist().catch((error) => {
+        result.failure_reason = appendFailureReason(result.failure_reason, `result checkpoint failed: ${errorMessage(error)}`);
+      });
+      return;
+    }
     if (snapshot.currentUrl) result.conversation_url = snapshot.currentUrl;
     if (snapshot.conversationId) result.conversation_id = snapshot.conversationId;
     const responseTurnObserved = snapshot.responseTurnObserved !== false;
@@ -1141,6 +1161,7 @@ export async function runReviewTransaction(context, options) {
       result.conversation_url = review.currentUrl || result.conversation_url;
       result.conversation_id = review.conversationId || result.conversation_id;
     }
+    recordVisibleConversation(result, review);
     result.completion = "waiting";
     stage = "artifacts";
     await persist();
@@ -1204,9 +1225,7 @@ export async function runReviewTransaction(context, options) {
         result.conversation_url = interruptionSnapshot.currentUrl;
         result.conversation_id = interruptionConversationId;
       }
-      if (interruptionSnapshot.checkpointAccepted !== false) {
-        await persistSnapshot(interruptionSnapshot);
-      }
+      await persistSnapshot(interruptionSnapshot);
     }
     const pageOpen = page && !isPageClosed(page);
     if (pageOpen) {

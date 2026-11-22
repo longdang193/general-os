@@ -1112,6 +1112,8 @@ const result = await runReviewTransaction({{}}, {{
 assert.equal(result.status, "incomplete");
 assert.equal(result.conversation_url, "https://chatgpt.com/c/accepted");
 assert.equal(result.conversation_id, "accepted");
+assert.equal(result.last_visible_conversation_url, "https://chatgpt.com/c/rejected");
+assert.equal(result.last_visible_conversation_id, "rejected");
 assert.equal(responses.at(-1), "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.\\n");
 '''
     )
