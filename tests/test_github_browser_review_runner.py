@@ -214,7 +214,7 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo 
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to investigate the pinned file before I can conclude.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to compare the pinned file before I can conclude.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to look at the pinned file before I can conclude.", provenance), false);
-assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe provisional gate was too strict.", provenance), true);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe evidence gate was too strict.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHigh — parser defect.\\nI still need to analyze the remaining pinned file.", provenance), false);
 '''
     )

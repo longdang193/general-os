@@ -242,9 +242,7 @@ export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (!revisionMarkerFound) return false;
   const outcome = /\bno (?:actionable )?(?:findings?|issues?|defects?|vulnerabilities?|concerns?)\b(?!\s+(?:yet|pending|tbd|so far|to be|until|will|next)\b)|\b(?:changes requested|request changes|review complete|approved)\b/i.test(response)
     || conclusiveSeverity;
-  const unfinishedReview = provisionalLanguage.test(response)
-    && !(/\bprovisional gate\b/i.test(response) && !/\b(?:i|we)\s+(?:will|'ll)\b|\bstill\s+need(?:s)?\s+to\b|\b(?:haven't|have\s+not)\b/i.test(response));
-  return outcome && !unfinishedReview;
+  return outcome && !provisionalLanguage.test(response);
 }
 
 function resolveExistingConversationUrl(review, index) {
