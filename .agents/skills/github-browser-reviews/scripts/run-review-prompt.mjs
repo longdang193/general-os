@@ -48,6 +48,12 @@ function normalizeComposerText(value) {
 function normalizePromptText(value) {
   return normalizeComposerText(value).replace(/\s*`n\s*/g, "`n");
 }
+function throwIfAborted(signal) {
+  if (!signal?.aborted) return;
+  const error = new Error("Review operation interrupted by termination signal");
+  error.code = "REVIEW_INTERRUPTED";
+  throw error;
+}
 
 function isChallengeEvidence(evidence) {
   const content = `${evidence?.currentUrl || ""} ${evidence?.visibleText || ""}`;
@@ -430,7 +436,8 @@ export function evaluateReviewCompletion({
     && submittedTurnObserved;
 }
 
-export async function submitPrompt(page, composer, prompt, { beforeSubmit } = {}) {
+export async function submitPrompt(page, composer, prompt, { beforeSubmit, signal } = {}) {
+  throwIfAborted(signal);
   await composer.fill(prompt, { timeout: UI_ACTION_TIMEOUT_MS });
 
   if (!(await isPromptVisibleInComposer(composer, prompt))) {
@@ -439,6 +446,7 @@ export async function submitPrompt(page, composer, prompt, { beforeSubmit } = {}
 
   const sendButton = page.getByRole("button", { name: /^(Send|Send message|Submit)$/i }).first();
   if (beforeSubmit) await beforeSubmit();
+  throwIfAborted(signal);
   let dispatchState = "not_dispatched";
   try {
     if (await sendButton.isVisible()) {
@@ -753,6 +761,7 @@ export async function waitForExistingReviewCompletion(page, {
   let previousMessageId = null;
   let stableSampleCount = 0;
   let snapshot;
+  let routeTransitionDeadline = null;
 
   while (Date.now() <= deadline) {
     if (signal?.aborted) {
@@ -766,6 +775,21 @@ export async function waitForExistingReviewCompletion(page, {
       throw error;
     }
     snapshot = await readCompletionSnapshot(page, { includeText: true });
+    if (!snapshot.conversationId) {
+      routeTransitionDeadline ||= Date.now() + Math.min(COMPOSER_READINESS_TIMEOUT_MS, timeoutMs);
+      if (Date.now() <= routeTransitionDeadline) {
+        if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: false });
+        await page.waitForTimeout(COMPLETION_INITIAL_BACKOFF_MS);
+        continue;
+      }
+      return {
+        ...snapshot,
+        response: snapshot.assistantText,
+        status: "incomplete",
+        checkpointAccepted: false,
+        failureReason: "existing conversation identity unavailable during route transition",
+      };
+    }
     if (snapshot.conversationId !== expectedConversationId) {
       return {
         ...snapshot,
@@ -829,8 +853,9 @@ export async function waitForExistingReviewCompletion(page, {
   };
 }
 
-export async function runReviewPrompt(page, { beforeSubmit, model, effort, prompt }) {
+export async function runReviewPrompt(page, { beforeSubmit, model, effort, prompt, signal }) {
   assertPrompt(prompt);
+  throwIfAborted(signal);
   const { composer } = await prepareReviewPrompt(page, { model, effort });
   const baselineAssistant = await readVisibleAssistantMessage(page, { includeText: false });
   const baseline = {
@@ -842,7 +867,8 @@ export async function runReviewPrompt(page, { beforeSubmit, model, effort, promp
   };
   let submission;
   try {
-    submission = await submitPrompt(page, composer, prompt, { beforeSubmit });
+    throwIfAborted(signal);
+    submission = await submitPrompt(page, composer, prompt, { beforeSubmit, signal });
   } catch (error) {
     error.reviewBaseline = baseline;
     error.submissionAttempted = error.submissionAttempted === true;

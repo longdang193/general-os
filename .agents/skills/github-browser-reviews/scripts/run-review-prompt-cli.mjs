@@ -338,9 +338,6 @@ export function createResult(options) {
   const prompt = typeof options.prompt === "string" ? options.prompt : "";
   const promptHash = prompt ? createHash("sha256").update(prompt, "utf8").digest("hex") : null;
   const existingConversationUrl = options.existingConversationUrl || null;
-  const existingConversationId = existingConversationUrl
-    ? decodeURIComponent(new URL(existingConversationUrl).pathname.replace(/^\/c\//, ""))
-    : null;
   return {
     status: "running",
     run_id: options.runId || null,
@@ -353,10 +350,10 @@ export function createResult(options) {
     submission: "not_started",
     dispatch_state: "not_dispatched",
     completion: "not_started",
-    conversation_url: existingConversationUrl,
-    conversation_id: existingConversationId,
-    last_visible_conversation_url: existingConversationUrl,
-    last_visible_conversation_id: existingConversationId,
+    conversation_url: null,
+    conversation_id: null,
+    last_visible_conversation_url: null,
+    last_visible_conversation_id: null,
     assistant_message_id: null,
     assistant_turn_index: null,
     response_path: "response.md",
@@ -1238,8 +1235,10 @@ export async function runReviewTransaction(context, options) {
       }
       const currentConversationId = extractConversationIdentity(currentUrl || "");
       recordVisibleConversation(result, { currentUrl, conversationId: currentConversationId });
-      result.conversation_url ||= baseline?.conversationUrl || null;
-      result.conversation_id ||= baseline?.conversationId || null;
+      if (!options.existingConversationUrl) {
+        result.conversation_url ||= baseline?.conversationUrl || null;
+        result.conversation_id ||= baseline?.conversationId || null;
+      }
       if (error.code !== "REVIEW_INTERRUPTED"
         && (dispatchState !== "not_dispatched" || options.existingConversationUrl)
         && baseline
@@ -1255,6 +1254,7 @@ export async function runReviewTransaction(context, options) {
             completionTimeoutMs: COMPLETION_TIMEOUT_MS,
             onSnapshot: persistSnapshot,
             acceptSnapshot: (snapshot) => hasRevisionEvidence(snapshot.assistantText, options),
+            signal: options.abortSignal,
           });
           result.completion = completion.status;
            const rejectedCompletion = completion.checkpointAccepted === false

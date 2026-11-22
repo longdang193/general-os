@@ -571,6 +571,175 @@ await assert.rejects(
     )
 
 
+def test_submit_prompt_does_not_dispatch_after_termination_signal():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ submitPrompt }} from {RUNNER.as_uri()!r};
+
+let clickCount = 0;
+let beforeSubmitCount = 0;
+const signal = new AbortController();
+const composer = {{
+  fill: async () => {{}},
+  inputValue: async () => "review prompt",
+  innerText: async () => "review prompt",
+}};
+const page = {{
+  getByRole: () => ({{
+    first() {{ return this; }},
+    isVisible: async () => true,
+    click: async () => {{ clickCount += 1; }},
+  }}),
+}};
+
+await assert.rejects(
+  submitPrompt(page, composer, "review prompt", {{
+    beforeSubmit: async () => {{ beforeSubmitCount += 1; signal.abort(); }},
+    signal: signal.signal,
+  }}),
+  (error) => error.code === "REVIEW_INTERRUPTED",
+);
+assert.equal(beforeSubmitCount, 1);
+assert.equal(clickCount, 0);
+''',
+    )
+
+
+def test_read_only_route_transition_without_identity_is_tolerated():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const snapshots = [
+  {{ url: "https://chatgpt.com/", text: "", ready: false }},
+  {{ url: "https://chatgpt.com/c/existing-review", text: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", ready: true }},
+];
+const page = {{
+  index: 0,
+  current() {{ return snapshots[Math.min(this.index, snapshots.length - 1)]; }},
+  url() {{ return this.current().url; }},
+  waitForTimeout() {{ this.index += 1; }},
+  locator(selector) {{
+    const interruptionSelector = selector.includes("conversation-turn-error")
+      || selector.includes("response-error")
+      || selector.includes("error-message")
+      || selector.includes("role=alert");
+    const locator = {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      nth() {{ return this; }},
+      count: async () => interruptionSelector ? 0 : 1,
+      isVisible: async () => !interruptionSelector && page.current().ready,
+      evaluateAll: async (callback, includeText) => callback([{{
+        innerText: includeText ? page.current().text : "",
+        getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+      }}], includeText),
+      innerText: async () => "",
+      getByRole: () => locator,
+      getByText: () => locator,
+    }};
+    return locator;
+  }},
+  getByRole(role, options) {{
+    const completionAction = typeof options?.name === "string"
+      && /Feedback|Regenerate response|Rate response/.test(options.name);
+    const locator = {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      nth() {{ return this; }},
+      isVisible: async () => role === "textbox" || completionAction && page.current().ready,
+      getByRole: () => locator,
+      getByText: () => locator,
+    }};
+    return locator;
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => page.current().ready }}),
+}};
+
+const result = await waitForExistingReviewCompletion(page, {{
+  conversationUrl: "https://chatgpt.com/c/existing-review",
+  timeoutMs: 1000,
+}});
+assert.equal(result.status, "confirmed");
+assert.equal(result.conversationId, "existing-review");
+''',
+    )
+
+
+def test_existing_result_does_not_claim_requested_conversation_was_observed():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ createResult }} from {CLI_RUNNER.as_uri()!r};
+
+const result = createResult({{ existingConversationUrl: "https://chatgpt.com/c/existing-review" }});
+assert.equal(result.conversation_url, null);
+assert.equal(result.conversation_id, null);
+assert.equal(result.last_visible_conversation_url, null);
+assert.equal(result.last_visible_conversation_id, null);
+assert.equal(result.request_provenance.existing_conversation_url, "https://chatgpt.com/c/existing-review");
+''',
+    )
+
+
+def test_completion_recovery_receives_termination_signal():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const abortController = new AbortController();
+let completionCalls = 0;
+const page = {{ close: async () => {{}} }};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-recovery-signal",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  abortSignal: abortController.signal,
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/c/recovery",
+      conversationId: "recovery",
+      assistantTurnCount: 0,
+      assistantMessageId: null,
+    }}),
+    waitForReviewCompletion: async (_page, options) => {{
+      completionCalls += 1;
+      if (completionCalls === 1) throw new Error("observer failed");
+      assert.equal(options.signal, abortController.signal);
+      return {{
+        status: "confirmed",
+        checkpointAccepted: true,
+        responseTurnObserved: true,
+        currentUrl: "https://chatgpt.com/c/recovery",
+        conversationId: "recovery",
+        assistantMessageId: "assistant-1",
+        assistantTurnIndex: 0,
+        response: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.",
+      }};
+    }},
+    writeResult: async () => {{}},
+    writeResponse: async () => {{}},
+  }},
+}});
+
+assert.equal(result.status, "completed");
+assert.equal(completionCalls, 2);
+''',
+    )
+
+
 def test_read_only_interruption_metadata_survives_error_wrapper():
     run_node_assertion(
         f'''
