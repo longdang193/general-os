@@ -397,12 +397,19 @@ import {{ waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
 
 const page = {{
   url: () => "https://chatgpt.com/c/existing",
+  evaluate: async () => ({{ userTurnCount: 1, assistantTurnCount: 1, latestAssistantFollowsLatestUser: true }}),
   waitForTimeout: async () => {{ throw new Error("should not wait"); }},
   locator(selector) {{
     return {{
       first() {{ return this; }},
       last() {{ return this; }},
-      count: async () => selector.includes("conversation-turn-error") ? 1 : 0,
+      count: async () => selector.includes("conversation-turn-error")
+        ? 1
+        : selector.includes("data-message-author-role=\\\"user\\\"")
+          || selector.includes("data-user-message-bubble")
+          || selector.includes("data-message-author-role=\\\"assistant\\\"")
+          ? 1
+          : 0,
       isVisible: async () => selector.includes("conversation-turn-error"),
       innerText: async () => "Response interrupted",
       evaluateAll: async (callback) => selector.includes("data-message-author-role=assistant")
@@ -524,6 +531,7 @@ assert.equal(
 
 const page = {{
   url: () => "https://chatgpt.com/c/local-chatgpt:abc",
+  evaluate: async () => ({{ userTurnCount: 1, assistantTurnCount: 1, latestAssistantFollowsLatestUser: true }}),
   waitForTimeout: async () => {{}},
   locator: () => ({{
     first() {{ return this; }},
@@ -595,6 +603,7 @@ import {{ waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
 
 let urlReads = 0;
 const page = {{
+      evaluate: async () => ({{ userTurnCount: 1, assistantTurnCount: 1, latestAssistantFollowsLatestUser: true }}),
   url() {{
     const sample = Math.floor(urlReads / 4);
     const phase = sample === 0
@@ -715,6 +724,7 @@ const snapshots = [
 ];
 const page = {{
   index: 0,
+  evaluate: async () => ({{ userTurnCount: 1, assistantTurnCount: 1, latestAssistantFollowsLatestUser: true }}),
   current() {{ return snapshots[Math.min(this.index, snapshots.length - 1)]; }},
   url() {{ return this.current().url; }},
   waitForTimeout() {{ this.index += 1; }},
@@ -782,6 +792,7 @@ const originalNow = Date.now;
 Date.now = () => now;
 const page = {{
   index: 0,
+  evaluate: async () => ({{ userTurnCount: 1, assistantTurnCount: 1, latestAssistantFollowsLatestUser: true }}),
   current() {{ return snapshots[Math.min(this.index, snapshots.length - 1)]; }},
   url() {{ return this.current().url; }},
   waitForTimeout() {{
@@ -940,6 +951,7 @@ const assistantLocator = {{
 }};
 const page = {{
   url: () => "https://chatgpt.com/c/existing-review",
+      evaluate: async () => ({{ userTurnCount: 1, assistantTurnCount: 1, latestAssistantFollowsLatestUser: true }}),
   goto: async () => {{}},
   close: async () => {{}},
   locator: () => assistantLocator,
@@ -1716,6 +1728,7 @@ function pageFor() {{
   const page = {{
     index: 0,
     url: () => "https://chatgpt.com/c/existing-review",
+        evaluate: async () => ({{ userTurnCount: 2, assistantTurnCount: 2, latestAssistantFollowsLatestUser: true }}),
     waitForTimeout: async () => {{ page.index += 1; }},
     locator(selector) {{
       return {{
@@ -1971,6 +1984,64 @@ assert.equal(result.submission, "not_attempted");
 assert.equal(result.submission_attempted, false);
 assert.equal(result.conversation_url, "https://chatgpt.com/c/existing-review");
 '''
+    )
+
+
+def test_read_only_stale_snapshot_does_not_persist_response_evidence():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const writes = [];
+const page = {{ close: async () => {{}} }};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-read-only-stale-response",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  existingConversationUrl: "https://chatgpt.com/c/existing-review",
+  dependencies: {{
+    runReviewPromptInNewTab: async (_context, options) => {{
+      await options.onSnapshot({{
+        checkpointAccepted: false,
+        responseTurnObserved: false,
+        currentUrl: "https://chatgpt.com/c/existing-review",
+        conversationId: "existing-review",
+        assistantMessageId: "assistant-old",
+        assistantTurnCount: 1,
+        assistantText: "Old response from before the pending request",
+      }});
+      return {{
+        page,
+        readOnlyVerification: true,
+        submission: "not_attempted",
+        dispatchState: "not_dispatched",
+        currentUrl: "https://chatgpt.com/c/existing-review",
+        conversationId: "existing-review",
+        completion: {{
+          status: "incomplete",
+          checkpointAccepted: false,
+          responseTurnObserved: false,
+          currentUrl: "https://chatgpt.com/c/existing-review",
+          conversationId: "existing-review",
+          response: "Old response from before the pending request",
+          failureReason: "bounded existing conversation verification timeout",
+        }},
+      }};
+    }},
+    writeResult: async () => {{ }},
+    writeResponse: async (_path, content) => writes.push(content),
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.deepEqual(writes, []);
+''',
     )
 
 
@@ -2773,12 +2844,100 @@ const page = {{
   getByText: () => ({{ first() {{ return this; }}, isVisible: async () => true }}),
 }};
 
+const snapshots = [];
+const result = await waitForExistingReviewCompletion(page, {{
+  conversationUrl: "https://chatgpt.com/c/existing-review",
+  timeoutMs: 10,
+  onSnapshot: async (snapshot) => snapshots.push(snapshot),
+}});
+assert.equal(result.status, "incomplete");
+assert.match(result.failureReason, /bounded existing conversation verification timeout/);
+assert.equal(snapshots.at(-1).checkpointAccepted, false);
+assert.equal(snapshots.at(-1).responseTurnObserved, false);
+''',
+    )
+
+
+def test_existing_conversation_completion_rejects_equal_counts_when_latest_user_is_pending():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/existing-review",
+  waitForTimeout: async () => {{ }},
+  evaluate: async () => ({{
+    userTurnCount: 2,
+    assistantTurnCount: 2,
+    latestAssistantFollowsLatestUser: false,
+  }}),
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => selector.includes("conversation-turn-error") || selector.includes("role=alert") ? 0 : 1,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => callback([
+        {{ innerText: "older completed response", getAttribute: () => "assistant-old" }},
+      ], includeText),
+    }};
+  }},
+  getByRole(role, options) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      isVisible: async () => role === "textbox" || options?.name === "Feedback",
+    }};
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => true }}),
+}};
+
 const result = await waitForExistingReviewCompletion(page, {{
   conversationUrl: "https://chatgpt.com/c/existing-review",
   timeoutMs: 10,
 }});
 assert.equal(result.status, "incomplete");
-assert.match(result.failureReason, /bounded existing conversation verification timeout/);
+''',
+    )
+
+
+def test_existing_conversation_completion_fails_closed_when_turn_order_is_unavailable():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/existing-review",
+  waitForTimeout: async () => {{ }},
+  evaluate: async () => {{ throw new Error("turn inspection unavailable"); }},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => selector.includes("conversation-turn-error") || selector.includes("role=alert") ? 0 : 1,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => callback([
+        {{ innerText: "older completed response", getAttribute: () => "assistant-old" }},
+      ], includeText),
+    }};
+  }},
+  getByRole(role, options) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      isVisible: async () => role === "textbox" || options?.name === "Feedback",
+    }};
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => true }}),
+}};
+
+const result = await waitForExistingReviewCompletion(page, {{
+  conversationUrl: "https://chatgpt.com/c/existing-review",
+  timeoutMs: 10,
+}});
+assert.equal(result.status, "incomplete");
 ''',
     )
 
@@ -2792,6 +2951,7 @@ import {{ waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
 function pageFor(snapshots) {{
   const page = {{
     index: 0,
+    evaluate: async () => ({{ userTurnCount: 1, assistantTurnCount: 1, latestAssistantFollowsLatestUser: true }}),
     current() {{ return snapshots[Math.min(this.index, snapshots.length - 1)]; }},
     url() {{ return this.current().url; }},
     waitForTimeout() {{ this.index += 1; }},

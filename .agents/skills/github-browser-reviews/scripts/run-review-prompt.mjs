@@ -323,9 +323,39 @@ async function hasSubmittedUserTurn(page, prompt, submittedUserTurnId = null) {
   }
 }
 
-async function readVisibleUserTurnCount(page) {
+async function readVisibleConversationTurnState(page) {
   try {
-    return await page.locator(USER_TURN_SELECTOR).count();
+    if (typeof page.evaluate === "function") {
+      return await page.evaluate(() => {
+        const candidates = Array.from(document.querySelectorAll(
+          '[data-message-author-role="user"], [data-message-author-role="assistant"], [data-user-message-bubble="true"], [data-response-body]',
+        ));
+        const isVisible = (element) => {
+          const style = getComputedStyle(element);
+          return style.display !== "none" && style.visibility !== "hidden" && element.getClientRects().length > 0;
+        };
+        const turns = candidates.filter((element, index) => {
+          if (!isVisible(element) || candidates.indexOf(element) !== index) return false;
+          const role = element.getAttribute("data-message-author-role")
+            || (element.hasAttribute("data-user-message-bubble") ? "user" : null)
+            || (element.hasAttribute("data-response-body") ? "assistant" : null);
+          if (!role) return false;
+          const parentRole = element.parentElement?.closest("[data-message-author-role]")?.getAttribute("data-message-author-role");
+          return role !== parentRole;
+        }).map((element) => ({ role: element.getAttribute("data-message-author-role")
+          || (element.hasAttribute("data-user-message-bubble") ? "user" : "assistant") }));
+        const latestUserIndex = turns.findLastIndex((turn) => turn.role === "user");
+        const latestAssistantIndex = turns.findLastIndex((turn) => turn.role === "assistant");
+        return {
+          userTurnCount: turns.filter((turn) => turn.role === "user").length,
+          assistantTurnCount: turns.filter((turn) => turn.role === "assistant").length,
+          latestAssistantFollowsLatestUser: latestUserIndex >= 0
+            && latestAssistantIndex > latestUserIndex,
+        };
+      });
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -382,7 +412,7 @@ async function readCompletionSnapshot(page, { includeText } = {}) {
   const assistantMessage = await readVisibleAssistantMessage(page, {
     includeText: includeText ?? !generating,
   });
-  const userTurnCount = await readVisibleUserTurnCount(page);
+  const conversationTurnState = await readVisibleConversationTurnState(page);
   const assistantUrl = page.url();
   const responseAction = page.getByRole("button", { name: /^(Regenerate response|Rate response|Feedback)$/i }).last();
   const composer = page.getByRole("textbox", { name: "Ask ChatGPT" }).first();
@@ -420,7 +450,9 @@ async function readCompletionSnapshot(page, { includeText } = {}) {
   const routeStable = initialUrl === assistantUrl && assistantUrl === currentUrl && currentUrl === finalUrl;
   return {
     ...(routeStable ? assistantMessage : { assistantMessageId: null, assistantText: "", assistantTurnCount: 0 }),
-    userTurnCount: routeStable ? userTurnCount : null,
+    userTurnCount: routeStable ? conversationTurnState?.userTurnCount ?? null : null,
+    latestAssistantFollowsLatestUser: routeStable
+      && conversationTurnState?.latestAssistantFollowsLatestUser === true,
     composerReady: routeStable && await composer.isVisible() && !generating,
     conversationId: routeStable ? extractConversationIdentity(finalUrl) : null,
     currentUrl: finalUrl,
@@ -736,9 +768,7 @@ export async function waitForReviewCompletion(page, {
     }
     previousAssistantTurnCount = snapshot.assistantTurnCount;
 
-    const latestUserTurnAnswered = snapshot.userTurnCount === null
-      || snapshot.userTurnCount <= snapshot.assistantTurnCount;
-    if (latestUserTurnAnswered && evaluateReviewCompletion({
+    if (evaluateReviewCompletion({
       ...snapshot,
       baselineAssistantTurnCount,
       expectedConversationId,
@@ -802,10 +832,12 @@ export async function waitForExistingReviewCompletion(page, {
   while (Date.now() <= deadline) {
     if (signal?.aborted) {
       const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
+      const responseTurnObserved = interruptedSnapshot.latestAssistantFollowsLatestUser === true;
       const checkpointAccepted = interruptedSnapshot.routeStable !== false
-        && interruptedSnapshot.conversationId === expectedConversationId;
-      const snapshot = { ...interruptedSnapshot, checkpointAccepted };
-      if (onSnapshot && checkpointAccepted) await onSnapshot(snapshot);
+        && interruptedSnapshot.conversationId === expectedConversationId
+        && responseTurnObserved;
+      const snapshot = { ...interruptedSnapshot, checkpointAccepted, responseTurnObserved };
+      if (onSnapshot) await onSnapshot(snapshot);
       const error = new Error("Existing conversation verification interrupted by termination signal");
       error.code = "REVIEW_INTERRUPTED";
       error.interruptionSnapshot = snapshot;
@@ -820,12 +852,14 @@ export async function waitForExistingReviewCompletion(page, {
     if (!snapshot.conversationId) {
       routeTransitionDeadline ||= Date.now() + Math.min(COMPOSER_READINESS_TIMEOUT_MS, timeoutMs);
       if (Date.now() <= routeTransitionDeadline) {
-        if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: false });
+        if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: false, responseTurnObserved: false });
         await page.waitForTimeout(COMPLETION_INITIAL_BACKOFF_MS);
         continue;
       }
+      const rejectedSnapshot = { ...snapshot, checkpointAccepted: false, responseTurnObserved: false };
+      if (onSnapshot) await onSnapshot(rejectedSnapshot);
       return {
-        ...snapshot,
+        ...rejectedSnapshot,
         response: snapshot.assistantText,
         status: "incomplete",
         checkpointAccepted: false,
@@ -833,8 +867,10 @@ export async function waitForExistingReviewCompletion(page, {
       };
     }
     if (snapshot.conversationId !== expectedConversationId) {
+      const rejectedSnapshot = { ...snapshot, checkpointAccepted: false, responseTurnObserved: false };
+      if (onSnapshot) await onSnapshot(rejectedSnapshot);
       return {
-        ...snapshot,
+        ...rejectedSnapshot,
         response: snapshot.assistantText,
         status: "incomplete",
         checkpointAccepted: false,
@@ -843,16 +879,17 @@ export async function waitForExistingReviewCompletion(page, {
     }
     routeTransitionDeadline = null;
     if (snapshot.interrupted) {
-      if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: true });
+      const responseTurnObserved = snapshot.latestAssistantFollowsLatestUser === true;
+      const interruptedSnapshot = { ...snapshot, checkpointAccepted: responseTurnObserved, responseTurnObserved };
+      if (onSnapshot) await onSnapshot(interruptedSnapshot);
       return {
-        ...snapshot,
+        ...interruptedSnapshot,
         response: snapshot.assistantText,
         status: "interrupted",
-        checkpointAccepted: true,
+        checkpointAccepted: interruptedSnapshot.checkpointAccepted,
         failureReason: "visible response interruption",
       };
     }
-    if (onSnapshot) await onSnapshot(snapshot);
     const sameMessage = !snapshot.assistantMessageId
       || !previousMessageId
       || snapshot.assistantMessageId === previousMessageId;
@@ -866,17 +903,22 @@ export async function waitForExistingReviewCompletion(page, {
     }
     previousMessageId = snapshot.assistantMessageId;
 
-    const latestUserTurnAnswered = snapshot.userTurnCount === null
-      || snapshot.userTurnCount <= snapshot.assistantTurnCount;
-    if (latestUserTurnAnswered && evaluateReviewCompletion({
+    const responseTurnObserved = snapshot.latestAssistantFollowsLatestUser === true;
+    const observedSnapshot = {
       ...snapshot,
+      checkpointAccepted: responseTurnObserved,
+      responseTurnObserved,
+    };
+    if (onSnapshot) await onSnapshot(observedSnapshot);
+    if (responseTurnObserved && evaluateReviewCompletion({
+      ...observedSnapshot,
       assistantTurnCount: 1,
       baselineAssistantTurnCount: 0,
       expectedConversationId,
       stableSampleCount,
     }) && snapshot.responseActionsReady) {
       return {
-        ...snapshot,
+        ...observedSnapshot,
         assistantTurnIndex: Math.max(0, snapshot.assistantTurnCount - 1),
         response: snapshot.assistantText,
         status: "confirmed",
@@ -887,11 +929,13 @@ export async function waitForExistingReviewCompletion(page, {
   }
 
   const finalSnapshot = await readCompletionSnapshot(page, { includeText: true });
-  const finalCheckpointAccepted = finalSnapshot.conversationId === expectedConversationId;
-  if (onSnapshot) await onSnapshot({ ...finalSnapshot, checkpointAccepted: finalCheckpointAccepted });
+  const responseTurnObserved = finalSnapshot.latestAssistantFollowsLatestUser === true;
+  const finalCheckpointAccepted = finalSnapshot.conversationId === expectedConversationId && responseTurnObserved;
+  if (onSnapshot) await onSnapshot({ ...finalSnapshot, checkpointAccepted: finalCheckpointAccepted, responseTurnObserved });
   return {
     ...finalSnapshot,
     response: finalSnapshot.assistantText,
+      responseTurnObserved,
     status: "incomplete",
     checkpointAccepted: finalCheckpointAccepted,
     failureReason: "bounded existing conversation verification timeout",
