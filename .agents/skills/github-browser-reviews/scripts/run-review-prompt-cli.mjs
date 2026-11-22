@@ -1068,6 +1068,13 @@ export async function runReviewTransaction(context, options) {
     if (!snapshot) return;
     recordVisibleConversation(result, snapshot);
     if (snapshot.checkpointAccepted === false) {
+      if (options.existingConversationUrl && snapshot.responseTurnObserved === false && outputDir) {
+        checkpointResponse = null;
+        lastAcceptedSnapshot = null;
+        result.assistant_message_id = null;
+        result.assistant_turn_index = null;
+        await rm(join(outputDir, "response.md"), { force: true }).catch(() => {});
+      }
       await persist().catch((error) => {
         result.failure_reason = appendFailureReason(result.failure_reason, `result checkpoint failed: ${errorMessage(error)}`);
       });
@@ -1240,7 +1247,7 @@ export async function runReviewTransaction(context, options) {
         result.conversation_id ||= baseline?.conversationId || null;
       }
       if (error.code !== "REVIEW_INTERRUPTED"
-        && (dispatchState !== "not_dispatched" || options.existingConversationUrl)
+        && dispatchState !== "not_dispatched"
         && baseline
         && result.completion !== "confirmed") {
         try {

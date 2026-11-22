@@ -2045,6 +2045,120 @@ assert.deepEqual(writes, []);
     )
 
 
+def test_read_only_error_recovery_does_not_use_submission_observer():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const page = {{
+  isClosed: () => false,
+  url: () => "https://chatgpt.com/c/existing-review",
+  close: async () => {{ }},
+}};
+const error = new Error("read-only verification failed");
+error.reviewPage = page;
+error.reviewBaseline = {{
+  conversationUrl: "https://chatgpt.com/c/existing-review",
+  conversationId: "existing-review",
+  assistantMessageId: "assistant-old",
+  assistantTurnCount: 1,
+}};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-read-only-recovery",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  existingConversationUrl: "https://chatgpt.com/c/existing-review",
+  dependencies: {{
+    runReviewPromptInNewTab: async () => {{ throw error; }},
+    waitForReviewCompletion: async () => {{ throw new Error("submission observer must not run"); }},
+    writeResult: async () => {{ }},
+    writeResponse: async () => {{ throw new Error("stale response must not be written"); }},
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.completion, "not_started");
+''',
+    )
+
+
+def test_read_only_accepted_response_is_removed_when_later_snapshot_is_stale():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ existsSync }} from "node:fs";
+import {{ mkdtemp, rm }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const outputDir = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "review-read-only-stale-"));
+const page = {{ close: async () => {{}} }};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: outputDir,
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  existingConversationUrl: "https://chatgpt.com/c/existing-review",
+  dependencies: {{
+    runReviewPromptInNewTab: async (_context, options) => {{
+      await options.onSnapshot({{
+        checkpointAccepted: true,
+        responseTurnObserved: true,
+        currentUrl: "https://chatgpt.com/c/existing-review",
+        conversationId: "existing-review",
+        assistantMessageId: "assistant-old",
+        assistantTurnCount: 1,
+        assistantText: "Old response from before the pending request",
+      }});
+      await options.onSnapshot({{
+        checkpointAccepted: false,
+        responseTurnObserved: false,
+        currentUrl: "https://chatgpt.com/c/existing-review",
+        conversationId: "existing-review",
+        assistantMessageId: "assistant-old",
+        assistantTurnCount: 1,
+        assistantText: "Old response from before the pending request",
+      }});
+      return {{
+        page,
+        readOnlyVerification: true,
+        submission: "not_attempted",
+        dispatchState: "not_dispatched",
+        currentUrl: "https://chatgpt.com/c/existing-review",
+        conversationId: "existing-review",
+        completion: {{
+          status: "incomplete",
+          checkpointAccepted: false,
+          responseTurnObserved: false,
+          currentUrl: "https://chatgpt.com/c/existing-review",
+          conversationId: "existing-review",
+          response: "Old response from before the pending request",
+          failureReason: "bounded existing conversation verification timeout",
+        }},
+      }};
+    }},
+    writeResult: async () => {{ }},
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(existsSync(join(outputDir, "response.md")), false);
+assert.equal(result.assistant_message_id, null);
+await rm(outputDir, {{ recursive: true, force: true }});
+''',
+    )
+
+
 def test_read_only_interruption_is_classified_as_completion_failure():
     run_node_assertion(
         f'''
@@ -2338,7 +2452,7 @@ assert.deepEqual(writes, [`Reviewed ${{sha}}; no findings.\\n`]);
     )
 
 
-def test_existing_conversation_recovery_promotes_confirmed_completion_after_helper_error():
+def test_existing_conversation_error_does_not_promote_submission_observer():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -2368,26 +2482,18 @@ const result = await runReviewTransaction({{}}, {{
       error.reviewBaseline = {{ conversationUrl: page.url(), conversationId: "existing-review" }};
       throw error;
     }},
-    waitForReviewCompletion: async () => ({{
-      status: "confirmed",
-      checkpointAccepted: true,
-      responseTurnObserved: true,
-      currentUrl: page.url(),
-      conversationId: "existing-review",
-      assistantMessageId: "assistant-existing",
-      assistantTurnIndex: 0,
-      response: `Reviewed ${{sha}}; no findings.`,
-    }}),
+    waitForReviewCompletion: async () => {{ throw new Error("submission observer must not run"); }},
     writeResult: async () => {{}},
     writeResponse: async (_path, content) => writes.push(content),
   }},
 }});
 
-assert.equal(result.status, "completed");
+assert.equal(result.status, "incomplete");
 assert.equal(result.submission, "not_started");
-assert.equal(result.completion, "confirmed");
-assert.equal(result.conversation_id, "existing-review");
-assert.deepEqual(writes, [`Reviewed ${{sha}}; no findings.\\n`]);
+assert.equal(result.completion, "not_started");
+assert.equal(result.conversation_id, null);
+assert.equal(result.last_visible_conversation_id, "existing-review");
+assert.deepEqual(writes, []);
 '''
     )
 
