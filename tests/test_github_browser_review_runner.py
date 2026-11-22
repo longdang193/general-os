@@ -2185,13 +2185,15 @@ const result = await runReviewTransaction({{}}, {{
   existingConversationUrl: "https://chatgpt.com/c/existing-review",
   dependencies: {{
     runReviewPromptInNewTab: async (_context, options) => {{
-      await options.onSnapshot({{
-        checkpointAccepted: false,
-        responseTurnObserved: false,
-        currentUrl: "https://chatgpt.com/c/existing-review",
-        conversationId: "existing-review",
-        assistantText: "Old response from before the pending request",
-      }});
+      for (let attempt = 0; attempt < 3; attempt += 1) {{
+        await options.onSnapshot({{
+          checkpointAccepted: false,
+          responseTurnObserved: false,
+          currentUrl: "https://chatgpt.com/c/existing-review",
+          conversationId: "existing-review",
+          assistantText: "Old response from before the pending request",
+        }});
+      }}
       return {{
         page,
         readOnlyVerification: true,
@@ -2215,6 +2217,8 @@ const result = await runReviewTransaction({{}}, {{
 
 assert.equal(result.status, "incomplete");
 assert.match(result.stale_response_cleanup_error, /EISDIR|ENOTEMPTY|EPERM|EBUSY/i);
+assert.equal((result.failure_reason.match(/stale response cleanup failed/gi) || []).length, 1);
+assert.match(result.failure_reason, /bounded existing conversation verification timeout/i);
 await rm(outputDir, {{ recursive: true, force: true }});
 ''',
     )

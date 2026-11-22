@@ -1077,8 +1077,10 @@ export async function runReviewTransaction(context, options) {
         try {
           await rm(join(outputDir, "response.md"), { force: true });
         } catch (error) {
-          result.stale_response_cleanup_error = errorMessage(error);
-          result.failure_reason = appendFailureReason(result.failure_reason, `stale response cleanup failed: ${errorMessage(error)}`);
+          if (!result.stale_response_cleanup_error) {
+            result.stale_response_cleanup_error = errorMessage(error);
+            result.failure_reason = appendFailureReason(result.failure_reason, `stale response cleanup failed: ${result.stale_response_cleanup_error}`);
+          }
         }
       }
       await persist().catch((error) => {
@@ -1211,12 +1213,12 @@ export async function runReviewTransaction(context, options) {
       result.status = "incomplete";
       result.failure_scope = "review";
       result.failure_stage = "completion";
-      result.failure_reason = completion.failureReason || "Review completion was not confirmed";
+      result.failure_reason = appendFailureReason(result.failure_reason, completion.failureReason || "Review completion was not confirmed");
     } else if (!hasRevisionEvidence(completionSnapshot.response, options)) {
       result.status = "incomplete";
       result.failure_scope = "review";
       result.failure_stage = "completion";
-      result.failure_reason = "Review response completed without citing the requested revision or file marker";
+      result.failure_reason = appendFailureReason(result.failure_reason, "Review response completed without citing the requested revision or file marker");
     }
   } catch (error) {
     const transactionFailureReason = errorMessage(error);
