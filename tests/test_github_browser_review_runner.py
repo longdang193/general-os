@@ -2224,6 +2224,97 @@ await rm(outputDir, {{ recursive: true, force: true }});
     )
 
 
+def test_cleanup_failure_preserves_prior_failure_reason():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, readFile, rm }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ persistCleanupFailure }} from {CLI_RUNNER.as_uri()!r};
+
+const outputDir = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "review-cleanup-preservation-"));
+const result = {{
+  status: "incomplete",
+  cleanup_status: "not_started",
+  cleanup_warning: null,
+  failure_scope: "review",
+  failure_stage: "completion",
+  failure_reason: "review timeout",
+}};
+await persistCleanupFailure(result, outputDir, "browser context close failed");
+assert.equal(result.failure_reason, "review timeout; context cleanup failed: browser context close failed");
+const persisted = JSON.parse(await readFile(join(outputDir, "result.json"), "utf8"));
+assert.equal(persisted.failure_reason, result.failure_reason);
+await rm(outputDir, {{ recursive: true, force: true }});
+''',
+    )
+
+
+def test_repeated_checkpoint_failures_are_deduplicated():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, rm }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const outputDir = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "review-checkpoint-deduplication-"));
+let writeCount = 0;
+const page = {{ close: async () => {{}} }};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: outputDir,
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  existingConversationUrl: "https://chatgpt.com/c/review",
+  dependencies: {{
+    runReviewPromptInNewTab: async (_context, options) => {{
+      for (let attempt = 0; attempt < 3; attempt += 1) {{
+        await options.onSnapshot({{
+          checkpointAccepted: true,
+          responseTurnObserved: false,
+          currentUrl: "https://chatgpt.com/c/review",
+          conversationId: "review",
+        }});
+      }}
+      return {{
+        page,
+        model: "GPT-6",
+        effort: "High",
+        readOnlyVerification: true,
+        submission: "not_attempted",
+        dispatchState: "not_dispatched",
+        currentUrl: "https://chatgpt.com/c/review",
+        conversationId: "review",
+        completion: {{
+          status: "incomplete",
+          checkpointAccepted: false,
+          responseTurnObserved: false,
+          currentUrl: "https://chatgpt.com/c/review",
+          conversationId: "review",
+          failureReason: "review timeout",
+        }},
+      }};
+    }},
+    writeResult: async () => {{
+      writeCount += 1;
+      if (writeCount >= 2 && writeCount <= 4) throw new Error("disk full");
+    }},
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal((result.failure_reason.match(/result checkpoint failed: disk full/gi) || []).length, 1);
+assert.match(result.failure_reason, /review timeout/i);
+await rm(outputDir, {{ recursive: true, force: true }});
+''',
+    )
+
+
 def test_read_only_interruption_is_classified_as_completion_failure():
     run_node_assertion(
         f'''

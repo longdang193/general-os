@@ -590,7 +590,7 @@ export async function persistCleanupFailure(result, outputDir, cleanupReason) {
   result.cleanup_warning = cleanupReason;
   result.failure_scope = result.failure_scope || "shared_context";
   result.failure_stage = "cleanup";
-  result.failure_reason = cleanupReason;
+  result.failure_reason = appendFailureReason(result.failure_reason, `context cleanup failed: ${cleanupReason}`);
   if (outputDir) await writeResult(outputDir, result);
 }
 
@@ -1005,7 +1005,9 @@ async function classifyFailureScope(stage, error, context) {
 }
 
 function appendFailureReason(currentReason, suffix) {
-  return `${currentReason || "Review transaction failed"}; ${suffix}`;
+  if (!currentReason) return suffix;
+  if (currentReason.includes(suffix)) return currentReason;
+  return `${currentReason}; ${suffix}`;
 }
 
 function recordVisibleConversation(result, snapshot) {
