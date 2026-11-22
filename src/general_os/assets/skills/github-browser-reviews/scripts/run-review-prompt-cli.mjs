@@ -124,12 +124,13 @@ export function parseArguments(argv) {
 
   const contextIndex = contextIndexValue === undefined ? DEFAULT_CONTEXT_INDEX : Number(contextIndexValue);
   if (!Number.isInteger(contextIndex) || contextIndex < 0) usageError(`Invalid context index: ${contextIndexValue}`);
-  const cdpPort = cdpPortValue === undefined ? DEFAULT_CDP_PORT : Number(cdpPortValue);
-  if (!Number.isInteger(cdpPort) || cdpPort < 1 || cdpPort > 65535) usageError(`Invalid CDP port: ${cdpPortValue}`);
+  const cdpPort = cdpPortValue === undefined ? 0 : Number(cdpPortValue);
+  if (cdpPortValue !== undefined && (!Number.isInteger(cdpPort) || cdpPort < 1 || cdpPort > 65535)) usageError(`Invalid CDP port: ${cdpPortValue}`);
 
   return {
     cdpEndpoint,
     cdpPort,
+    cdpPortProvided: cdpPortValue !== undefined,
     contextIndex,
     contextIndexProvided: contextIndexValue !== undefined,
     commitSha,
@@ -241,7 +242,9 @@ export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (!revisionMarkerFound) return false;
   const outcome = /\bno (?:actionable )?(?:findings?|issues?|defects?|vulnerabilities?|concerns?)\b(?!\s+(?:yet|pending|tbd|so far|to be|until|will|next)\b)|\b(?:changes requested|request changes|review complete|approved)\b/i.test(response)
     || conclusiveSeverity;
-  return outcome && (!provisionalLanguage.test(response) || conclusiveSeverity);
+  const unfinishedReview = provisionalLanguage.test(response)
+    && !(/\bprovisional gate\b/i.test(response) && !/\b(?:i|we)\s+(?:will|'ll)\b|\bstill\s+need(?:s)?\s+to\b|\b(?:haven't|have\s+not)\b/i.test(response));
+  return outcome && !unfinishedReview;
 }
 
 function resolveExistingConversationUrl(review, index) {
@@ -728,13 +731,14 @@ export async function waitForProcessExit(child, { timeoutMs = PROCESS_EXIT_TIMEO
 export async function launchDedicatedChrome(
   profilePath,
   {
+    cdpPort = 0,
     executablePath,
     spawnProcess = spawn,
     waitForEndpoint = waitForCdpEndpoint,
   } = {},
 ) {
   await rm(join(profilePath, "DevToolsActivePort"), { force: true });
-  const port = 0;
+  const port = cdpPort;
   const executable = executablePath || resolveChromeExecutable();
   const chromeProcess = spawnProcess(
     executable,
@@ -797,7 +801,7 @@ export async function openContext(chromium, options, dependencies = {}) {
     let launched;
     try {
       const launch = dependencies.launchDedicatedChrome || launchDedicatedChrome;
-      launched = await launch(profilePath, { cdpPort: options.cdpPort });
+      launched = await launch(profilePath, { cdpPort: options.cdpPortProvided ? options.cdpPort : 0 });
       const { browser, context } = await connectToCdpContext(chromium, launched.endpoint, options);
       return {
         browser,

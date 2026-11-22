@@ -215,6 +215,7 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo 
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to compare the pinned file before I can conclude.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to look at the pinned file before I can conclude.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe provisional gate was too strict.", provenance), true);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHigh — parser defect.\\nI still need to analyze the remaining pinned file.", provenance), false);
 '''
     )
 
@@ -296,6 +297,69 @@ assert.equal(evaluateReviewCompletion({{
   stableSampleCount: 2,
   submittedTurnObserved: true,
 }}), true);
+'''
+    )
+
+
+def test_terminal_marker_does_not_complete_an_old_assistant_turn():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ evaluateReviewCompletion }} from {RUNNER.as_uri()!r};
+
+assert.equal(evaluateReviewCompletion({{
+  assistantMessageId: "assistant-old",
+  assistantText: "Old response still visible.",
+  assistantTurnCount: 1,
+  baselineAssistantTurnCount: 1,
+  composerReady: false,
+  conversationId: "review",
+  expectedConversationId: "review",
+  generationObserved: false,
+  generating: false,
+  interrupted: false,
+  responseActionsReady: true,
+  stableSampleCount: 2,
+  submittedTurnObserved: true,
+}}), false);
+'''
+    )
+
+
+def test_completion_action_must_be_on_the_current_assistant_turn():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+let polls = 0;
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForTimeout: async () => {{ polls += 1; }},
+  locator: () => ({{
+    count: async () => 2,
+    nth: () => ({{
+      getByRole: () => ({{ last() {{ return this; }}, isVisible: async () => false }}),
+    }}),
+    first() {{ return this; }},
+    last() {{ return this; }},
+    isVisible: async () => false,
+    evaluateAll: async () => [],
+  }}),
+  getByRole: (role) => ({{
+    first() {{ return this; }},
+    last() {{ return this; }},
+    isVisible: async () => role === "button",
+  }}),
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "baseline", assistantTurnCount: 1, conversationId: "review", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 100,
+}});
+assert.equal(result.status, "incomplete");
+assert.ok(polls > 0);
 '''
     )
 
@@ -1174,7 +1238,7 @@ import {{ openContext }} from {CLI_RUNNER.as_uri()!r};
 
 const root = await mkdtemp(join(tmpdir(), "github-review-profile-"));
 const profile = join(root, "github-review", "owner-repo");
-const lockPath = join(profile, ".codex-review-profile.lock");
+const lockPath = `${{profile}}.codex-review-profile.lock`;
 let closeCount = 0;
 const context = {{ pages: () => [{{}}, {{}}], close: async () => {{ closeCount += 1; assert.equal(existsSync(lockPath), true); }} }};
 const chromium = {{ launchPersistentContext: async () => context }};

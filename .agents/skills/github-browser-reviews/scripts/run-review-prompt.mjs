@@ -370,6 +370,25 @@ async function readCompletionSnapshot(page, { includeText } = {}) {
     }
   }
 
+  let responseActionsReady = false;
+  let assistantTurnScopeAvailable = false;
+  try {
+    const assistantTurns = page.locator(ASSISTANT_TURN_SELECTOR);
+    const assistantTurnCount = await assistantTurns.count();
+    if (assistantTurnCount > 0) {
+      const currentAssistantTurn = assistantTurns.nth(assistantTurnCount - 1);
+      const scopedResponseAction = currentAssistantTurn.getByRole("button", { name: /^(Regenerate response|Rate response|Feedback)$/i }).last();
+      assistantTurnScopeAvailable = true;
+      responseActionsReady = await scopedResponseAction.isVisible();
+      if (!responseActionsReady) {
+        responseActionsReady = await currentAssistantTurn.getByText("Response complete", { exact: true }).first().isVisible();
+      }
+    }
+  } catch {
+    responseActionsReady = false;
+  }
+  if (!assistantTurnScopeAvailable && !responseActionsReady) responseActionsReady = await responseAction.isVisible() || responseCompleteVisible;
+
   return {
     ...assistantMessage,
     composerReady: await composer.isVisible() && !generating,
@@ -377,7 +396,7 @@ async function readCompletionSnapshot(page, { includeText } = {}) {
     currentUrl,
     generating,
     interrupted: await readVisibleInterruption(page),
-    responseActionsReady: await responseAction.isVisible() || responseCompleteVisible,
+    responseActionsReady,
   };
 }
 
@@ -404,7 +423,7 @@ export function evaluateReviewCompletion({
     && Boolean(assistantMessageId)
     && assistantTurnCount > baselineAssistantTurnCount
     && Boolean(assistantText.trim())
-    && (responseActionsReady && stableSampleCount >= 1
+    && (responseActionsReady && stableSampleCount >= 1 && (generationObserved || assistantTurnCount > baselineAssistantTurnCount)
       || allowStableTextFallback && composerReady && stableSampleCount >= 2)
     && submittedTurnObserved;
 }
