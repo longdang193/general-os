@@ -395,16 +395,17 @@ export function evaluateReviewCompletion({
   responseActionsReady,
   stableSampleCount,
   submittedTurnObserved = true,
+  allowStableTextFallback = false,
 }) {
   return !generating
-    && (composerReady || responseActionsReady)
     && !interrupted
     && Boolean(conversationId)
     && (!expectedConversationId || conversationId === expectedConversationId)
     && Boolean(assistantMessageId)
     && assistantTurnCount > baselineAssistantTurnCount
     && Boolean(assistantText.trim())
-    && (stableSampleCount >= 2 || (responseActionsReady && stableSampleCount >= 1))
+    && (responseActionsReady && stableSampleCount >= 1
+      || allowStableTextFallback && stableSampleCount >= 2)
     && submittedTurnObserved;
 }
 
@@ -632,12 +633,7 @@ export async function waitForReviewCompletion(page, {
       deadline = Date.now() + completionTimeoutMs;
       ambiguityActive = false;
     }
-    const sameMessage = !snapshot.assistantMessageId
-      || !previousMessageId
-      || snapshot.assistantMessageId === previousMessageId;
-    if (snapshot.assistantText === previousText
-      && (sameMessage || snapshot.responseActionsReady)
-      && snapshot.assistantText) {
+    if (snapshot.assistantText === previousText && snapshot.assistantText) {
       stableSampleCount += 1;
     } else {
       stableSampleCount = 0;
@@ -652,6 +648,7 @@ export async function waitForReviewCompletion(page, {
       generationObserved,
       stableSampleCount,
       submittedTurnObserved,
+      allowStableTextFallback: true,
     }) && await acceptSnapshot(snapshot)) {
       return {
         ...snapshot,

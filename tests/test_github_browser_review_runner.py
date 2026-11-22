@@ -40,6 +40,7 @@ assert.equal(evaluateReviewCompletion({{
   interrupted: false,
   responseActionsReady: false,
   stableSampleCount: 2,
+  allowStableTextFallback: true,
 }}), true);
 '''
     )
