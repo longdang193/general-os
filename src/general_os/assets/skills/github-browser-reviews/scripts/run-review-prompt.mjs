@@ -494,7 +494,7 @@ export async function waitForReviewCompletion(page, {
   let ambiguityActive = initialTimeoutMs !== null && initialTimeoutMs !== undefined;
   let backoffMs = COMPLETION_INITIAL_BACKOFF_MS;
   let previousText = "";
-  let previousMessageId = null;
+  let previousAssistantTurnCount = null;
   let generationObserved = false;
   let stableSampleCount = 0;
   let snapshot;
@@ -633,13 +633,17 @@ export async function waitForReviewCompletion(page, {
       deadline = Date.now() + completionTimeoutMs;
       ambiguityActive = false;
     }
-    if (snapshot.assistantText === previousText && snapshot.assistantText) {
+    const sameAssistantTurn = previousAssistantTurnCount === null
+      || snapshot.assistantTurnCount === previousAssistantTurnCount;
+    if (snapshot.assistantText === previousText
+      && (sameAssistantTurn || snapshot.responseActionsReady)
+      && snapshot.assistantText) {
       stableSampleCount += 1;
     } else {
       stableSampleCount = 0;
       previousText = snapshot.assistantText;
     }
-    previousMessageId = snapshot.assistantMessageId;
+    previousAssistantTurnCount = snapshot.assistantTurnCount;
 
     if (evaluateReviewCompletion({
       ...snapshot,

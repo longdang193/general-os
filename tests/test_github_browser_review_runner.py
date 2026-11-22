@@ -135,6 +135,64 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nCou
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI don't have access to the pinned file, so I found no issues.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI will report no findings if the review is clean.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High if the suspected issue is confirmed; I will inspect it next.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nConfidence: High", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nRisk: Low", provenance), false);
+'''
+    )
+
+
+def test_stable_text_fallback_resets_at_a_new_assistant_turn():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const text = "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.";
+const assistantSequences = [
+  [{{ innerText: text, getAttribute: (name) => name === "data-message-id" ? "assistant-a" : null }}],
+  [
+    {{ innerText: "Earlier response", getAttribute: (name) => name === "data-message-id" ? "assistant-old" : null }},
+    {{ innerText: text, getAttribute: (name) => name === "data-message-id" ? "assistant-b" : null }},
+  ],
+  [
+    {{ innerText: "Earlier response", getAttribute: (name) => name === "data-message-id" ? "assistant-old" : null }},
+    {{ innerText: text, getAttribute: (name) => name === "data-message-id" ? "assistant-b" : null }},
+  ],
+  [
+    {{ innerText: "Earlier response", getAttribute: (name) => name === "data-message-id" ? "assistant-old" : null }},
+    {{ innerText: text, getAttribute: (name) => name === "data-message-id" ? "assistant-b" : null }},
+  ],
+];
+let reads = 0;
+let polls = 0;
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForTimeout: async () => {{ polls += 1; }},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => 0,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => selector.includes("data-message-author-role=\\"assistant\\"")
+        ? callback(assistantSequences[Math.min(reads++, assistantSequences.length - 1)], includeText)
+        : selector.includes("data-message-author-role=\\"user\\"")
+          ? callback([{{ innerText: "Review the pinned change.", getAttribute: () => null }}], includeText)
+          : callback([], includeText),
+    }};
+  }},
+  getByRole(role) {{
+    return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }};
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "baseline", assistantTurnCount: 0, conversationId: "review", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 100,
+}});
+assert.equal(result.status, "confirmed");
+assert.ok(polls >= 3);
 '''
     )
 
