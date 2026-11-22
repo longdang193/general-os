@@ -206,6 +206,8 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHig
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHigh — possible issue; needs investigation.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHigh — risk level only.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings expected; review has not started.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I need to inspect the pinned file before I can conclude.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI haven't reviewed the pinned file yet; no findings.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe provisional gate was too strict.", provenance), true);
 '''
     )
@@ -1608,6 +1610,75 @@ const result = await runReviewTransaction({{}}, {{
 assert.equal(result.status, "incomplete");
 assert.equal(result.conversation_url, "https://chatgpt.com/c/real-review");
 assert.equal(result.conversation_id, "real-review");
+assert.deepEqual(writes, []);
+'''
+    )
+
+
+def test_exception_recovery_prefers_real_url_and_rejects_stale_assistant_evidence():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const writes = [];
+let completionCalls = 0;
+const page = {{
+  isClosed: () => false,
+  url: () => "https://chatgpt.com/c/real-review",
+  close: async () => {{}},
+}};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-exception-recovery",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => {{
+      return {{
+        page,
+        model: "GPT-6",
+        effort: "High",
+        promptSubmitted: true,
+        submission: "acknowledged",
+        dispatchState: "acknowledged",
+        currentUrl: "https://chatgpt.com/",
+        conversationId: null,
+      }};
+    }},
+    waitForReviewCompletion: async () => {{
+      completionCalls += 1;
+      if (completionCalls === 1) {{
+        const error = new Error("page lost during completion");
+        error.reviewPage = page;
+        error.reviewBaseline = {{ conversationUrl: "https://chatgpt.com/", conversationId: null }};
+        throw error;
+      }}
+      return {{
+      status: "incomplete",
+      checkpointAccepted: true,
+      responseTurnObserved: false,
+      currentUrl: "https://chatgpt.com/c/real-review",
+      conversationId: "real-review",
+      assistantMessageId: "old-assistant",
+      assistantTurnIndex: 0,
+      response: "Old response from before submission",
+      failureReason: "bounded completion timeout",
+      }};
+    }},
+    writeResult: async () => {{}},
+    writeResponse: async (_path, content) => writes.push(content),
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.conversation_url, "https://chatgpt.com/c/real-review");
+assert.equal(result.conversation_id, "real-review");
+assert.equal(result.assistant_message_id, null);
 assert.deepEqual(writes, []);
 '''
     )

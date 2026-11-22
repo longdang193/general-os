@@ -11,6 +11,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 
 import {
   captureVisibleEvidence,
+  extractConversationIdentity,
   runReviewPromptInNewTab,
   preflightAuthenticatedContext,
   AMBIGUOUS_DISPATCH_TIMEOUT_MS,
@@ -221,11 +222,11 @@ export function validateReviewProvenance({ repository, commitSha, reviewUrls, pr
 export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (typeof response !== "string" || !response.trim()) return false;
   if (/(?:could not|unable to|failed to|cannot|can't)\s+(?:access|review|inspect|load|read)|\b(?:don't|do not)\s+have access\b|\bnot able to access\b|\baccess(?:ing)?(?: the| to)?\s+[^.\n]{0,40}\bfailed\b|\b(?:not|never|not yet|pending)\s+approved\b/i.test(response)) return false;
-  const provisionalLanguage = /\b(?:i|we)\s+(?:will|'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:if|when|once|until)\b[^.\n]{0,120}\b(?:confirm(?:ed)?|inspect|review|check|verify|findings?|severity|report)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification))\b/i;
+  const provisionalLanguage = /\b(?:i|we)\s+(?:will|'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:if|when|once|until)\b[^.\n]{0,120}\b(?:confirm(?:ed)?|inspect|review|check|verify|findings?|severity|report)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|verify|check|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|confirmed))\b/i;
   const severityPattern = /(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\b)\s*[-:—;]\s*\S|^\s*(?:(?:[-*]|\d+[.)])\s+)?(?:critical|high|medium|low)\b(?=\s*(?:[-:—]|$)))/i;
   const conclusiveSeverity = response.split(/\r?\n/).some((line) => severityPattern.test(line)
     && !/\b(?:if|when|once|until|will|'ll|pending|tentative|provisional|to be confirmed|not yet)\b/i.test(line)
-    && !/\b(?:confidence|risk\s+(?:level|assessment|score|rating)|review plan|planning|approach|strategy|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification))\b/i.test(line));
+    && !/\b(?:confidence|risk\s+(?:level|assessment|score|rating)|review plan|planning|approach|strategy|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|verify|check|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|confirmed))\b/i.test(line));
   const normalizedResponse = response.toLowerCase();
   let revisionMarkerFound = typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase());
   for (const reviewUrl of reviewUrls || []) {
@@ -1124,8 +1125,10 @@ export async function runReviewTransaction(context, options) {
     if (completionSnapshot) {
       result.conversation_url = completionSnapshot.currentUrl || result.conversation_url || null;
       result.conversation_id = completionSnapshot.conversationId || result.conversation_id || null;
-      result.assistant_message_id = completionSnapshot.assistantMessageId || result.assistant_message_id || null;
-      result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? result.assistant_turn_index ?? null;
+      if (completionSnapshot.responseTurnObserved !== false) {
+        result.assistant_message_id = completionSnapshot.assistantMessageId || result.assistant_message_id || null;
+        result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? result.assistant_turn_index ?? null;
+      }
     }
 
     if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && !rejectedCompletion) {
@@ -1165,8 +1168,14 @@ export async function runReviewTransaction(context, options) {
       } catch {
         currentUrl = null;
       }
-      result.conversation_url ||= currentUrl || baseline?.conversationUrl || null;
-      result.conversation_id ||= baseline?.conversationId || null;
+      const currentConversationId = extractConversationIdentity(currentUrl || "");
+      if (currentConversationId && !extractConversationIdentity(result.conversation_url || "")) {
+        result.conversation_url = currentUrl;
+        result.conversation_id = currentConversationId;
+      } else {
+        result.conversation_url ||= currentUrl || baseline?.conversationUrl || null;
+        result.conversation_id ||= baseline?.conversationId || null;
+      }
       if (dispatchState !== "not_dispatched" && baseline && result.completion !== "confirmed") {
         try {
           const timeoutMs = dispatchState === "possibly_dispatched" && result.submission !== "acknowledged"
@@ -1191,10 +1200,12 @@ export async function runReviewTransaction(context, options) {
             if (completionSnapshot) {
               result.conversation_url = completionSnapshot.currentUrl || result.conversation_url;
               result.conversation_id = completionSnapshot.conversationId || result.conversation_id;
-              result.assistant_message_id = completionSnapshot.assistantMessageId || null;
-              result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? null;
+              if (completionSnapshot.responseTurnObserved !== false) {
+                result.assistant_message_id = completionSnapshot.assistantMessageId || null;
+                result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? null;
+              }
             }
-            if (completionSnapshot?.response && outputDir) {
+            if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && outputDir) {
              await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
           }
            if (completion.status === "confirmed" && hasRevisionEvidence(completionSnapshot.response, options) && stage === "submission") {

@@ -193,7 +193,7 @@ async function closeModelMenu(page) {
   await menu.waitFor({ state: "hidden", timeout: MENU_TRANSITION_TIMEOUT_MS });
 }
 
-function extractConversationIdentity(url) {
+export function extractConversationIdentity(url) {
   const match = url.match(/\/c\/([^/?#]+)/);
   if (!match) return null;
   try {
