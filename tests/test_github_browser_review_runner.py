@@ -210,6 +210,10 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo 
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI haven't reviewed the pinned file yet; no findings.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to read the pinned file before I can conclude.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to examine the pinned file before I can conclude.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to analyze the pinned file before I can conclude.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to investigate the pinned file before I can conclude.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to compare the pinned file before I can conclude.", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to look at the pinned file before I can conclude.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe provisional gate was too strict.", provenance), true);
 '''
     )
@@ -1749,6 +1753,147 @@ assert.equal(result.completion, "confirmed");
 assert.equal(result.conversation_id, "recovered-review");
 assert.equal(result.failure_stage, null);
 assert.deepEqual(writes, [`Reviewed ${{sha}}; no findings.\\n`]);
+'''
+    )
+
+
+def test_existing_conversation_recovery_promotes_confirmed_completion_after_helper_error():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const writes = [];
+const page = {{
+  isClosed: () => false,
+  url: () => "https://chatgpt.com/c/existing-review",
+  close: async () => {{}},
+}};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-existing-recovery",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [`https://github.com/owner/repo/blob/${{sha}}/file.md`],
+  existingConversationUrl: page.url(),
+  dependencies: {{
+    runReviewPromptInNewTab: async () => {{
+      const error = new Error("page observer failed during existing review");
+      error.reviewPage = page;
+      error.reviewBaseline = {{ conversationUrl: page.url(), conversationId: "existing-review" }};
+      throw error;
+    }},
+    waitForReviewCompletion: async () => ({{
+      status: "confirmed",
+      checkpointAccepted: true,
+      responseTurnObserved: true,
+      currentUrl: page.url(),
+      conversationId: "existing-review",
+      assistantMessageId: "assistant-existing",
+      assistantTurnIndex: 0,
+      response: `Reviewed ${{sha}}; no findings.`,
+    }}),
+    writeResult: async () => {{}},
+    writeResponse: async (_path, content) => writes.push(content),
+  }},
+}});
+
+assert.equal(result.status, "completed");
+assert.equal(result.submission, "not_started");
+assert.equal(result.completion, "confirmed");
+assert.equal(result.conversation_id, "existing-review");
+assert.deepEqual(writes, [`Reviewed ${{sha}}; no findings.\\n`]);
+'''
+    )
+
+
+def test_post_dispatch_checkpoint_error_can_recover_confirmed_completion():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const writes = [];
+let resultWrites = 0;
+const page = {{
+  isClosed: () => false,
+  url: () => "https://chatgpt.com/c/checkpoint-recovery",
+  close: async () => {{}},
+}};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-checkpoint-recovery",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [`https://github.com/owner/repo/blob/${{sha}}/file.md`],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: page.url(),
+      conversationId: "checkpoint-recovery",
+    }}),
+    waitForReviewCompletion: async () => ({{
+      status: "confirmed",
+      checkpointAccepted: true,
+      responseTurnObserved: true,
+      currentUrl: page.url(),
+      conversationId: "checkpoint-recovery",
+      assistantMessageId: "assistant-checkpoint",
+      assistantTurnIndex: 0,
+      response: `Reviewed ${{sha}}; no findings.`,
+    }}),
+    writeResult: async () => {{
+      resultWrites += 1;
+      if (resultWrites === 2) throw new Error("waiting checkpoint write failed");
+    }},
+    writeResponse: async (_path, content) => writes.push(content),
+  }},
+}});
+
+assert.equal(result.status, "completed");
+assert.equal(result.completion, "confirmed");
+assert.equal(result.conversation_id, "checkpoint-recovery");
+assert.deepEqual(writes, [`Reviewed ${{sha}}; no findings.\\n`]);
+'''
+    )
+
+
+def test_launch_uses_profile_owned_devtools_port():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, readFile, rm, writeFile }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ launchDedicatedChrome }} from {CLI_RUNNER.as_uri()!r};
+
+const profile = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "github-review-cdp-"));
+const chromeProcess = {{ exitCode: 0, signalCode: null }};
+let endpointSeen = null;
+const launched = await launchDedicatedChrome(profile, {{
+  spawnProcess: (_executable, args) => {{
+    assert.equal(args.includes("--remote-debugging-port=0"), true);
+    void writeFile(join(profile, "DevToolsActivePort"), "45678\\nprofile-owned-browser\\n");
+    return chromeProcess;
+  }},
+  waitForEndpoint: async (endpoint) => {{ endpointSeen = endpoint; }},
+}});
+assert.equal(endpointSeen, "http://127.0.0.1:45678");
+assert.equal(launched.endpoint, endpointSeen);
+assert.equal(launched.port, 45678);
+await rm(profile, {{ recursive: true, force: true }});
 '''
     )
 

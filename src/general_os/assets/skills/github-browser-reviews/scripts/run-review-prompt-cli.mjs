@@ -222,11 +222,11 @@ export function validateReviewProvenance({ repository, commitSha, reviewUrls, pr
 export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (typeof response !== "string" || !response.trim()) return false;
   if (/(?:could not|unable to|failed to|cannot|can't)\s+(?:access|review|inspect|load|read)|\b(?:don't|do not)\s+have access\b|\bnot able to access\b|\baccess(?:ing)?(?: the| to)?\s+[^.\n]{0,40}\bfailed\b|\b(?:not|never|not yet|pending)\s+approved\b/i.test(response)) return false;
-  const provisionalLanguage = /\b(?:i|we)\s+(?:will|'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:if|when|once|until)\b[^.\n]{0,120}\b(?:confirm(?:ed)?|inspect|review|check|verify|findings?|severity|report)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|verify|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|confirmed))\b/i;
+  const provisionalLanguage = /\b(?:i|we)\s+(?:will|'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:if|when|once|until)\b[^.\n]{0,120}\b(?:confirm(?:ed)?|inspect|review|check|verify|findings?|severity|report)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|analyzed|analysed|investigated|compared|looked at|confirmed))\b/i;
   const severityPattern = /(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\b)\s*[-:—;]\s*\S|^\s*(?:(?:[-*]|\d+[.)])\s+)?(?:critical|high|medium|low)\b(?=\s*(?:[-:—]|$)))/i;
   const conclusiveSeverity = response.split(/\r?\n/).some((line) => severityPattern.test(line)
     && !/\b(?:if|when|once|until|will|'ll|pending|tentative|provisional|to be confirmed|not yet)\b/i.test(line)
-    && !/\b(?:confidence|risk\s+(?:level|assessment|score|rating)|review plan|planning|approach|strategy|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|verify|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|confirmed))\b/i.test(line));
+    && !/\b(?:confidence|risk\s+(?:level|assessment|score|rating)|review plan|planning|approach|strategy|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|analyzed|analysed|investigated|compared|looked at|confirmed))\b/i.test(line));
   const normalizedResponse = response.toLowerCase();
   let revisionMarkerFound = typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase());
   for (const reviewUrl of reviewUrls || []) {
@@ -674,6 +674,34 @@ export async function waitForCdpEndpoint(
   throw new Error(`Timed out waiting for Chrome CDP endpoint ${endpoint}: ${errorMessage(lastError)}`);
 }
 
+export async function waitForChromeCdpEndpoint(
+  profilePath,
+  {
+    readFileImpl = readFile,
+    waitForEndpoint = waitForCdpEndpoint,
+    timeoutMs = CDP_STARTUP_TIMEOUT_MS,
+    pollIntervalMs = CDP_POLL_INTERVAL_MS,
+  } = {},
+) {
+  const activePortPath = join(profilePath, "DevToolsActivePort");
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() <= deadline) {
+    try {
+      const [portLine] = (await readFileImpl(activePortPath, "utf8")).trim().split(/\r?\n/);
+      const port = Number(portLine);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Invalid Chrome DevTools port: ${portLine}`);
+      const endpoint = `http://127.0.0.1:${port}`;
+      await waitForEndpoint(endpoint, { timeoutMs, pollIntervalMs });
+      return endpoint;
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, pollIntervalMs));
+  }
+  throw new Error(`Timed out waiting for Chrome DevTools port file ${activePortPath}: ${errorMessage(lastError)}`);
+}
+
 export async function waitForProcessExit(child, { timeoutMs = PROCESS_EXIT_TIMEOUT_MS } = {}) {
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
   if (typeof child.once !== "function") throw new Error("Owned browser process does not expose an exit event");
@@ -700,15 +728,13 @@ export async function waitForProcessExit(child, { timeoutMs = PROCESS_EXIT_TIMEO
 export async function launchDedicatedChrome(
   profilePath,
   {
-    cdpPort = DEFAULT_CDP_PORT,
     executablePath,
-    findPort = findAvailableTcpPort,
     spawnProcess = spawn,
     waitForEndpoint = waitForCdpEndpoint,
   } = {},
 ) {
-  const port = await findPort(cdpPort);
-  const endpoint = `http://127.0.0.1:${port}`;
+  await rm(join(profilePath, "DevToolsActivePort"), { force: true });
+  const port = 0;
   const executable = executablePath || resolveChromeExecutable();
   const chromeProcess = spawnProcess(
     executable,
@@ -723,8 +749,9 @@ export async function launchDedicatedChrome(
     { detached: false, stdio: "ignore", windowsHide: true },
   );
   try {
-    await waitForEndpoint(endpoint);
-    return { endpoint, port, process: chromeProcess };
+    const endpoint = await waitForChromeCdpEndpoint(profilePath, { waitForEndpoint });
+    const actualPort = Number(new URL(endpoint).port);
+    return { endpoint, port: actualPort, process: chromeProcess };
   } catch (error) {
     error.chromeProcess = chromeProcess;
     try {
@@ -1176,7 +1203,7 @@ export async function runReviewTransaction(context, options) {
         result.conversation_url ||= currentUrl || baseline?.conversationUrl || null;
         result.conversation_id ||= baseline?.conversationId || null;
       }
-      if (dispatchState !== "not_dispatched" && baseline && result.completion !== "confirmed") {
+      if ((dispatchState !== "not_dispatched" || options.existingConversationUrl) && baseline && result.completion !== "confirmed") {
         try {
           const timeoutMs = dispatchState === "possibly_dispatched" && result.submission !== "acknowledged"
             ? AMBIGUOUS_DISPATCH_TIMEOUT_MS
@@ -1208,7 +1235,7 @@ export async function runReviewTransaction(context, options) {
             if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && outputDir) {
              await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
           }
-           if (completion.status === "confirmed" && hasRevisionEvidence(completionSnapshot.response, options) && (stage === "submission" || stage === "completion")) {
+           if (completion.status === "confirmed" && hasRevisionEvidence(completionSnapshot.response, options)) {
             if (!options.existingConversationUrl) {
               result.submission = "acknowledged";
               result.dispatch_state = "acknowledged";
