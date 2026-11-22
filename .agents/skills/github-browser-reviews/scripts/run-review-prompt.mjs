@@ -5,10 +5,12 @@ export const UI_ACTION_TIMEOUT_MS = 5000;
 export const COMPOSER_READINESS_TIMEOUT_MS = 30000;
 export const SUBMISSION_ACK_TIMEOUT_MS = 10000;
 export const SUBMISSION_ACK_POLL_MS = 50;
+export const SUBMITTED_TURN_ID_TIMEOUT_MS = 2000;
 export const AMBIGUOUS_DISPATCH_TIMEOUT_MS = 15000;
-export const ASSISTANT_TURN_SELECTOR = '[data-message-author-role="assistant"]:visible:not([data-message-author-role="assistant"] [data-message-author-role="assistant"])';
+export const ASSISTANT_TURN_SELECTOR = '[data-message-author-role="assistant"]:visible:not([data-message-author-role="assistant"] [data-message-author-role="assistant"]), [data-response-body]:visible';
 const ASSISTANT_FALLBACK_SELECTOR = 'main [class*="MarkdownRoot-"]:visible:not(.rich-text-user-turn)';
 const ASSISTANT_TURN_SELECTORS = [ASSISTANT_TURN_SELECTOR, ASSISTANT_FALLBACK_SELECTOR];
+const USER_TURN_SELECTOR = '[data-message-author-role="user"]:visible:not([data-message-author-role="user"] [data-message-author-role="user"]), [data-user-message-bubble="true"]:visible';
 export const INTERRUPTION_PATTERN = /(?:something went wrong|network error|response interrupted|stopped responding)/i;
 export const INTERRUPTION_UI_SELECTOR = '[data-testid="conversation-turn-error"]:visible, [data-testid="response-error"]:visible, [data-testid="error-message"]:visible';
 const GENERIC_ALERT_SELECTOR = '[role="alert"]:visible';
@@ -35,6 +37,8 @@ function withFailureScope(error, failureScope) {
     wrapped.submissionAttempted = error.submissionAttempted === true;
     wrapped.dispatchState = error.dispatchState || null;
     wrapped.visibleEvidence = error.visibleEvidence || null;
+    wrapped.code = error.code;
+    wrapped.interruptionSnapshot = error.interruptionSnapshot;
   }
   return wrapped;
 }
@@ -43,6 +47,12 @@ function normalizeComposerText(value) {
 }
 function normalizePromptText(value) {
   return normalizeComposerText(value).replace(/\s*`n\s*/g, "`n");
+}
+function throwIfAborted(signal) {
+  if (!signal?.aborted) return;
+  const error = new Error("Review operation interrupted by termination signal");
+  error.code = "REVIEW_INTERRUPTED";
+  throw error;
 }
 
 function isChallengeEvidence(evidence) {
@@ -134,11 +144,12 @@ export async function captureVisibleEvidence(page) {
   };
 }
 
-export async function preflightAuthenticatedContext(context) {
+export async function preflightAuthenticatedContext(context, existingPage = null) {
   let page;
   let failure;
+  const ownsPage = !existingPage;
   try {
-    page = await context.newPage();
+    page = existingPage || await context.newPage();
     await openChatGPT(page);
   } catch (error) {
     failure = withFailureScope(error, "shared_context");
@@ -149,7 +160,7 @@ export async function preflightAuthenticatedContext(context) {
   }
 
   try {
-    if (page) await page.close();
+    if (ownsPage && page) await page.close();
   } catch (error) {
     failure ||= withFailureScope(error, "shared_context");
   }
@@ -190,9 +201,49 @@ async function closeModelMenu(page) {
   await menu.waitFor({ state: "hidden", timeout: MENU_TRANSITION_TIMEOUT_MS });
 }
 
-function extractConversationIdentity(url) {
-  const match = url.match(/\/c\/([^/?#]+)/);
-  return match ? match[1] : null;
+export function extractConversationIdentity(url) {
+  if (typeof url !== "string") return null;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!(parsed.protocol === "https:" && ["chatgpt.com", "www.chatgpt.com"].includes(parsed.hostname))) return null;
+  const match = parsed.pathname.match(/^\/c\/([^/]+)\/?$/);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+export function normalizeExistingConversationUrl(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("existing conversation URL must be a non-empty ChatGPT conversation URL");
+  }
+  let parsed;
+  try {
+    parsed = new URL(value.trim());
+  } catch {
+    throw new Error(`Invalid existing conversation URL: ${value}`);
+  }
+  if (!(parsed.protocol === "https:" && ["chatgpt.com", "www.chatgpt.com"].includes(parsed.hostname))) {
+    throw new Error(`Existing conversation URL must use https://chatgpt.com/c/<id>: ${value}`);
+  }
+  const conversationId = extractConversationIdentity(parsed.href);
+  const pathConversationId = parsed.pathname.replace(/^\/c\//, "").replace(/\/+$/g, "");
+  let decodedPathConversationId = null;
+  try {
+    decodedPathConversationId = decodeURIComponent(pathConversationId);
+  } catch {
+    // Keep invalid route segments on the existing validation failure path.
+  }
+  if (!conversationId || !pathConversationId || pathConversationId.includes("/") || decodedPathConversationId !== conversationId) {
+    throw new Error(`Existing conversation URL must use https://chatgpt.com/c/<id>: ${value}`);
+  }
+  return `https://chatgpt.com/c/${encodeURIComponent(conversationId)}`;
 }
 
 export async function readVisibleInterruption(page) {
@@ -210,7 +261,7 @@ async function readVisibleAssistantMessage(page, { includeText = true } = {}) {
     let snapshots;
     if (typeof turns.evaluateAll === "function") {
       snapshots = await turns.evaluateAll((elements, readText) => elements.map((element) => ({
-        assistantMessageId: ["data-message-id", "data-turn-id", "data-testid", "id"]
+        assistantMessageId: ["data-message-id", "data-turn-id", "data-chatgpt-selection-message-id", "data-response-body", "data-testid", "id"]
           .map((attribute) => element.getAttribute(attribute))
           .find(Boolean) || null,
         assistantText: readText ? (element.innerText || "").trim() : "",
@@ -252,6 +303,96 @@ async function readVisibleAssistantMessage(page, { includeText = true } = {}) {
   };
 }
 
+async function hasSubmittedUserTurn(page, prompt, submittedUserTurnId = null) {
+  if (!prompt) return true;
+  try {
+    const turns = page.locator(USER_TURN_SELECTOR);
+    const snapshots = await turns.evaluateAll((elements) => elements.map((element) => ({
+      id: element.getAttribute("data-message-id")
+        || element.getAttribute("data-user-message-id")
+        || element.getAttribute("data-testid")
+        || element.id
+        || null,
+      text: element.innerText || "",
+    })));
+    const expectedPrompt = normalizePromptText(prompt);
+    if (submittedUserTurnId) return snapshots.some((snapshot) => snapshot.id === submittedUserTurnId);
+    return snapshots.some((snapshot) => normalizePromptText(snapshot.text).includes(expectedPrompt));
+  } catch {
+    return false;
+  }
+}
+
+async function readVisibleConversationTurnState(page) {
+  try {
+    if (typeof page.evaluate === "function") {
+      return await page.evaluate(() => {
+        const candidates = Array.from(document.querySelectorAll(
+          '[data-message-author-role="user"], [data-message-author-role="assistant"], [data-user-message-bubble="true"], [data-response-body]',
+        ));
+        const isVisible = (element) => {
+          const style = getComputedStyle(element);
+          return style.display !== "none" && style.visibility !== "hidden" && element.getClientRects().length > 0;
+        };
+        const turns = candidates.filter((element, index) => {
+          if (!isVisible(element) || candidates.indexOf(element) !== index) return false;
+          const role = element.getAttribute("data-message-author-role")
+            || (element.hasAttribute("data-user-message-bubble") ? "user" : null)
+            || (element.hasAttribute("data-response-body") ? "assistant" : null);
+          if (!role) return false;
+          const parentRole = element.parentElement?.closest("[data-message-author-role]")?.getAttribute("data-message-author-role");
+          return role !== parentRole;
+        }).map((element) => ({ role: element.getAttribute("data-message-author-role")
+          || (element.hasAttribute("data-user-message-bubble") ? "user" : "assistant") }));
+        const latestUserIndex = turns.findLastIndex((turn) => turn.role === "user");
+        const latestAssistantIndex = turns.findLastIndex((turn) => turn.role === "assistant");
+        return {
+          userTurnCount: turns.filter((turn) => turn.role === "user").length,
+          assistantTurnCount: turns.filter((turn) => turn.role === "assistant").length,
+          latestAssistantFollowsLatestUser: latestUserIndex >= 0
+            && latestAssistantIndex > latestUserIndex,
+        };
+      });
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function readSubmittedUserTurnId(page, prompt, { timeoutMs = SUBMITTED_TURN_ID_TIMEOUT_MS } = {}) {
+  if (!prompt) return null;
+  const deadline = Date.now() + timeoutMs;
+  const expectedPrompt = normalizePromptText(prompt);
+  let firstAttempt = true;
+  while (firstAttempt || Date.now() <= deadline) {
+    firstAttempt = false;
+    try {
+      const turns = page.locator(USER_TURN_SELECTOR);
+      const snapshots = await turns.evaluateAll((elements) => elements.map((element) => ({
+        id: element.getAttribute("data-message-id")
+          || element.getAttribute("data-user-message-id")
+          || element.getAttribute("data-testid")
+          || element.id
+          || null,
+        text: element.innerText || "",
+      })));
+      const submittedTurnId = snapshots
+        .filter((snapshot) => snapshot.id && normalizePromptText(snapshot.text).includes(expectedPrompt))
+        .at(-1)?.id || null;
+      if (submittedTurnId) return submittedTurnId;
+    } catch {
+      // The SPA may replace the conversation turn while routing after dispatch.
+    }
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0 || typeof page.waitForTimeout !== "function") break;
+    await page.waitForTimeout(Math.min(SUBMISSION_ACK_POLL_MS, remaining));
+  }
+  return null;
+}
+
 export async function isPromptVisibleInComposer(composer, prompt) {
   const expectedPrompt = normalizePromptText(prompt);
 
@@ -265,24 +406,60 @@ export async function isPromptVisibleInComposer(composer, prompt) {
 }
 
 async function readCompletionSnapshot(page, { includeText } = {}) {
+  const initialUrl = page.url();
   const stopButton = page.getByRole("button", { name: /^(Stop generating|Stop response)$/i }).first();
   const generating = await stopButton.isVisible();
   const assistantMessage = await readVisibleAssistantMessage(page, {
     includeText: includeText ?? !generating,
   });
-  const responseAction = page.getByRole("button", { name: /^(Regenerate response|Rate response)$/i }).last();
+  const conversationTurnState = await readVisibleConversationTurnState(page);
+  const assistantUrl = page.url();
+  const responseAction = page.getByRole("button", { name: /^(Regenerate response|Rate response|Feedback)$/i }).last();
   const composer = page.getByRole("textbox", { name: "Ask ChatGPT" }).first();
   const currentUrl = page.url();
-  const conversationId = extractConversationIdentity(currentUrl);
+  let responseCompleteVisible = false;
+  if (typeof page.getByText === "function") {
+    try {
+      responseCompleteVisible = await page.getByText("Response complete", { exact: true }).first().isVisible();
+    } catch {
+      responseCompleteVisible = false;
+    }
+  }
 
+  let responseActionsReady = false;
+  let assistantTurnScopeAvailable = false;
+  try {
+    const assistantTurns = page.locator(ASSISTANT_TURN_SELECTOR);
+    const assistantTurnCount = await assistantTurns.count();
+    if (assistantTurnCount > 0) {
+      const currentAssistantTurn = assistantTurns.nth(assistantTurnCount - 1);
+      const scopedResponseAction = currentAssistantTurn.getByRole("button", { name: /^(Regenerate response|Rate response|Feedback)$/i }).last();
+      assistantTurnScopeAvailable = true;
+      responseActionsReady = await scopedResponseAction.isVisible();
+      if (!responseActionsReady) {
+        responseActionsReady = await currentAssistantTurn.getByText("Response complete", { exact: true }).first().isVisible();
+      }
+    }
+  } catch {
+    responseActionsReady = false;
+  }
+  if (!assistantTurnScopeAvailable && !responseActionsReady) responseActionsReady = await responseAction.isVisible() || responseCompleteVisible;
+
+  const interrupted = await readVisibleInterruption(page);
+  const finalUrl = page.url();
+  const routeStable = initialUrl === assistantUrl && assistantUrl === currentUrl && currentUrl === finalUrl;
   return {
-    ...assistantMessage,
-    composerReady: await composer.isVisible() && !generating,
-    conversationId,
-    currentUrl,
-    generating,
-    interrupted: await readVisibleInterruption(page),
-    responseActionsReady: await responseAction.isVisible(),
+    ...(routeStable ? assistantMessage : { assistantMessageId: null, assistantText: "", assistantTurnCount: 0 }),
+    userTurnCount: routeStable ? conversationTurnState?.userTurnCount ?? null : null,
+    latestAssistantFollowsLatestUser: routeStable
+      && conversationTurnState?.latestAssistantFollowsLatestUser === true,
+    composerReady: routeStable && await composer.isVisible() && !generating,
+    conversationId: routeStable ? extractConversationIdentity(finalUrl) : null,
+    currentUrl: finalUrl,
+    generating: routeStable && generating,
+    interrupted: routeStable && interrupted,
+    responseActionsReady: routeStable && responseActionsReady,
+    routeStable,
   };
 }
 
@@ -299,20 +476,23 @@ export function evaluateReviewCompletion({
   interrupted,
   responseActionsReady,
   stableSampleCount,
+  submittedTurnObserved = true,
+  allowStableTextFallback = false,
 }) {
   return !generating
-    && composerReady
     && !interrupted
     && Boolean(conversationId)
     && (!expectedConversationId || conversationId === expectedConversationId)
     && Boolean(assistantMessageId)
-    && (generationObserved || responseActionsReady)
     && assistantTurnCount > baselineAssistantTurnCount
     && Boolean(assistantText.trim())
-    && stableSampleCount >= 2;
+    && (responseActionsReady && stableSampleCount >= 1 && (generationObserved || assistantTurnCount > baselineAssistantTurnCount)
+      || allowStableTextFallback && composerReady && stableSampleCount >= 2)
+    && submittedTurnObserved;
 }
 
-export async function submitPrompt(page, composer, prompt, { beforeSubmit } = {}) {
+export async function submitPrompt(page, composer, prompt, { beforeSubmit, signal } = {}) {
+  throwIfAborted(signal);
   await composer.fill(prompt, { timeout: UI_ACTION_TIMEOUT_MS });
 
   if (!(await isPromptVisibleInComposer(composer, prompt))) {
@@ -321,9 +501,12 @@ export async function submitPrompt(page, composer, prompt, { beforeSubmit } = {}
 
   const sendButton = page.getByRole("button", { name: /^(Send|Send message|Submit)$/i }).first();
   if (beforeSubmit) await beforeSubmit();
+  throwIfAborted(signal);
   let dispatchState = "not_dispatched";
   try {
-    if (await sendButton.isVisible()) {
+    const sendButtonVisible = await sendButton.isVisible();
+    throwIfAborted(signal);
+    if (sendButtonVisible) {
       dispatchState = "possibly_dispatched";
       await sendButton.click({ timeout: UI_ACTION_TIMEOUT_MS });
     } else {
@@ -354,7 +537,14 @@ export async function submitPrompt(page, composer, prompt, { beforeSubmit } = {}
     throw error;
   }
 
-  return { dispatchState: "acknowledged", submission: "acknowledged" };
+  const currentUrl = page.url();
+  return {
+    currentUrl,
+    conversationId: extractConversationIdentity(currentUrl),
+    submissionConversationId: extractConversationIdentity(currentUrl),
+    dispatchState: "acknowledged",
+    submission: "acknowledged",
+  };
 }
 
 async function prepareReviewPrompt(page, { model, effort }) {
@@ -380,6 +570,9 @@ export async function waitForReviewCompletion(page, {
   timeoutMs = COMPLETION_TIMEOUT_MS,
   initialTimeoutMs = null,
   completionTimeoutMs = timeoutMs,
+  onSnapshot,
+  acceptSnapshot = () => true,
+  signal,
 } = {}) {
   if (!baseline) throw new Error("baseline is required for completion observation");
 
@@ -388,63 +581,192 @@ export async function waitForReviewCompletion(page, {
   let ambiguityActive = initialTimeoutMs !== null && initialTimeoutMs !== undefined;
   let backoffMs = COMPLETION_INITIAL_BACKOFF_MS;
   let previousText = "";
-  let previousMessageId = null;
+  let previousAssistantTurnCount = null;
   let generationObserved = false;
   let stableSampleCount = 0;
   let snapshot;
   let baselineAssistantTurnCount = baseline.assistantTurnCount;
   let expectedConversationId = baseline.conversationId || null;
-  let conversationIdentityTransitioned = false;
+  let responseConversationId = null;
+  let submittedUserTurnId = baseline.submittedUserTurnId || null;
+  let submittedTurnAnchorObserved = false;
+  let submittedTurnAnchorConversationId = null;
+  let conversationTransitionDeadline = null;
+  let handoffConversationId = null;
+  let handoffAssistantText = null;
+  let handoffResponseProgressed = false;
+  const submissionConversationId = baseline.submissionConversationId || null;
+  const syntheticSubmissionRoute = submissionConversationId?.startsWith("local-chatgpt:") === true;
+  const submissionAcknowledged = baseline.submission === "acknowledged"
+    || baseline.dispatchState === "acknowledged";
 
   while (Date.now() <= deadline) {
+    if (signal?.aborted) {
+      const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
+      const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
+      const responseTurnObserved = interruptedSnapshot.generating
+        || interruptedSnapshot.assistantTurnCount > baselineAssistantTurnCount
+        || Boolean(interruptedSnapshot.assistantMessageId && interruptedSnapshot.assistantMessageId !== baseline.assistantMessageId);
+      const checkpointAccepted = interruptedSnapshot.routeStable !== false
+        && submittedTurnObserved
+        && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId);
+      const snapshot = { ...interruptedSnapshot, checkpointAccepted, responseTurnObserved };
+      if (onSnapshot) await onSnapshot(snapshot);
+      const error = new Error("Review completion observation interrupted by termination signal");
+      error.code = "REVIEW_INTERRUPTED";
+      error.reviewBaseline = baseline;
+      error.interruptionSnapshot = snapshot;
+      throw error;
+    }
     if (await readVisibleInterruption(page)) {
       const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
+      const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
+      const responseTurnObserved = interruptedSnapshot.generating
+        || interruptedSnapshot.assistantTurnCount > baselineAssistantTurnCount
+        || Boolean(interruptedSnapshot.assistantMessageId && interruptedSnapshot.assistantMessageId !== baseline.assistantMessageId);
+      if (submittedTurnObserved && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId)) {
+        if (onSnapshot) await onSnapshot({ ...interruptedSnapshot, responseTurnObserved });
+      }
       return {
         ...interruptedSnapshot,
         response: interruptedSnapshot.assistantText,
+        responseTurnObserved,
         status: "interrupted",
+        checkpointAccepted: submittedTurnObserved
+          && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId),
         failureReason: "visible response interruption",
       };
     }
 
     snapshot = await readCompletionSnapshot(page);
-    if (expectedConversationId && snapshot.conversationId && snapshot.conversationId !== expectedConversationId) {
-      if (conversationIdentityTransitioned) {
+    if (snapshot.routeStable === false) {
+      if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: false, responseTurnObserved: false });
+      await page.waitForTimeout(backoffMs);
+      backoffMs = Math.min(backoffMs * 2, COMPLETION_MAX_BACKOFF_MS);
+      continue;
+    }
+    const conversationChanged = !responseConversationId
+      && expectedConversationId
+      && snapshot.conversationId
+      && snapshot.conversationId !== expectedConversationId;
+    if (conversationChanged) {
+      if (handoffConversationId !== snapshot.conversationId) {
+        handoffConversationId = snapshot.conversationId;
+        handoffAssistantText = snapshot.assistantText;
+        handoffResponseProgressed = snapshot.generating;
+      } else if (snapshot.generating || snapshot.assistantText !== handoffAssistantText) {
+        handoffResponseProgressed = true;
+      }
+    }
+    if (conversationChanged && conversationTransitionDeadline === null) {
+      conversationTransitionDeadline = Date.now() + Math.min(COMPOSER_READINESS_TIMEOUT_MS, timeoutMs);
+    }
+    if (!submittedUserTurnId && baseline.submittedPrompt) {
+      submittedUserTurnId = await readSubmittedUserTurnId(page, baseline.submittedPrompt, { timeoutMs: 0 });
+    }
+    let submittedTurnObserved = (submittedTurnAnchorObserved
+      && (!snapshot.conversationId || snapshot.conversationId === submittedTurnAnchorConversationId))
+      || await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
+    if (submittedTurnObserved) {
+      submittedTurnAnchorObserved = true;
+      submittedTurnAnchorConversationId = snapshot.conversationId || submittedTurnAnchorConversationId;
+    }
+    const acknowledgedSubmissionAssistantTurn = submissionAcknowledged
+      && baselineAssistantTurnCount === 0
+      && submissionConversationId
+      && snapshot.conversationId === submissionConversationId
+      && snapshot.assistantTurnCount > baselineAssistantTurnCount
+      && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
+    if (acknowledgedSubmissionAssistantTurn) {
+      submittedTurnObserved = true;
+      submittedTurnAnchorObserved = true;
+    }
+    if (responseConversationId && snapshot.conversationId && snapshot.conversationId !== responseConversationId) {
+      if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: false, responseTurnObserved: false });
+      return {
+        ...snapshot,
+        response: snapshot.assistantText,
+        status: "incomplete",
+        checkpointAccepted: false,
+        failureReason: "conversation identity changed after response evidence was bound",
+      };
+    }
+    if (conversationChanged) {
+      const transitionFreshnessObserved = syntheticSubmissionRoute && handoffResponseProgressed;
+      const newAssistantTurnObserved = transitionFreshnessObserved
+        || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
+      const durableTurnAnchorObserved = Boolean(submittedUserTurnId)
+        || acknowledgedSubmissionAssistantTurn
+        || syntheticSubmissionRoute && submittedTurnObserved
+        || transitionFreshnessObserved;
+      const newConversationAnchorObserved = newAssistantTurnObserved
+        && durableTurnAnchorObserved;
+      if (transitionFreshnessObserved) {
+        submittedTurnObserved = true;
+        submittedTurnAnchorObserved = true;
+        submittedTurnAnchorConversationId = snapshot.conversationId;
+      }
+      if (!newConversationAnchorObserved) {
+        if (submissionAcknowledged && baselineAssistantTurnCount === 0) {
+          await page.waitForTimeout(backoffMs);
+          backoffMs = Math.min(backoffMs * 2, COMPLETION_MAX_BACKOFF_MS);
+          continue;
+        }
+        if (conversationTransitionDeadline !== null && Date.now() <= conversationTransitionDeadline) {
+          await page.waitForTimeout(backoffMs);
+          backoffMs = Math.min(backoffMs * 2, COMPLETION_MAX_BACKOFF_MS);
+          continue;
+        }
         return {
           ...snapshot,
           response: snapshot.assistantText,
           status: "incomplete",
-          failureReason: "conversation identity changed repeatedly during completion observation",
+          checkpointAccepted: false,
+          failureReason: "conversation identity changed before submitted user turn identity was bound",
         };
       }
-      conversationIdentityTransitioned = true;
       expectedConversationId = snapshot.conversationId;
-      const newAssistantTurn = snapshot.assistantMessageId
-        && snapshot.assistantMessageId !== baseline.assistantMessageId;
+      const newAssistantTurn = transitionFreshnessObserved
+        || (snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
       baselineAssistantTurnCount = snapshot.generating || newAssistantTurn
         ? Math.max(0, snapshot.assistantTurnCount - 1)
         : snapshot.assistantTurnCount;
     }
     if (!expectedConversationId && snapshot.conversationId) expectedConversationId = snapshot.conversationId;
     generationObserved ||= snapshot.generating;
-    const responseEvidenceObserved = snapshot.generating
-      || snapshot.responseActionsReady
-      || snapshot.assistantTurnCount > baseline.assistantTurnCount
-      || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
+    const responseTurnObserved = snapshot.generating
+      || snapshot.assistantTurnCount > baselineAssistantTurnCount
+      || (conversationChanged && (handoffResponseProgressed
+        || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId)));
+    const responseEvidenceObserved = responseTurnObserved
+      || snapshot.responseActionsReady;
+    if (onSnapshot) {
+      await onSnapshot({
+        ...snapshot,
+        checkpointAccepted: submittedTurnObserved
+          && (!expectedConversationId || snapshot.conversationId === expectedConversationId),
+        responseTurnObserved,
+      });
+    }
+    if (!responseConversationId && responseTurnObserved && snapshot.conversationId && submittedTurnObserved) {
+      responseConversationId = snapshot.conversationId;
+      expectedConversationId = responseConversationId;
+    }
     if (ambiguityActive && responseEvidenceObserved) {
       deadline = Date.now() + completionTimeoutMs;
       ambiguityActive = false;
     }
-    const sameMessage = !snapshot.assistantMessageId
-      || !previousMessageId
-      || snapshot.assistantMessageId === previousMessageId;
-    if (snapshot.assistantText === previousText && sameMessage && snapshot.assistantText) {
+    const sameAssistantTurn = previousAssistantTurnCount === null
+      || snapshot.assistantTurnCount === previousAssistantTurnCount;
+    if (snapshot.assistantText === previousText
+      && (sameAssistantTurn || snapshot.responseActionsReady)
+      && snapshot.assistantText) {
       stableSampleCount += 1;
     } else {
       stableSampleCount = 0;
       previousText = snapshot.assistantText;
     }
-    previousMessageId = snapshot.assistantMessageId;
+    previousAssistantTurnCount = snapshot.assistantTurnCount;
 
     if (evaluateReviewCompletion({
       ...snapshot,
@@ -452,12 +774,16 @@ export async function waitForReviewCompletion(page, {
       expectedConversationId,
       generationObserved,
       stableSampleCount,
-    })) {
+      submittedTurnObserved,
+      allowStableTextFallback: true,
+    }) && await acceptSnapshot(snapshot)) {
       return {
         ...snapshot,
         assistantTurnIndex: snapshot.assistantTurnCount - 1,
         response: snapshot.assistantText,
         status: "confirmed",
+        checkpointAccepted: true,
+        responseTurnObserved: true,
       };
     }
 
@@ -466,16 +792,159 @@ export async function waitForReviewCompletion(page, {
   }
 
   const finalSnapshot = await readCompletionSnapshot(page, { includeText: true });
+  const finalSubmittedTurnObserved = (submittedTurnAnchorObserved
+    && (!finalSnapshot.conversationId || finalSnapshot.conversationId === submittedTurnAnchorConversationId))
+    || await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
+  const finalResponseTurnObserved = finalSnapshot.routeStable !== false && (finalSnapshot.generating
+    || finalSnapshot.assistantTurnCount > baselineAssistantTurnCount
+    || Boolean(finalSnapshot.assistantMessageId && finalSnapshot.assistantMessageId !== baseline.assistantMessageId));
+  const finalCheckpointAccepted = finalSnapshot.routeStable !== false
+    && (!expectedConversationId || finalSnapshot.conversationId === expectedConversationId)
+    && finalSubmittedTurnObserved;
+  if (onSnapshot && finalCheckpointAccepted) {
+    await onSnapshot({ ...finalSnapshot, checkpointAccepted: true, responseTurnObserved: finalResponseTurnObserved });
+  }
   return {
     ...finalSnapshot,
     response: finalSnapshot.assistantText,
+    responseTurnObserved: finalResponseTurnObserved,
     status: "incomplete",
+    checkpointAccepted: finalCheckpointAccepted,
     failureReason: "bounded completion timeout or ambiguous response association",
   };
 }
 
-export async function runReviewPrompt(page, { beforeSubmit, model, effort, prompt }) {
+export async function waitForExistingReviewCompletion(page, {
+  conversationUrl,
+  timeoutMs = COMPLETION_TIMEOUT_MS,
+  onSnapshot,
+  signal,
+} = {}) {
+  const expectedConversationUrl = normalizeExistingConversationUrl(conversationUrl);
+  const expectedConversationId = extractConversationIdentity(expectedConversationUrl);
+  const deadline = Date.now() + timeoutMs;
+  let previousText = "";
+  let previousMessageId = null;
+  let stableSampleCount = 0;
+  let snapshot;
+  let routeTransitionDeadline = null;
+
+  while (Date.now() <= deadline) {
+    if (signal?.aborted) {
+      const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
+      const responseTurnObserved = interruptedSnapshot.latestAssistantFollowsLatestUser === true;
+      const checkpointAccepted = interruptedSnapshot.routeStable !== false
+        && interruptedSnapshot.conversationId === expectedConversationId
+        && responseTurnObserved;
+      const snapshot = { ...interruptedSnapshot, checkpointAccepted, responseTurnObserved };
+      if (onSnapshot) await onSnapshot(snapshot);
+      const error = new Error("Existing conversation verification interrupted by termination signal");
+      error.code = "REVIEW_INTERRUPTED";
+      error.interruptionSnapshot = snapshot;
+      throw error;
+    }
+    snapshot = await readCompletionSnapshot(page, { includeText: true });
+    if (snapshot.routeStable === false) {
+      if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: false, responseTurnObserved: false });
+      await page.waitForTimeout(COMPLETION_INITIAL_BACKOFF_MS);
+      continue;
+    }
+    if (!snapshot.conversationId) {
+      routeTransitionDeadline ||= Date.now() + Math.min(COMPOSER_READINESS_TIMEOUT_MS, timeoutMs);
+      if (Date.now() <= routeTransitionDeadline) {
+        if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: false, responseTurnObserved: false });
+        await page.waitForTimeout(COMPLETION_INITIAL_BACKOFF_MS);
+        continue;
+      }
+      const rejectedSnapshot = { ...snapshot, checkpointAccepted: false, responseTurnObserved: false };
+      if (onSnapshot) await onSnapshot(rejectedSnapshot);
+      return {
+        ...rejectedSnapshot,
+        response: snapshot.assistantText,
+        status: "incomplete",
+        checkpointAccepted: false,
+        failureReason: "existing conversation identity unavailable during route transition",
+      };
+    }
+    if (snapshot.conversationId !== expectedConversationId) {
+      const rejectedSnapshot = { ...snapshot, checkpointAccepted: false, responseTurnObserved: false };
+      if (onSnapshot) await onSnapshot(rejectedSnapshot);
+      return {
+        ...rejectedSnapshot,
+        response: snapshot.assistantText,
+        status: "incomplete",
+        checkpointAccepted: false,
+        failureReason: "existing conversation identity changed during verification",
+      };
+    }
+    routeTransitionDeadline = null;
+    if (snapshot.interrupted) {
+      const responseTurnObserved = snapshot.latestAssistantFollowsLatestUser === true;
+      const interruptedSnapshot = { ...snapshot, checkpointAccepted: responseTurnObserved, responseTurnObserved };
+      if (onSnapshot) await onSnapshot(interruptedSnapshot);
+      return {
+        ...interruptedSnapshot,
+        response: snapshot.assistantText,
+        status: "interrupted",
+        checkpointAccepted: interruptedSnapshot.checkpointAccepted,
+        failureReason: "visible response interruption",
+      };
+    }
+    const sameMessage = !snapshot.assistantMessageId
+      || !previousMessageId
+      || snapshot.assistantMessageId === previousMessageId;
+    if (snapshot.assistantText === previousText
+      && (sameMessage || snapshot.responseActionsReady)
+      && snapshot.assistantText) {
+      stableSampleCount += 1;
+    } else {
+      stableSampleCount = 0;
+      previousText = snapshot.assistantText;
+    }
+    previousMessageId = snapshot.assistantMessageId;
+
+    const responseTurnObserved = snapshot.latestAssistantFollowsLatestUser === true;
+    const observedSnapshot = {
+      ...snapshot,
+      checkpointAccepted: responseTurnObserved,
+      responseTurnObserved,
+    };
+    if (onSnapshot) await onSnapshot(observedSnapshot);
+    if (responseTurnObserved && evaluateReviewCompletion({
+      ...observedSnapshot,
+      assistantTurnCount: 1,
+      baselineAssistantTurnCount: 0,
+      expectedConversationId,
+      stableSampleCount,
+    }) && snapshot.responseActionsReady) {
+      return {
+        ...observedSnapshot,
+        assistantTurnIndex: Math.max(0, snapshot.assistantTurnCount - 1),
+        response: snapshot.assistantText,
+        status: "confirmed",
+        checkpointAccepted: true,
+      };
+    }
+    await page.waitForTimeout(COMPLETION_INITIAL_BACKOFF_MS);
+  }
+
+  const finalSnapshot = await readCompletionSnapshot(page, { includeText: true });
+  const responseTurnObserved = finalSnapshot.latestAssistantFollowsLatestUser === true;
+  const finalCheckpointAccepted = finalSnapshot.conversationId === expectedConversationId && responseTurnObserved;
+  if (onSnapshot) await onSnapshot({ ...finalSnapshot, checkpointAccepted: finalCheckpointAccepted, responseTurnObserved });
+  return {
+    ...finalSnapshot,
+    response: finalSnapshot.assistantText,
+      responseTurnObserved,
+    status: "incomplete",
+    checkpointAccepted: finalCheckpointAccepted,
+    failureReason: "bounded existing conversation verification timeout",
+  };
+}
+
+export async function runReviewPrompt(page, { beforeSubmit, model, effort, prompt, signal }) {
   assertPrompt(prompt);
+  throwIfAborted(signal);
   const { composer } = await prepareReviewPrompt(page, { model, effort });
   const baselineAssistant = await readVisibleAssistantMessage(page, { includeText: false });
   const baseline = {
@@ -483,10 +952,12 @@ export async function runReviewPrompt(page, { beforeSubmit, model, effort, promp
     assistantTurnCount: baselineAssistant.assistantTurnCount,
     conversationId: extractConversationIdentity(page.url()),
     conversationUrl: page.url(),
+    submittedPrompt: normalizePromptText(prompt),
   };
   let submission;
   try {
-    submission = await submitPrompt(page, composer, prompt, { beforeSubmit });
+    throwIfAborted(signal);
+    submission = await submitPrompt(page, composer, prompt, { beforeSubmit, signal });
   } catch (error) {
     error.reviewBaseline = baseline;
     error.submissionAttempted = error.submissionAttempted === true;
@@ -494,19 +965,66 @@ export async function runReviewPrompt(page, { beforeSubmit, model, effort, promp
     throw error;
   }
 
-  return { ...baseline, ...submission, model, effort, promptSubmitted: true };
+  return {
+    ...baseline,
+    ...submission,
+    submittedUserTurnId: await readSubmittedUserTurnId(page, prompt),
+    model,
+    effort,
+    promptSubmitted: true,
+  };
 }
 
-export async function runReviewPromptInNewTab(context, options) {
-  const page = await openReviewTab(context);
+export async function runReviewPromptInNewTab(context, options = {}) {
+  const hasExistingConversationUrl = Object.prototype.hasOwnProperty.call(options, "existingConversationUrl")
+    && options.existingConversationUrl !== undefined;
+  const existingConversationUrl = hasExistingConversationUrl
+    ? normalizeExistingConversationUrl(options.existingConversationUrl)
+    : null;
+  const ownsPage = !options.reviewPage;
+  const page = options.reviewPage || await openReviewTab(context);
   try {
+    if (!ownsPage && !options.existingConversationUrl) {
+      await page.goto(CHATGPT_URL, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
+    }
+    if (!ownsPage) await openChatGPT(page);
+    if (existingConversationUrl) {
+      await page.goto(existingConversationUrl, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
+      const completion = await waitForExistingReviewCompletion(page, {
+        conversationUrl: existingConversationUrl,
+        onSnapshot: options.onSnapshot,
+        signal: options.signal,
+      });
+      return {
+        page,
+        ...completion,
+        completion,
+        model: null,
+        effort: null,
+        modelVerified: null,
+        effortVerified: null,
+        promptSubmitted: false,
+        readOnlyVerification: true,
+        submission: "not_attempted",
+        dispatchState: "not_dispatched",
+      };
+    }
     return { page, ...(await runReviewPrompt(page, options)) };
   } catch (error) {
     if (error && typeof error === "object") {
       error.reviewPage = page;
+      if (existingConversationUrl && !error.reviewBaseline) {
+        const conversationUrl = existingConversationUrl;
+        error.reviewBaseline = {
+          conversationUrl,
+          conversationId: extractConversationIdentity(conversationUrl),
+          assistantMessageId: null,
+          assistantTurnCount: 0,
+        };
+      }
       if (!error.visibleEvidence) error.visibleEvidence = await captureVisibleEvidence(page).catch(() => null);
     }
-    if (!error?.reviewBaseline) await page.close().catch(() => {});
+    if (!error?.reviewBaseline && ownsPage) await page.close().catch(() => {});
     throw withFailureScope(error, "review");
   }
 }

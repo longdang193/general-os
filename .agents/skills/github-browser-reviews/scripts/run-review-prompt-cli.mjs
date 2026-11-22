@@ -11,10 +11,12 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 
 import {
   captureVisibleEvidence,
+  extractConversationIdentity,
   runReviewPromptInNewTab,
   preflightAuthenticatedContext,
   AMBIGUOUS_DISPATCH_TIMEOUT_MS,
   COMPLETION_TIMEOUT_MS,
+  normalizeExistingConversationUrl,
   waitForReviewCompletion,
 } from "./run-review-prompt.mjs";
 import {
@@ -26,6 +28,7 @@ const DEFAULT_CONTEXT_INDEX = 0;
 const DEFAULT_CDP_PORT = 9222;
 const CDP_STARTUP_TIMEOUT_MS = 15000;
 const CDP_POLL_INTERVAL_MS = 100;
+const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const DEFAULT_OUTPUT_DIR = "review-output";
 const PROFILE_LEASE_SUFFIX = ".codex-review-profile.lock";
 const PROFILE_BINDING_FILE = ".codex-review-profile.json";
@@ -42,10 +45,11 @@ const VALUE_ARGUMENTS = new Set([
   "--project-key",
   "--repository",
   "--review-url",
+  "--existing-conversation-url",
   "--batch-file",
   "--user-data-dir",
 ]);
-const USAGE = "Usage: node run-review-prompt-cli.mjs (--launch-cdp --user-data-dir <path> --project-key <owner-repository> | --user-data-dir <path> --project-key <owner-repository> | --cdp-endpoint <url>) (--model <GPT-5.6-Sol|GPT-6> --effort <Instant|Medium|High> --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>...) | --batch-file <path>) [--cdp-port <port>] [--output-dir <path>] [--context-index <number>]";
+const USAGE = "Usage: node run-review-prompt-cli.mjs (--launch-cdp --user-data-dir <path> --project-key <owner-repository> | --user-data-dir <path> --project-key <owner-repository> | --cdp-endpoint <url>) (--model <GPT-5.6-Sol|GPT-6> --effort <Instant|Medium|High> --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... [--existing-conversation-url <url>]) | --batch-file <path>) [--cdp-port <port>] [--output-dir <path>] [--context-index <number>]";
 const FLAG_ARGUMENTS = new Set(["--launch-cdp"]);
 const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/i;
 const GITHUB_BLOB_URL_PATTERN = /https:\/\/github\.com\/[^\s<>"']+/gi;
@@ -88,6 +92,7 @@ export function parseArguments(argv) {
   const projectKey = argumentsByName.get("--project-key");
   const repository = argumentsByName.get("--repository");
   const reviewUrls = argumentsByName.get("--review-url") || [];
+  const existingConversationUrl = argumentsByName.get("--existing-conversation-url");
   const batchFile = argumentsByName.get("--batch-file");
   const contextIndexValue = argumentsByName.get("--context-index");
   const launchCdp = argumentsByName.has("--launch-cdp");
@@ -102,7 +107,7 @@ export function parseArguments(argv) {
   if (!launchCdp && cdpPortValue !== undefined) usageError("--cdp-port requires --launch-cdp");
   if (userDataDir) argumentsByName.set("--user-data-dir", validateProjectProfilePath(userDataDir));
   if (!cdpEndpoint && contextIndexValue !== undefined) usageError("--context-index requires --cdp-endpoint");
-  if (batchFile && (model || effort || promptFile || repository || commitSha || reviewUrls.length > 0)) {
+  if (batchFile && (model || effort || promptFile || repository || commitSha || reviewUrls.length > 0 || existingConversationUrl)) {
     usageError("Single-review arguments cannot be combined with --batch-file");
   }
   if (!batchFile && !model) usageError("Missing required argument: --model");
@@ -113,15 +118,19 @@ export function parseArguments(argv) {
   if (!batchFile && !repository) usageError("Missing required argument: --repository");
   if (!batchFile && !commitSha) usageError("Missing required argument: --commit-sha");
   if (!batchFile && reviewUrls.length === 0) usageError("Missing required argument: --review-url");
+  const normalizedExistingConversationUrl = existingConversationUrl === undefined
+    ? undefined
+    : normalizeExistingConversationUrl(existingConversationUrl);
 
   const contextIndex = contextIndexValue === undefined ? DEFAULT_CONTEXT_INDEX : Number(contextIndexValue);
   if (!Number.isInteger(contextIndex) || contextIndex < 0) usageError(`Invalid context index: ${contextIndexValue}`);
-  const cdpPort = cdpPortValue === undefined ? DEFAULT_CDP_PORT : Number(cdpPortValue);
-  if (!Number.isInteger(cdpPort) || cdpPort < 1 || cdpPort > 65535) usageError(`Invalid CDP port: ${cdpPortValue}`);
+  const cdpPort = cdpPortValue === undefined ? 0 : Number(cdpPortValue);
+  if (cdpPortValue !== undefined && (!Number.isInteger(cdpPort) || cdpPort < 1 || cdpPort > 65535)) usageError(`Invalid CDP port: ${cdpPortValue}`);
 
   return {
     cdpEndpoint,
     cdpPort,
+    cdpPortProvided: cdpPortValue !== undefined,
     contextIndex,
     contextIndexProvided: contextIndexValue !== undefined,
     commitSha,
@@ -134,6 +143,7 @@ export function parseArguments(argv) {
     launchCdp,
     repository,
     reviewUrls,
+    existingConversationUrl: normalizedExistingConversationUrl,
     userDataDir: userDataDir ? resolve(userDataDir) : undefined,
   };
 }
@@ -208,6 +218,42 @@ export function validateReviewProvenance({ repository, commitSha, reviewUrls, pr
     reviewUrls: normalizedUrls,
     projectKey: deriveProjectKey(`${repositoryMatch[1]}/${repositoryMatch[2]}`),
   };
+}
+
+export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
+  if (typeof response !== "string" || !response.trim()) return false;
+  if (/(?:could not|unable to|failed to|cannot|can't)\s+(?:access|review|inspect|load|read)|\b(?:don't|do not)\s+have access\b|\bnot able to access\b|\baccess(?:ing)?(?: the| to)?\s+[^.\n]{0,40}\bfailed\b|\b(?:not|never|not yet|pending)\s+approved\b/i.test(response)) return false;
+  const provisionalLanguage = /\b(?:i|we)\s+(?:will|'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:if|when|once|until)\b[^.\n]{0,120}\b(?:confirm(?:ed)?|inspect|review|check|verify|findings?|severity|report)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|analyzed|analysed|investigated|compared|looked at|confirmed))\b/i;
+  const severityPattern = /(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\b)\s*[-:—;]\s*\S|^\s*(?:(?:[-*]|\d+[.)])\s+)?(?:critical|high|medium|low)\b(?=\s*(?:[-:—]|$)))/i;
+  const conclusiveSeverity = response.split(/\r?\n/).some((line) => severityPattern.test(line)
+    && !/\b(?:if|when|once|until|will|'ll|pending|tentative|provisional|to be confirmed|not yet)\b/i.test(line)
+    && !/\b(?:confidence|risk\s+(?:level|assessment|score|rating)|review plan|planning|approach|strategy|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|analyzed|analysed|investigated|compared|looked at|confirmed))\b/i.test(line));
+  const normalizedResponse = response.toLowerCase();
+  let revisionMarkerFound = typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase());
+  for (const reviewUrl of reviewUrls || []) {
+    try {
+      const segments = new URL(reviewUrl).pathname.split("/").filter(Boolean).slice(3);
+      const marker = decodeURIComponent(segments.join("/")).toLowerCase();
+      if (marker && normalizedResponse.includes(marker)) revisionMarkerFound = true;
+    } catch {
+      continue;
+    }
+  }
+  if (!revisionMarkerFound) return false;
+  const outcome = /\bno (?:actionable )?(?:findings?|issues?|defects?|vulnerabilities?|concerns?)\b(?!\s+(?:yet|pending|tbd|so far|to be|until|will|next)\b)|\b(?:changes requested|request changes|review complete|approved)\b/i.test(response)
+    || conclusiveSeverity;
+  return outcome && !provisionalLanguage.test(response);
+}
+
+function resolveExistingConversationUrl(review, index) {
+  const snake = review.existing_conversation_url;
+  const camel = review.existingConversationUrl;
+  const normalizedSnake = snake === undefined ? undefined : normalizeExistingConversationUrl(snake);
+  const normalizedCamel = camel === undefined ? undefined : normalizeExistingConversationUrl(camel);
+  if (normalizedSnake !== undefined && normalizedCamel !== undefined && normalizedSnake !== normalizedCamel) {
+    throw new Error(`Review ${index + 1} has conflicting existing conversation URL aliases`);
+  }
+  return normalizedSnake ?? normalizedCamel;
 }
 
 function canonicalProfilePath(userDataDir) {
@@ -291,6 +337,7 @@ async function bindProfileIdentity(profilePath, repository, projectKey) {
 export function createResult(options) {
   const prompt = typeof options.prompt === "string" ? options.prompt : "";
   const promptHash = prompt ? createHash("sha256").update(prompt, "utf8").digest("hex") : null;
+  const existingConversationUrl = options.existingConversationUrl || null;
   return {
     status: "running",
     run_id: options.runId || null,
@@ -305,11 +352,14 @@ export function createResult(options) {
     completion: "not_started",
     conversation_url: null,
     conversation_id: null,
+    last_visible_conversation_url: null,
+    last_visible_conversation_id: null,
     assistant_message_id: null,
     assistant_turn_index: null,
     response_path: "response.md",
     cleanup_status: "not_started",
     cleanup_warning: null,
+    stale_response_cleanup_error: null,
     failure_scope: null,
     failure_stage: null,
     failure_reason: null,
@@ -321,6 +371,7 @@ export function createResult(options) {
       repository: options.repository || null,
       commit_sha: options.commitSha || null,
       review_urls: Array.isArray(options.reviewUrls) ? [...options.reviewUrls] : [],
+      existing_conversation_url: options.existingConversationUrl || null,
     },
   };
 }
@@ -402,6 +453,7 @@ export async function readBatchReviews(batchFile) {
       commitSha: provenance.commitSha,
       reviewUrls: provenance.reviewUrls,
       projectKey: provenance.projectKey,
+      existingConversationUrl: resolveExistingConversationUrl(review, index),
       reviewIndex: index,
     };
   }));
@@ -452,7 +504,11 @@ export function validateReviewBatch(reviews, { projectKey, repository } = {}) {
     if (provenance.projectKey !== expectedProjectKey) {
       throw new Error(`Review ${index + 1} project key does not match the attached project: ${provenance.projectKey}`);
     }
-    return { ...review, ...provenance };
+    return {
+      ...review,
+      ...provenance,
+      existingConversationUrl: resolveExistingConversationUrl(review, index),
+    };
   });
 }
 
@@ -534,7 +590,7 @@ export async function persistCleanupFailure(result, outputDir, cleanupReason) {
   result.cleanup_warning = cleanupReason;
   result.failure_scope = result.failure_scope || "shared_context";
   result.failure_stage = "cleanup";
-  result.failure_reason = cleanupReason;
+  result.failure_reason = appendFailureReason(result.failure_reason, `context cleanup failed: ${cleanupReason}`);
   if (outputDir) await writeResult(outputDir, result);
 }
 
@@ -619,18 +675,68 @@ export async function waitForCdpEndpoint(
   throw new Error(`Timed out waiting for Chrome CDP endpoint ${endpoint}: ${errorMessage(lastError)}`);
 }
 
+export async function waitForChromeCdpEndpoint(
+  profilePath,
+  {
+    readFileImpl = readFile,
+    waitForEndpoint = waitForCdpEndpoint,
+    timeoutMs = CDP_STARTUP_TIMEOUT_MS,
+    pollIntervalMs = CDP_POLL_INTERVAL_MS,
+  } = {},
+) {
+  const activePortPath = join(profilePath, "DevToolsActivePort");
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() <= deadline) {
+    try {
+      const [portLine] = (await readFileImpl(activePortPath, "utf8")).trim().split(/\r?\n/);
+      const port = Number(portLine);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Invalid Chrome DevTools port: ${portLine}`);
+      const endpoint = `http://127.0.0.1:${port}`;
+      await waitForEndpoint(endpoint, { timeoutMs, pollIntervalMs });
+      return endpoint;
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, pollIntervalMs));
+  }
+  throw new Error(`Timed out waiting for Chrome DevTools port file ${activePortPath}: ${errorMessage(lastError)}`);
+}
+
+export async function waitForProcessExit(child, { timeoutMs = PROCESS_EXIT_TIMEOUT_MS } = {}) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  if (typeof child.once !== "function") throw new Error("Owned browser process does not expose an exit event");
+  await new Promise((resolveExit, rejectExit) => {
+    let timer;
+    const cleanup = () => {
+      clearTimeout(timer);
+      child.removeListener?.("exit", onExit);
+      child.removeListener?.("close", onExit);
+      child.removeListener?.("error", onError);
+    };
+    const onExit = () => { cleanup(); resolveExit(); };
+    const onError = (error) => { cleanup(); rejectExit(error); };
+    timer = setTimeout(() => {
+      cleanup();
+      rejectExit(new Error("Timed out waiting for owned browser process to exit"));
+    }, timeoutMs);
+    child.once("exit", onExit);
+    child.once("close", onExit);
+    child.once("error", onError);
+  });
+}
+
 export async function launchDedicatedChrome(
   profilePath,
   {
-    cdpPort = DEFAULT_CDP_PORT,
+    cdpPort = 0,
     executablePath,
-    findPort = findAvailableTcpPort,
     spawnProcess = spawn,
     waitForEndpoint = waitForCdpEndpoint,
   } = {},
 ) {
-  const port = await findPort(cdpPort);
-  const endpoint = `http://127.0.0.1:${port}`;
+  await rm(join(profilePath, "DevToolsActivePort"), { force: true });
+  const port = cdpPort;
   const executable = executablePath || resolveChromeExecutable();
   const chromeProcess = spawnProcess(
     executable,
@@ -640,15 +746,22 @@ export async function launchDedicatedChrome(
       "--remote-debugging-address=127.0.0.1",
       "--no-first-run",
       "--no-default-browser-check",
-      "https://chatgpt.com/",
     ],
     { detached: false, stdio: "ignore", windowsHide: true },
   );
   try {
-    await waitForEndpoint(endpoint);
-    return { endpoint, port, process: chromeProcess };
+    const endpoint = await waitForChromeCdpEndpoint(profilePath, { waitForEndpoint });
+    const actualPort = Number(new URL(endpoint).port);
+    return { endpoint, port: actualPort, process: chromeProcess };
   } catch (error) {
-    chromeProcess.kill?.();
+    error.chromeProcess = chromeProcess;
+    try {
+      chromeProcess.kill?.();
+      await waitForProcessExit(chromeProcess);
+      error.chromeProcessExited = true;
+    } catch (cleanupError) {
+      error.cleanupError = cleanupError;
+    }
     throw error;
   }
 }
@@ -685,12 +798,13 @@ export async function openContext(chromium, options, dependencies = {}) {
     let launched;
     try {
       const launch = dependencies.launchDedicatedChrome || launchDedicatedChrome;
-      launched = await launch(profilePath, { cdpPort: options.cdpPort });
+      launched = await launch(profilePath, { cdpPort: options.cdpPortProvided ? options.cdpPort : 0 });
       const { browser, context } = await connectToCdpContext(chromium, launched.endpoint, options);
       return {
         browser,
         context,
         ownsContext: false,
+        reviewPage: await findBootstrapReviewPage(context),
         chromeProcess: launched.process,
         cdpEndpoint: launched.endpoint,
         profileLease,
@@ -699,36 +813,74 @@ export async function openContext(chromium, options, dependencies = {}) {
         repository: options.repository,
       };
     } catch (error) {
-      launched?.process?.kill?.();
-      try {
-        await releaseProfileLease(profileLease);
-      } catch (cleanupError) {
-        error.cleanupError = cleanupError;
-        error.message = `${errorMessage(error)}; profile lease cleanup failed: ${errorMessage(cleanupError)}`;
+      let processExited = error.chromeProcessExited === true;
+      const ownedChromeProcess = launched?.process || error.chromeProcess;
+      if (ownedChromeProcess) {
+        try {
+          ownedChromeProcess.kill?.();
+          await waitForProcessExit(ownedChromeProcess);
+          processExited = true;
+        } catch (cleanupError) {
+          error.cleanupError = cleanupError;
+        }
+      }
+      if (processExited || !ownedChromeProcess) {
+        try {
+          await releaseProfileLease(profileLease);
+        } catch (cleanupError) {
+          error.cleanupError = cleanupError;
+          error.message = `${errorMessage(error)}; profile lease cleanup failed: ${errorMessage(cleanupError)}`;
+        }
       }
       throw error;
     }
   }
+  let context;
   try {
-    const context = await chromium.launchPersistentContext(profilePath, { headless: false });
+    context = await chromium.launchPersistentContext(profilePath, { headless: false });
+    const reviewPage = await findBootstrapReviewPage(context);
     return {
       browser: null,
       context,
       ownsContext: true,
+      reviewPage,
       profileLease,
       profilePath,
       projectKey: derivedProjectKey,
       repository: options.repository,
     };
   } catch (error) {
-    try {
-      await releaseProfileLease(profileLease);
-    } catch (cleanupError) {
-      error.cleanupError = cleanupError;
-      error.message = `${errorMessage(error)}; profile lease cleanup failed: ${errorMessage(cleanupError)}`;
+    let contextClosed = !context;
+    if (context) {
+      try {
+        await context.close();
+        contextClosed = true;
+      } catch (cleanupError) {
+        error.cleanupError = cleanupError;
+        error.message = `${errorMessage(error)}; browser context cleanup failed: ${errorMessage(cleanupError)}`;
+      }
+    }
+    if (contextClosed) {
+      try {
+        await releaseProfileLease(profileLease);
+      } catch (cleanupError) {
+        error.cleanupError = cleanupError;
+        error.message = `${errorMessage(error)}; profile lease cleanup failed: ${errorMessage(cleanupError)}`;
+      }
     }
     const detail = error instanceof Error ? `: ${error.message}` : "";
     throw new Error(`Could not launch the Playwright browser profile${detail}`);
+  }
+}
+
+export async function findBootstrapReviewPage(context, { timeoutMs = 5000, pollIntervalMs = 50 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const pages = context.pages();
+    if (pages.length === 1) return pages[0];
+    if (pages.length > 1) throw new Error(`Ambiguous bootstrap page selection: expected one ChatGPT page, found ${pages.length}`);
+    if (Date.now() >= deadline) throw new Error("ChatGPT bootstrap page was not available");
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, pollIntervalMs));
   }
 }
 
@@ -736,7 +888,7 @@ export async function openReviewContext(options) {
   const chromium = await loadPlaywright();
   const attached = await openContext(chromium, options);
   try {
-    await preflightAuthenticatedContext(attached.context);
+    await preflightAuthenticatedContext(attached.context, attached.reviewPage);
     return attached;
   } catch (error) {
     try {
@@ -755,6 +907,7 @@ export async function closeContext(attached) {
   const { browser, context, ownsContext, page, profileLease, chromeProcess } = attached;
   let cleanupError;
   let ownedContextClosed = !ownsContext;
+  let chromeProcessExited = !chromeProcess;
   try {
     if (ownsContext && context) {
       await context.close();
@@ -776,11 +929,15 @@ export async function closeContext(attached) {
     }
     try {
       if (chromeProcess && !chromeProcess.killed) chromeProcess.kill?.();
+      if (chromeProcess) {
+        await waitForProcessExit(chromeProcess);
+        chromeProcessExited = true;
+      }
     } catch (error) {
       cleanupError ||= error;
     }
   }
-  if (ownedContextClosed) {
+  if (ownedContextClosed && profileLease && chromeProcessExited) {
     try {
       await releaseProfileLease(profileLease);
     } catch (error) {
@@ -791,7 +948,7 @@ export async function closeContext(attached) {
   attached.closed = true;
 }
 
-export function installTerminationCleanup(attached, closeAttachedContext = closeContext) {
+export function installTerminationCleanup(attached, closeAttachedContext = closeContext, onSignal = null) {
   if (!attached) return () => {};
 
   const handlers = new Map();
@@ -804,7 +961,15 @@ export function installTerminationCleanup(attached, closeAttachedContext = close
   for (const signal of ["SIGINT", "SIGTERM"]) {
     const handler = () => {
       signalCode = signal === "SIGINT" ? 130 : 143;
-      closeOnce().catch(() => {});
+      if (onSignal) {
+        try {
+          onSignal(signalCode);
+        } catch {
+          closeOnce().catch(() => {});
+        }
+      } else {
+        closeOnce().catch(() => {});
+      }
     };
     handlers.set(signal, handler);
     process.once(signal, handler);
@@ -829,8 +994,8 @@ async function isContextHealthy(context) {
 }
 
 async function classifyFailureScope(stage, error, context) {
-  if (error?.failureScope) return error.failureScope;
   if (!(await isContextHealthy(context))) return "shared_context";
+  if (error?.failureScope) return error.failureScope;
   if (/(?:browser|context|target).*(?:closed|close|disconnect)|(?:closed|close|disconnect).*(?:browser|context|target)/i.test(errorMessage(error))) {
     return "shared_context";
   }
@@ -840,23 +1005,43 @@ async function classifyFailureScope(stage, error, context) {
 }
 
 function appendFailureReason(currentReason, suffix) {
-  return `${currentReason || "Review transaction failed"}; ${suffix}`;
+  if (!currentReason) return suffix;
+  if (currentReason.includes(suffix)) return currentReason;
+  return `${currentReason}; ${suffix}`;
 }
 
-function markCleanupFailure(result, cleanupReason) {
+function recordVisibleConversation(result, snapshot) {
+  const conversationId = snapshot?.conversationId || extractConversationIdentity(snapshot?.currentUrl || "");
+  if (!conversationId || !snapshot?.currentUrl) return;
+  result.last_visible_conversation_url = snapshot.currentUrl;
+  result.last_visible_conversation_id = conversationId;
+}
+
+function isPageClosed(page) {
+  try {
+    return typeof page?.isClosed === "function" && page.isClosed();
+  } catch {
+    return true;
+  }
+}
+
+export function markCleanupFailure(result, cleanupReason) {
   result.cleanup_status = "failed";
   result.cleanup_warning = cleanupReason;
   result.failure_scope = "shared_context";
   if (result.status === "completed" || !result.failure_stage) {
     result.status = "incomplete";
     result.failure_stage = "cleanup";
-    result.failure_reason = cleanupReason;
-  } else {
-    result.failure_reason = appendFailureReason(result.failure_reason, `cleanup failed: ${cleanupReason}`);
   }
+  result.failure_reason = appendFailureReason(result.failure_reason, `cleanup failed: ${cleanupReason}`);
 }
 
 export async function runReviewTransaction(context, options) {
+  const hasExistingConversationUrl = Object.prototype.hasOwnProperty.call(options || {}, "existingConversationUrl")
+    && options.existingConversationUrl !== undefined;
+  options = hasExistingConversationUrl
+    ? { ...options, existingConversationUrl: normalizeExistingConversationUrl(options.existingConversationUrl) }
+    : options;
   const dependencies = options.dependencies || {};
   const runPrompt = dependencies.runReviewPromptInNewTab || runReviewPromptInNewTab;
   const waitForCompletion = dependencies.waitForReviewCompletion || waitForReviewCompletion;
@@ -871,11 +1056,65 @@ export async function runReviewTransaction(context, options) {
   let dispatchState = "not_dispatched";
   let stage = "artifacts";
   let resultPersisted = false;
+  let checkpointResponse = null;
+  let lastAcceptedSnapshot = null;
 
   const persist = async () => {
     if (!outputDir) throw new Error("Review output directory was not allocated");
     await persistResult(outputDir, result);
     resultPersisted = true;
+  };
+
+  const persistSnapshot = async (snapshot) => {
+    if (!snapshot) return;
+    recordVisibleConversation(result, snapshot);
+    if (snapshot.checkpointAccepted === false) {
+      if (options.existingConversationUrl && snapshot.responseTurnObserved === false && outputDir) {
+        checkpointResponse = null;
+        lastAcceptedSnapshot = null;
+        result.assistant_message_id = null;
+        result.assistant_turn_index = null;
+        try {
+          await rm(join(outputDir, "response.md"), { force: true });
+        } catch (error) {
+          if (!result.stale_response_cleanup_error) {
+            result.stale_response_cleanup_error = errorMessage(error);
+            result.failure_reason = appendFailureReason(result.failure_reason, `stale response cleanup failed: ${result.stale_response_cleanup_error}`);
+          }
+        }
+      }
+      await persist().catch((error) => {
+        result.failure_reason = appendFailureReason(result.failure_reason, `result checkpoint failed: ${errorMessage(error)}`);
+      });
+      return;
+    }
+    if (snapshot.checkpointAccepted !== true && result.conversation_id && snapshot.conversationId && snapshot.conversationId !== result.conversation_id) {
+      await persist().catch((error) => {
+        result.failure_reason = appendFailureReason(result.failure_reason, `result checkpoint failed: ${errorMessage(error)}`);
+      });
+      return;
+    }
+    if (snapshot.currentUrl) result.conversation_url = snapshot.currentUrl;
+    if (snapshot.conversationId) result.conversation_id = snapshot.conversationId;
+    const responseTurnObserved = snapshot.responseTurnObserved !== false;
+    const responseText = snapshot.assistantText?.trim();
+    if (responseTurnObserved && responseText && responseText !== checkpointResponse && outputDir) {
+      try {
+        await writeResponse(join(outputDir, "response.md"), `${responseText}\n`);
+      } catch (error) {
+        result.failure_reason = appendFailureReason(result.failure_reason, `response checkpoint failed: ${errorMessage(error)}`);
+        return;
+      }
+      checkpointResponse = responseText;
+    }
+    lastAcceptedSnapshot = snapshot;
+    if (responseTurnObserved && snapshot.assistantMessageId) result.assistant_message_id = snapshot.assistantMessageId;
+    if (responseTurnObserved && snapshot.assistantTurnCount !== undefined && snapshot.assistantTurnCount !== null) {
+      result.assistant_turn_index = Math.max(0, snapshot.assistantTurnCount - 1);
+    }
+    await persist().catch((error) => {
+      result.failure_reason = appendFailureReason(result.failure_reason, `result checkpoint failed: ${errorMessage(error)}`);
+    });
   };
 
   try {
@@ -890,12 +1129,18 @@ export async function runReviewTransaction(context, options) {
     result.response_path = relative(process.cwd(), join(outputDir, "response.md"));
     await persist();
 
-    stage = "selection";
-    const review = await runPrompt(context, {
+    stage = options.existingConversationUrl ? "completion" : "selection";
+    const runPromptOptions = {
       effort: options.effort,
       model: options.model,
       prompt: options.prompt,
-      beforeSubmit: async () => {
+    };
+    if (options.reviewPage) runPromptOptions.reviewPage = options.reviewPage;
+    if (options.existingConversationUrl) {
+      runPromptOptions.existingConversationUrl = options.existingConversationUrl;
+      runPromptOptions.onSnapshot = persistSnapshot;
+    } else {
+      runPromptOptions.beforeSubmit = async () => {
         stage = "submission";
         result.submission_attempted = true;
         result.submission = "attempted";
@@ -905,40 +1150,75 @@ export async function runReviewTransaction(context, options) {
           stage = "artifacts";
           throw error;
         }
-      },
-    });
+      };
+    }
+    runPromptOptions.signal = options.abortSignal;
+    const review = await runPrompt(context, runPromptOptions);
     page = review.page;
     reviewBaseline = review;
-    if (review.promptSubmitted !== true) {
+    if (!options.existingConversationUrl && review.promptSubmitted !== true) {
       stage = "submission";
       throw new Error("Review prompt submission was not confirmed by the helper");
     }
-    result.model_verified = review.model;
-    result.effort_verified = review.effort;
-    result.submission = review.submission;
+    if (options.existingConversationUrl && review.readOnlyVerification !== true) {
+      stage = "completion";
+      throw new Error("Existing conversation verification was not confirmed by the helper");
+    }
+    result.model_verified = review.modelVerified ?? (options.existingConversationUrl ? null : review.model);
+    result.effort_verified = review.effortVerified ?? (options.existingConversationUrl ? null : review.effort);
+    result.submission = options.existingConversationUrl ? "not_attempted" : review.submission;
     dispatchState = review.dispatchState || "acknowledged";
     result.dispatch_state = dispatchState;
+    if (review.checkpointAccepted !== false) {
+      result.conversation_url = review.currentUrl || result.conversation_url;
+      result.conversation_id = review.conversationId || result.conversation_id;
+    }
+    recordVisibleConversation(result, review);
     result.completion = "waiting";
     stage = "artifacts";
     await persist();
 
     stage = "completion";
-    const completion = await waitForCompletion(page, { baseline: review });
+    const completion = review.completion || await waitForCompletion(page, {
+      baseline: review,
+      onSnapshot: persistSnapshot,
+      acceptSnapshot: (snapshot) => hasRevisionEvidence(snapshot.assistantText, options),
+      signal: options.abortSignal,
+    });
+    const rejectedCompletion = completion.checkpointAccepted === false
+      || (lastAcceptedSnapshot && completion.conversationId && completion.conversationId !== lastAcceptedSnapshot.conversationId);
+    const completionSnapshot = rejectedCompletion
+      ? lastAcceptedSnapshot
+        ? { ...completion, ...lastAcceptedSnapshot, response: lastAcceptedSnapshot.assistantText || null }
+        : null
+      : completion;
     result.completion = completion.status;
-    result.conversation_url = completion.currentUrl || null;
-    result.conversation_id = completion.conversationId || null;
-    result.assistant_message_id = completion.assistantMessageId || null;
-    result.assistant_turn_index = completion.assistantTurnIndex ?? null;
+    if (completionSnapshot) {
+      result.conversation_url = completionSnapshot.currentUrl || result.conversation_url || null;
+      result.conversation_id = completionSnapshot.conversationId || result.conversation_id || null;
+      if (completionSnapshot.responseTurnObserved !== false) {
+        result.assistant_message_id = completionSnapshot.assistantMessageId || result.assistant_message_id || null;
+        result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? result.assistant_turn_index ?? null;
+      }
+    }
 
-    if (completion.response) {
+    if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && !rejectedCompletion) {
       stage = "artifacts";
-      await writeResponse(join(outputDir, "response.md"), `${completion.response}\n`);
+      await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
+    } else if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && rejectedCompletion && lastAcceptedSnapshot) {
+      stage = "artifacts";
+      await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
     }
     if (completion.status !== "confirmed") {
       result.status = "incomplete";
       result.failure_scope = "review";
       result.failure_stage = "completion";
-      result.failure_reason = completion.failureReason || "Review completion was not confirmed";
+      result.failure_reason = appendFailureReason(result.failure_reason, completion.failureReason || "Review completion was not confirmed");
+    } else if (!hasRevisionEvidence(completionSnapshot.response, options)) {
+      result.status = "incomplete";
+      result.failure_scope = "review";
+      result.failure_stage = "completion";
+      result.failure_reason = appendFailureReason(result.failure_reason, "Review response completed without citing the requested revision or file marker");
     }
   } catch (error) {
     const transactionFailureReason = errorMessage(error);
@@ -950,7 +1230,17 @@ export async function runReviewTransaction(context, options) {
       page = error.reviewPage;
       reviewBaseline = error.reviewBaseline;
     }
-    if (page) {
+    if (error?.interruptionSnapshot) {
+      const interruptionSnapshot = error.interruptionSnapshot;
+      const interruptionConversationId = extractConversationIdentity(interruptionSnapshot.currentUrl || "");
+      if (interruptionConversationId && interruptionSnapshot.checkpointAccepted !== false) {
+        result.conversation_url = interruptionSnapshot.currentUrl;
+        result.conversation_id = interruptionConversationId;
+      }
+      await persistSnapshot(interruptionSnapshot);
+    }
+    const pageOpen = page && !isPageClosed(page);
+    if (pageOpen) {
       const baseline = error.reviewBaseline || reviewBaseline;
       let currentUrl = null;
       try {
@@ -958,9 +1248,16 @@ export async function runReviewTransaction(context, options) {
       } catch {
         currentUrl = null;
       }
-      result.conversation_url = baseline?.conversationUrl || currentUrl;
-      result.conversation_id = baseline?.conversationId || null;
-      if (dispatchState !== "not_dispatched" && baseline && result.completion !== "confirmed") {
+      const currentConversationId = extractConversationIdentity(currentUrl || "");
+      recordVisibleConversation(result, { currentUrl, conversationId: currentConversationId });
+      if (!options.existingConversationUrl) {
+        result.conversation_url ||= baseline?.conversationUrl || null;
+        result.conversation_id ||= baseline?.conversationId || null;
+      }
+      if (error.code !== "REVIEW_INTERRUPTED"
+        && dispatchState !== "not_dispatched"
+        && baseline
+        && result.completion !== "confirmed") {
         try {
           const timeoutMs = dispatchState === "possibly_dispatched" && result.submission !== "acknowledged"
             ? AMBIGUOUS_DISPATCH_TIMEOUT_MS
@@ -970,36 +1267,62 @@ export async function runReviewTransaction(context, options) {
             timeoutMs,
             initialTimeoutMs: timeoutMs,
             completionTimeoutMs: COMPLETION_TIMEOUT_MS,
+            onSnapshot: persistSnapshot,
+            acceptSnapshot: (snapshot) => hasRevisionEvidence(snapshot.assistantText, options),
+            signal: options.abortSignal,
           });
           result.completion = completion.status;
-          result.conversation_url = completion.currentUrl || result.conversation_url;
-          result.conversation_id = completion.conversationId || result.conversation_id;
-          result.assistant_message_id = completion.assistantMessageId || null;
-          result.assistant_turn_index = completion.assistantTurnIndex ?? null;
-          if (completion.response && outputDir) {
-            await writeResponse(join(outputDir, "response.md"), `${completion.response}\n`);
+           const rejectedCompletion = completion.checkpointAccepted === false
+             || (lastAcceptedSnapshot && completion.conversationId && completion.conversationId !== lastAcceptedSnapshot.conversationId);
+            const completionSnapshot = rejectedCompletion
+              ? lastAcceptedSnapshot
+                ? { ...completion, ...lastAcceptedSnapshot, response: lastAcceptedSnapshot.assistantText || null }
+                : null
+              : completion;
+            if (completionSnapshot) {
+              result.conversation_url = completionSnapshot.currentUrl || result.conversation_url;
+              result.conversation_id = completionSnapshot.conversationId || result.conversation_id;
+              if (completionSnapshot.responseTurnObserved !== false) {
+                result.assistant_message_id = completionSnapshot.assistantMessageId || null;
+                result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? null;
+              }
+            }
+            if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && outputDir) {
+             await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
           }
-          if (completion.status === "confirmed" && stage === "submission") {
-            result.submission = "acknowledged";
-            result.dispatch_state = "acknowledged";
+           if (completion.status === "confirmed" && hasRevisionEvidence(completionSnapshot.response, options)) {
+            if (!options.existingConversationUrl) {
+              result.submission = "acknowledged";
+              result.dispatch_state = "acknowledged";
+            }
             result.status = "completed";
             result.failure_scope = null;
             result.failure_stage = null;
             result.failure_reason = null;
+           } else if (completion.status === "confirmed" && !hasRevisionEvidence(completionSnapshot.response, options)) {
+            result.status = "incomplete";
+            result.failure_scope = "review";
+            result.failure_stage = "completion";
+            result.failure_reason = "Review response completed without citing the requested revision or file marker";
           }
         } catch (preservationError) {
-          result.failure_reason = appendFailureReason(transactionFailureReason, `evidence preservation failed: ${errorMessage(preservationError)}`);
+          result.failure_reason = appendFailureReason(
+            result.failure_reason || transactionFailureReason,
+            `evidence preservation failed: ${errorMessage(preservationError)}`,
+          );
         }
       }
     }
-    if (page && !result.visible_evidence) {
+    if (pageOpen && !result.visible_evidence) {
       result.visible_evidence = await captureVisibleEvidence(page).catch(() => null);
     }
     if (result.status !== "completed") {
       result.status = stage === "artifacts" || stage === "selection" ? "blocked" : "incomplete";
     }
     if (result.status !== "completed") {
-      result.failure_scope = await classifyFailureScope(stage, error, context);
+      result.failure_scope = options.reviewPage && isPageClosed(page)
+        ? "shared_context"
+        : await classifyFailureScope(stage, error, context);
       result.failure_stage = stage;
       result.failure_reason ||= transactionFailureReason;
       if (stage === "submission" && result.submission !== "acknowledged" && dispatchState !== "not_dispatched") {
@@ -1017,16 +1340,14 @@ export async function runReviewTransaction(context, options) {
         if (result.failure_stage !== "artifacts") {
           result.status = "blocked";
           result.failure_stage = "artifacts";
-          result.failure_reason = artifactReason;
-        } else {
-          result.failure_reason = `${result.failure_reason}; result write failed: ${artifactReason}`;
         }
+        result.failure_reason = appendFailureReason(result.failure_reason, `result write failed: ${artifactReason}`);
       }
     }
 
     try {
       if (page) {
-        await closePage(page);
+        if (!options.reviewPage) await closePage(page);
         result.cleanup_status = "completed";
         if (result.completion === "confirmed" && !result.failure_stage) result.status = "completed";
       }
@@ -1055,7 +1376,7 @@ export async function runReviewTransaction(context, options) {
   };
 }
 
-export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
+export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, abortSignal, runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
   const results = [];
   let cleanupError;
   let requestedCount = reviews?.length || 0;
@@ -1073,6 +1394,8 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         ...review,
         reviewIndex: review.reviewIndex ?? index,
         outputDir,
+        reviewPage: attached.reviewPage,
+        abortSignal,
       });
       results.push(result);
       const dispatchMayHaveStarted = result.dispatch_state == null
@@ -1205,6 +1528,7 @@ export async function main(argv, dependencies = {}) {
       prompt,
       promptFile: options.promptFile,
       ...provenance,
+      existingConversationUrl: options.existingConversationUrl,
     }];
   }
   if (!options.batchFile && !reviews[0].prompt.trim()) usageError("Prompt file must not be empty");
@@ -1233,6 +1557,7 @@ export async function main(argv, dependencies = {}) {
   let attached;
   let removeTerminationCleanup = () => {};
   let terminationCode = null;
+  const reviewAbortController = new AbortController();
 
   try {
     try {
@@ -1251,7 +1576,7 @@ export async function main(argv, dependencies = {}) {
       throw error;
     }
     attached = await openContextForReview(contextOptions);
-    removeTerminationCleanup = installCleanup(attached, closeAttachedContext);
+    removeTerminationCleanup = installCleanup(attached, closeAttachedContext, () => reviewAbortController.abort());
     if (options.batchFile) {
       result = summarizeBatchResults(await runBatch({
         attached,
@@ -1259,6 +1584,7 @@ export async function main(argv, dependencies = {}) {
         reviews,
         projectKey: contextOptions.projectKey,
         repository: contextOptions.repository,
+        abortSignal: reviewAbortController.signal,
         closeContextFn: removeTerminationCleanup.closeOnce,
       }));
       try {
@@ -1283,8 +1609,11 @@ export async function main(argv, dependencies = {}) {
         repository: reviews[0].repository,
         commitSha: reviews[0].commitSha,
         reviewUrls: reviews[0].reviewUrls,
+        existingConversationUrl: reviews[0].existingConversationUrl,
+        reviewPage: attached.reviewPage,
         runId: reviews[0].runId,
         runOutputDir: reviews[0].runOutputDir,
+        abortSignal: reviewAbortController.signal,
       });
     }
   } catch (error) {
