@@ -181,7 +181,7 @@ assert.equal(evaluateReviewCompletion({{
   generating: false,
   interrupted: false,
   responseActionsReady: true,
-  stableSampleCount: 0,
+  stableSampleCount: 1,
   submittedTurnObserved: true,
 }}), true);
 '''

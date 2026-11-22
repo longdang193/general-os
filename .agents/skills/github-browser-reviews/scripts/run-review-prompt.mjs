@@ -404,7 +404,7 @@ export function evaluateReviewCompletion({
     && Boolean(assistantMessageId)
     && assistantTurnCount > baselineAssistantTurnCount
     && Boolean(assistantText.trim())
-    && (stableSampleCount >= 2 || responseActionsReady)
+    && (stableSampleCount >= 2 || (responseActionsReady && stableSampleCount >= 1))
     && submittedTurnObserved;
 }
 
@@ -635,7 +635,9 @@ export async function waitForReviewCompletion(page, {
     const sameMessage = !snapshot.assistantMessageId
       || !previousMessageId
       || snapshot.assistantMessageId === previousMessageId;
-    if (snapshot.assistantText === previousText && sameMessage && snapshot.assistantText) {
+    if (snapshot.assistantText === previousText
+      && (sameMessage || snapshot.responseActionsReady)
+      && snapshot.assistantText) {
       stableSampleCount += 1;
     } else {
       stableSampleCount = 0;
@@ -718,7 +720,9 @@ export async function waitForExistingReviewCompletion(page, {
     const sameMessage = !snapshot.assistantMessageId
       || !previousMessageId
       || snapshot.assistantMessageId === previousMessageId;
-    if (snapshot.assistantText === previousText && sameMessage && snapshot.assistantText) {
+    if (snapshot.assistantText === previousText
+      && (sameMessage || snapshot.responseActionsReady)
+      && snapshot.assistantText) {
       stableSampleCount += 1;
     } else {
       stableSampleCount = 0;
