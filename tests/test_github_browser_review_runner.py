@@ -2159,6 +2159,67 @@ await rm(outputDir, {{ recursive: true, force: true }});
     )
 
 
+def test_read_only_stale_response_cleanup_failure_is_recorded():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdir, writeFile }} from "node:fs/promises";
+import {{ mkdtemp, rm }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const outputDir = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "review-read-only-cleanup-failure-"));
+const responseDir = join(outputDir, "response.md");
+await mkdir(responseDir);
+await writeFile(join(responseDir, "existing.txt"), "old response");
+const page = {{ close: async () => {{}} }};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: outputDir,
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  existingConversationUrl: "https://chatgpt.com/c/existing-review",
+  dependencies: {{
+    runReviewPromptInNewTab: async (_context, options) => {{
+      await options.onSnapshot({{
+        checkpointAccepted: false,
+        responseTurnObserved: false,
+        currentUrl: "https://chatgpt.com/c/existing-review",
+        conversationId: "existing-review",
+        assistantText: "Old response from before the pending request",
+      }});
+      return {{
+        page,
+        readOnlyVerification: true,
+        submission: "not_attempted",
+        dispatchState: "not_dispatched",
+        currentUrl: "https://chatgpt.com/c/existing-review",
+        conversationId: "existing-review",
+        completion: {{
+          status: "incomplete",
+          checkpointAccepted: false,
+          responseTurnObserved: false,
+          currentUrl: "https://chatgpt.com/c/existing-review",
+          conversationId: "existing-review",
+          response: "Old response from before the pending request",
+          failureReason: "bounded existing conversation verification timeout",
+        }},
+      }};
+    }},
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.match(result.stale_response_cleanup_error, /EISDIR|ENOTEMPTY|EPERM|EBUSY/i);
+await rm(outputDir, {{ recursive: true, force: true }});
+''',
+    )
+
+
 def test_read_only_interruption_is_classified_as_completion_failure():
     run_node_assertion(
         f'''

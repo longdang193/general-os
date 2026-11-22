@@ -359,6 +359,7 @@ export function createResult(options) {
     response_path: "response.md",
     cleanup_status: "not_started",
     cleanup_warning: null,
+    stale_response_cleanup_error: null,
     failure_scope: null,
     failure_stage: null,
     failure_reason: null,
@@ -1073,7 +1074,12 @@ export async function runReviewTransaction(context, options) {
         lastAcceptedSnapshot = null;
         result.assistant_message_id = null;
         result.assistant_turn_index = null;
-        await rm(join(outputDir, "response.md"), { force: true }).catch(() => {});
+        try {
+          await rm(join(outputDir, "response.md"), { force: true });
+        } catch (error) {
+          result.stale_response_cleanup_error = errorMessage(error);
+          result.failure_reason = appendFailureReason(result.failure_reason, `stale response cleanup failed: ${errorMessage(error)}`);
+        }
       }
       await persist().catch((error) => {
         result.failure_reason = appendFailureReason(result.failure_reason, `result checkpoint failed: ${errorMessage(error)}`);
