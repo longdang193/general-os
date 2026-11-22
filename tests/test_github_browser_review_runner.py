@@ -70,6 +70,69 @@ assert.equal(evaluateReviewCompletion({{
     )
 
 
+def test_stable_text_fallback_requires_composer_readiness_without_terminal_marker():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ evaluateReviewCompletion }} from {RUNNER.as_uri()!r};
+
+assert.equal(evaluateReviewCompletion({{
+  assistantMessageId: "assistant-new",
+  assistantText: "Medium — partial review text.",
+  assistantTurnCount: 1,
+  baselineAssistantTurnCount: 0,
+  composerReady: false,
+  conversationId: "review",
+  expectedConversationId: "review",
+  generating: false,
+  interrupted: false,
+  responseActionsReady: false,
+  stableSampleCount: 2,
+  submittedTurnObserved: true,
+  allowStableTextFallback: true,
+}}), false);
+'''
+    )
+
+
+def test_checkpoint_does_not_persist_old_assistant_text_when_only_user_turn_is_visible():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => 0,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => selector.includes("assistant") || selector.includes("response-body")
+        ? callback([{{ innerText: "Older response", getAttribute: (name) => name === "data-message-id" ? "assistant-old" : null }}], includeText)
+        : selector.includes("user")
+          ? callback([{{ innerText: "Review the pinned change.", getAttribute: (name) => name === "data-message-id" ? "submitted-user" : null }}], includeText)
+          : callback([], includeText),
+    }};
+  }},
+  getByRole() {{ return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => false }}; }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+let checkpoints = 0;
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "assistant-old", assistantTurnCount: 1, conversationId: "review", submittedPrompt: "Review the pinned change.", submittedUserTurnId: "submitted-user" }},
+  timeoutMs: 0,
+  onSnapshot: async () => {{ checkpoints += 1; }},
+}});
+assert.equal(result.status, "incomplete");
+assert.equal(checkpoints, 0);
+assert.equal(result.checkpointAccepted, false);
+'''
+    )
+
+
 def test_completion_waits_for_accepted_review_evidence():
     run_node_assertion(
         f'''
@@ -138,6 +201,7 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nI w
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSeverity: High if the suspected issue is confirmed; I will inspect it next.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nConfidence: High", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nRisk: Low", provenance), false);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHigh — confidence in the review plan.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe provisional gate was too strict.", provenance), true);
 '''
     )
@@ -1105,6 +1169,32 @@ const chromium = {{ launchPersistentContext: async () => context }};
 await assert.rejects(openContext(chromium, {{ userDataDir: profile, projectKey: "owner-repo", repository: "owner/repo" }}), /Could not launch/);
 assert.equal(closeCount, 1);
 assert.equal(existsSync(lockPath), false);
+'''
+    )
+
+
+def test_launch_failure_keeps_lease_when_owned_chrome_exit_is_unconfirmed():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ existsSync }} from "node:fs";
+import {{ mkdtemp }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ openContext }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "github-review-lease-"));
+const profile = join(root, "github-review", "owner-repo");
+const chromeProcess = {{ exitCode: null, signalCode: null, kill: () => {{}} }};
+const launchError = new Error("CDP startup failed");
+launchError.chromeProcess = chromeProcess;
+const chromium = {{}};
+await assert.rejects(openContext(chromium, {{
+  launchCdp: true,
+  userDataDir: profile,
+  projectKey: "owner-repo",
+  repository: "owner/repo",
+}}, {{ launchDedicatedChrome: async () => {{ throw launchError; }} }}), /CDP startup failed/);
+assert.equal(existsSync(`${{profile}}.codex-review-profile.lock`), true);
 '''
     )
 

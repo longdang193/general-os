@@ -405,7 +405,7 @@ export function evaluateReviewCompletion({
     && assistantTurnCount > baselineAssistantTurnCount
     && Boolean(assistantText.trim())
     && (responseActionsReady && stableSampleCount >= 1
-      || allowStableTextFallback && stableSampleCount >= 2)
+      || allowStableTextFallback && composerReady && stableSampleCount >= 2)
     && submittedTurnObserved;
 }
 
@@ -618,17 +618,16 @@ export async function waitForReviewCompletion(page, {
         : snapshot.assistantTurnCount;
     }
     if (!expectedConversationId && snapshot.conversationId) expectedConversationId = snapshot.conversationId;
-    if (onSnapshot && submittedTurnObserved) await onSnapshot({ ...snapshot, checkpointAccepted: true });
     generationObserved ||= snapshot.generating;
-    const responseEvidenceObserved = snapshot.generating
-      || snapshot.responseActionsReady
-      || snapshot.assistantTurnCount > baselineAssistantTurnCount
-      || (conversationChanged && (handoffResponseProgressed
-        || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId)));
     const responseTurnObserved = snapshot.generating
       || snapshot.assistantTurnCount > baselineAssistantTurnCount
       || (conversationChanged && (handoffResponseProgressed
         || Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId)));
+    const responseEvidenceObserved = responseTurnObserved
+      || snapshot.responseActionsReady
+    if (onSnapshot && submittedTurnObserved && responseTurnObserved) {
+      await onSnapshot({ ...snapshot, checkpointAccepted: true });
+    }
     if (!responseConversationId && responseTurnObserved && snapshot.conversationId && submittedTurnObserved) {
       responseConversationId = snapshot.conversationId;
       expectedConversationId = responseConversationId;
@@ -675,8 +674,12 @@ export async function waitForReviewCompletion(page, {
   const finalSubmittedTurnObserved = (submittedTurnAnchorObserved
     && (!finalSnapshot.conversationId || finalSnapshot.conversationId === submittedTurnAnchorConversationId))
     || await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
+  const finalResponseTurnObserved = finalSnapshot.generating
+    || finalSnapshot.assistantTurnCount > baselineAssistantTurnCount
+    || Boolean(finalSnapshot.assistantMessageId && finalSnapshot.assistantMessageId !== baseline.assistantMessageId);
   const finalCheckpointAccepted = (!expectedConversationId || finalSnapshot.conversationId === expectedConversationId)
-    && finalSubmittedTurnObserved;
+    && finalSubmittedTurnObserved
+    && finalResponseTurnObserved;
   if (onSnapshot && finalCheckpointAccepted) await onSnapshot({ ...finalSnapshot, checkpointAccepted: true });
   return {
     ...finalSnapshot,

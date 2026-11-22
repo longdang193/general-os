@@ -224,7 +224,8 @@ export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   const provisionalLanguage = /\b(?:i|we)\s+(?:will|'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:if|when|once|until)\b[^.\n]{0,120}\b(?:confirm(?:ed)?|inspect|review|check|verify|findings?|severity|report)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet)\b/i;
   const severityPattern = /(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\b)\s*[-:—;]\s*\S|^\s*(?:(?:[-*]|\d+[.)])\s+)?(?:critical|high|medium|low)\b(?=\s*(?:[-:—]|$)))/i;
   const conclusiveSeverity = response.split(/\r?\n/).some((line) => severityPattern.test(line)
-    && !/\b(?:if|when|once|until|will|'ll|pending|tentative|provisional|to be confirmed|not yet)\b/i.test(line));
+    && !/\b(?:if|when|once|until|will|'ll|pending|tentative|provisional|to be confirmed|not yet)\b/i.test(line)
+    && !/\b(?:confidence|review plan|planning|approach|strategy)\b/i.test(line));
   const normalizedResponse = response.toLowerCase();
   let revisionMarkerFound = typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase());
   for (const reviewUrl of reviewUrls || []) {
@@ -724,6 +725,7 @@ export async function launchDedicatedChrome(
     await waitForEndpoint(endpoint);
     return { endpoint, port, process: chromeProcess };
   } catch (error) {
+    error.chromeProcess = chromeProcess;
     try {
       chromeProcess.kill?.();
       await waitForProcessExit(chromeProcess);
@@ -783,16 +785,17 @@ export async function openContext(chromium, options, dependencies = {}) {
       };
     } catch (error) {
       let processExited = error.chromeProcessExited === true;
-      if (launched?.process) {
+      const ownedChromeProcess = launched?.process || error.chromeProcess;
+      if (ownedChromeProcess) {
         try {
-          launched.process.kill?.();
-          await waitForProcessExit(launched.process);
+          ownedChromeProcess.kill?.();
+          await waitForProcessExit(ownedChromeProcess);
           processExited = true;
         } catch (cleanupError) {
           error.cleanupError = cleanupError;
         }
       }
-      if (processExited || !launched) {
+      if (processExited || !ownedChromeProcess) {
         try {
           await releaseProfileLease(profileLease);
         } catch (cleanupError) {
