@@ -138,6 +138,62 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nSev
     )
 
 
+def test_completion_accepts_terminal_response_marker_without_composer_visibility():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ evaluateReviewCompletion }} from {RUNNER.as_uri()!r};
+
+assert.equal(evaluateReviewCompletion({{
+  assistantMessageId: "assistant-new",
+  assistantText: "Reviewed the pinned revision; no findings.",
+  assistantTurnCount: 1,
+  baselineAssistantTurnCount: 0,
+  composerReady: false,
+  conversationId: "review",
+  expectedConversationId: "review",
+  generationObserved: true,
+  generating: false,
+  interrupted: false,
+  responseActionsReady: true,
+  stableSampleCount: 2,
+  submittedTurnObserved: true,
+}}), true);
+'''
+    )
+
+
+def test_existing_conversation_interruption_returns_without_waiting_for_timeout():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/existing",
+  waitForTimeout: async () => {{ throw new Error("should not wait"); }},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => selector.includes("conversation-turn-error") ? 1 : 0,
+      isVisible: async () => selector.includes("conversation-turn-error"),
+      innerText: async () => "Response interrupted",
+      evaluateAll: async (callback) => selector.includes("data-message-author-role=assistant")
+        ? callback([{{ innerText: "Partial response", getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null }}])
+        : callback([]),
+    }};
+  }},
+  getByRole: () => ({{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => false }}),
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+const result = await waitForExistingReviewCompletion(page, {{ conversationUrl: "https://chatgpt.com/c/existing", timeoutMs: 900000 }});
+assert.equal(result.status, "interrupted");
+assert.equal(result.checkpointAccepted, true);
+'''
+    )
+
+
 def test_preflight_reuses_launch_owned_review_page_without_opening_second_tab():
     run_node_assertion(
         f'''
@@ -190,14 +246,13 @@ await closeContext(attached);
     )
 
 
-def test_attached_cdp_context_reuses_existing_review_page():
+def test_attached_cdp_context_does_not_adopt_existing_pages():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
 import {{ openContext }} from {CLI_RUNNER.as_uri()!r};
 
-const page = {{}};
-const context = {{ pages: () => [page] }};
+const context = {{ pages: () => [{{}}, {{}}] }};
 const browser = {{ contexts: () => [context] }};
 const chromium = {{ connectOverCDP: async () => browser }};
 const attached = await openContext(chromium, {{
@@ -205,7 +260,7 @@ const attached = await openContext(chromium, {{
   contextIndex: 0,
   contextIndexProvided: true,
 }});
-assert.equal(attached.reviewPage, page);
+assert.equal(attached.reviewPage, undefined);
 '''
     )
 
@@ -544,6 +599,7 @@ function pageFor(snapshots) {{
 const result = await waitForReviewCompletion(pageFor([
   {{ url: "https://chatgpt.com/c/local-chatgpt:abc", assistant: ["Bootstrap"] }},
   {{ url: "https://chatgpt.com/c/real-route", assistant: ["Partial response"] }},
+  {{ url: "https://chatgpt.com/c/real-route", assistant: ["Reviewed 0123456789abcdef0123456789abcdef01234567; no findings."] }},
   {{ url: "https://chatgpt.com/c/real-route", assistant: ["Reviewed 0123456789abcdef0123456789abcdef01234567; no findings."] }},
   {{ url: "https://chatgpt.com/c/real-route", assistant: ["Reviewed 0123456789abcdef0123456789abcdef01234567; no findings."] }},
 ]), {{

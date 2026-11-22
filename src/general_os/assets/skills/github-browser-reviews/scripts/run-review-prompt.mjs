@@ -397,7 +397,7 @@ export function evaluateReviewCompletion({
   submittedTurnObserved = true,
 }) {
   return !generating
-    && composerReady
+    && (composerReady || responseActionsReady)
     && !interrupted
     && Boolean(conversationId)
     && (!expectedConversationId || conversationId === expectedConversationId)
@@ -501,7 +501,8 @@ export async function waitForReviewCompletion(page, {
   let expectedConversationId = baseline.conversationId || null;
   let responseConversationId = null;
   let submittedUserTurnId = baseline.submittedUserTurnId || null;
-  let submittedTurnAnchorObserved = Boolean(submittedUserTurnId);
+  let submittedTurnAnchorObserved = false;
+  let submittedTurnAnchorConversationId = null;
   let conversationTransitionDeadline = null;
   let handoffConversationId = null;
   let handoffAssistantText = null;
@@ -548,9 +549,13 @@ export async function waitForReviewCompletion(page, {
     if (!submittedUserTurnId && baseline.submittedPrompt) {
       submittedUserTurnId = await readSubmittedUserTurnId(page, baseline.submittedPrompt, { timeoutMs: 0 });
     }
-    let submittedTurnObserved = submittedTurnAnchorObserved
+    let submittedTurnObserved = (submittedTurnAnchorObserved
+      && (!snapshot.conversationId || snapshot.conversationId === submittedTurnAnchorConversationId))
       || await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
-    submittedTurnAnchorObserved ||= submittedTurnObserved;
+    if (submittedTurnObserved) {
+      submittedTurnAnchorObserved = true;
+      submittedTurnAnchorConversationId = snapshot.conversationId || submittedTurnAnchorConversationId;
+    }
     const acknowledgedSubmissionAssistantTurn = submissionAcknowledged
       && baselineAssistantTurnCount === 0
       && submissionConversationId
@@ -579,6 +584,7 @@ export async function waitForReviewCompletion(page, {
       if (transitionFreshnessObserved) {
         submittedTurnObserved = true;
         submittedTurnAnchorObserved = true;
+        submittedTurnAnchorConversationId = snapshot.conversationId;
       }
       if (!newConversationAnchorObserved) {
         if (submissionAcknowledged && baselineAssistantTurnCount === 0) {
@@ -659,7 +665,8 @@ export async function waitForReviewCompletion(page, {
   }
 
   const finalSnapshot = await readCompletionSnapshot(page, { includeText: true });
-  const finalSubmittedTurnObserved = submittedTurnAnchorObserved
+  const finalSubmittedTurnObserved = (submittedTurnAnchorObserved
+    && (!finalSnapshot.conversationId || finalSnapshot.conversationId === submittedTurnAnchorConversationId))
     || await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
   const finalCheckpointAccepted = (!expectedConversationId || finalSnapshot.conversationId === expectedConversationId)
     && finalSubmittedTurnObserved;
@@ -695,6 +702,16 @@ export async function waitForExistingReviewCompletion(page, {
         status: "incomplete",
         checkpointAccepted: false,
         failureReason: "existing conversation identity changed during verification",
+      };
+    }
+    if (snapshot.interrupted) {
+      if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: true });
+      return {
+        ...snapshot,
+        response: snapshot.assistantText,
+        status: "interrupted",
+        checkpointAccepted: true,
+        failureReason: "visible response interruption",
       };
     }
     if (onSnapshot) await onSnapshot(snapshot);

@@ -334,6 +334,10 @@ async function bindProfileIdentity(profilePath, repository, projectKey) {
 export function createResult(options) {
   const prompt = typeof options.prompt === "string" ? options.prompt : "";
   const promptHash = prompt ? createHash("sha256").update(prompt, "utf8").digest("hex") : null;
+  const existingConversationUrl = options.existingConversationUrl || null;
+  const existingConversationId = existingConversationUrl
+    ? decodeURIComponent(new URL(existingConversationUrl).pathname.replace(/^\/c\//, ""))
+    : null;
   return {
     status: "running",
     run_id: options.runId || null,
@@ -346,8 +350,8 @@ export function createResult(options) {
     submission: "not_started",
     dispatch_state: "not_dispatched",
     completion: "not_started",
-    conversation_url: null,
-    conversation_id: null,
+    conversation_url: existingConversationUrl,
+    conversation_id: existingConversationId,
     assistant_message_id: null,
     assistant_turn_index: null,
     response_path: "response.md",
@@ -749,7 +753,7 @@ async function connectToCdpContext(chromium, endpoint, options) {
 export async function openContext(chromium, options, dependencies = {}) {
   if (options.cdpEndpoint) {
     const { browser, context } = await connectToCdpContext(chromium, options.cdpEndpoint, options);
-    return { browser, context, ownsContext: false, reviewPage: await findBootstrapReviewPage(context) };
+    return { browser, context, ownsContext: false };
   }
 
   const derivedProjectKey = deriveProjectKey(options.repository);
@@ -788,7 +792,7 @@ export async function openContext(chromium, options, dependencies = {}) {
           error.cleanupError = cleanupError;
         }
       }
-      if (processExited) {
+      if (processExited || !launched) {
         try {
           await releaseProfileLease(profileLease);
         } catch (cleanupError) {
@@ -1018,18 +1022,23 @@ export async function runReviewTransaction(context, options) {
     if (!snapshot) return;
     if (snapshot.checkpointAccepted === false) return;
     if (snapshot.checkpointAccepted !== true && result.conversation_id && snapshot.conversationId && snapshot.conversationId !== result.conversation_id) return;
+    const responseText = snapshot.assistantText?.trim();
+    if (!responseText) return;
+    if (responseText !== checkpointResponse && outputDir) {
+      try {
+        await writeResponse(join(outputDir, "response.md"), `${responseText}\n`);
+      } catch (error) {
+        result.failure_reason = appendFailureReason(result.failure_reason, `response checkpoint failed: ${errorMessage(error)}`);
+        return;
+      }
+      checkpointResponse = responseText;
+    }
     lastAcceptedSnapshot = snapshot;
     if (snapshot.currentUrl) result.conversation_url = snapshot.currentUrl;
     if (snapshot.conversationId) result.conversation_id = snapshot.conversationId;
     if (snapshot.assistantMessageId) result.assistant_message_id = snapshot.assistantMessageId;
     if (snapshot.assistantTurnCount !== undefined && snapshot.assistantTurnCount !== null) {
       result.assistant_turn_index = Math.max(0, snapshot.assistantTurnCount - 1);
-    }
-    if (snapshot.assistantText?.trim() && snapshot.assistantText !== checkpointResponse && outputDir) {
-      checkpointResponse = snapshot.assistantText;
-      await writeResponse(join(outputDir, "response.md"), `${checkpointResponse}\n`).catch((error) => {
-        result.failure_reason = appendFailureReason(result.failure_reason, `response checkpoint failed: ${errorMessage(error)}`);
-      });
     }
     await persist().catch((error) => {
       result.failure_reason = appendFailureReason(result.failure_reason, `result checkpoint failed: ${errorMessage(error)}`);
@@ -1087,8 +1096,10 @@ export async function runReviewTransaction(context, options) {
     result.submission = options.existingConversationUrl ? "not_attempted" : review.submission;
     dispatchState = review.dispatchState || "acknowledged";
     result.dispatch_state = dispatchState;
-    result.conversation_url = review.currentUrl || result.conversation_url;
-    result.conversation_id = review.conversationId || result.conversation_id;
+    if (review.checkpointAccepted !== false) {
+      result.conversation_url = review.currentUrl || result.conversation_url;
+      result.conversation_id = review.conversationId || result.conversation_id;
+    }
     result.completion = "waiting";
     stage = "artifacts";
     await persist();
