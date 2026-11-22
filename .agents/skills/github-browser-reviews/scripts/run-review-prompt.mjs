@@ -565,7 +565,8 @@ export async function waitForReviewCompletion(page, {
       const responseTurnObserved = interruptedSnapshot.generating
         || interruptedSnapshot.assistantTurnCount > baselineAssistantTurnCount
         || Boolean(interruptedSnapshot.assistantMessageId && interruptedSnapshot.assistantMessageId !== baseline.assistantMessageId);
-      const checkpointAccepted = submittedTurnObserved
+      const checkpointAccepted = interruptedSnapshot.routeStable !== false
+        && submittedTurnObserved
         && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId);
       const snapshot = { ...interruptedSnapshot, checkpointAccepted, responseTurnObserved };
       if (onSnapshot) await onSnapshot(snapshot);
@@ -639,6 +640,7 @@ export async function waitForReviewCompletion(page, {
       submittedTurnAnchorObserved = true;
     }
     if (responseConversationId && snapshot.conversationId && snapshot.conversationId !== responseConversationId) {
+      if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: false, responseTurnObserved: false });
       return {
         ...snapshot,
         response: snapshot.assistantText,
@@ -788,7 +790,8 @@ export async function waitForExistingReviewCompletion(page, {
   while (Date.now() <= deadline) {
     if (signal?.aborted) {
       const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
-      const checkpointAccepted = interruptedSnapshot.conversationId === expectedConversationId;
+      const checkpointAccepted = interruptedSnapshot.routeStable !== false
+        && interruptedSnapshot.conversationId === expectedConversationId;
       const snapshot = { ...interruptedSnapshot, checkpointAccepted };
       if (onSnapshot && checkpointAccepted) await onSnapshot(snapshot);
       const error = new Error("Existing conversation verification interrupted by termination signal");

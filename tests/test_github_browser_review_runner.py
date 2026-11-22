@@ -1817,7 +1817,8 @@ const changed = await waitForReviewCompletion(pageFor([
 ]), {{ baseline, timeoutMs: 1000, onSnapshot: async (snapshot) => checkpoints.push(snapshot) }});
 assert.equal(changed.status, "incomplete");
 assert.match(changed.failureReason, /after response evidence was bound/);
-assert.equal(checkpoints.at(-1).conversationId, "route-1");
+assert.equal(checkpoints.at(-1).conversationId, "route-2");
+assert.equal(checkpoints.at(-1).checkpointAccepted, false);
 '''
     )
 
@@ -2471,6 +2472,51 @@ assert.equal(closeCount, 0);
 await cleanup.closeOnce();
 assert.equal(closeCount, 1);
 cleanup();
+''',
+    )
+
+
+def test_signal_interruption_rejects_unstable_checkpoint():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+let urlReads = 0;
+const page = {{
+  url: () => [
+    "https://chatgpt.com/c/submitted",
+    "https://chatgpt.com/c/submitted",
+    "https://chatgpt.com/c/other",
+    "https://chatgpt.com/c/other",
+  ][Math.min(urlReads++, 3)],
+  locator: () => ({{
+    first() {{ return this; }},
+    last() {{ return this; }},
+    nth() {{ return this; }},
+    count: async () => 0,
+    isVisible: async () => false,
+    evaluateAll: async () => [],
+    innerText: async () => "",
+  }}),
+  getByRole: () => ({{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => false }}),
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+const signal = new AbortController();
+signal.abort();
+
+await assert.rejects(
+  waitForReviewCompletion(page, {{
+    baseline: {{ assistantMessageId: null, assistantTurnCount: 0, conversationId: null, submittedPrompt: "" }},
+    signal: signal.signal,
+  }}),
+  (error) => {{
+    assert.equal(error.code, "REVIEW_INTERRUPTED");
+    assert.equal(error.interruptionSnapshot.routeStable, false);
+    assert.equal(error.interruptionSnapshot.checkpointAccepted, false);
+    return true;
+  }},
+);
 ''',
     )
 
