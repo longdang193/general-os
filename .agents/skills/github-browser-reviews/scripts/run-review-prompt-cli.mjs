@@ -28,6 +28,7 @@ const DEFAULT_CONTEXT_INDEX = 0;
 const DEFAULT_CDP_PORT = 9222;
 const CDP_STARTUP_TIMEOUT_MS = 15000;
 const CDP_POLL_INTERVAL_MS = 100;
+const BOOTSTRAP_SETTLE_MS = 250;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const DEFAULT_OUTPUT_DIR = "review-output";
 const PROFILE_LEASE_SUFFIX = ".codex-review-profile.lock";
@@ -873,12 +874,24 @@ export async function openContext(chromium, options, dependencies = {}) {
   }
 }
 
-export async function findBootstrapReviewPage(context, { timeoutMs = 5000, pollIntervalMs = 50 } = {}) {
+export async function findBootstrapReviewPage(
+  context,
+  { timeoutMs = 5000, pollIntervalMs = 50, settleMs = BOOTSTRAP_SETTLE_MS } = {},
+) {
   const deadline = Date.now() + timeoutMs;
   while (true) {
     const pages = context.pages();
-    if (pages.length === 1) return pages[0];
-    if (pages.length > 1) throw new Error(`Ambiguous bootstrap page selection: expected one ChatGPT page, found ${pages.length}`);
+    if (pages.length > 0) {
+      const bootstrapPage = pages[0];
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, settleMs));
+      const settledPages = context.pages();
+      if (settledPages.includes(bootstrapPage)) {
+        for (const extraPage of settledPages) {
+          if (extraPage !== bootstrapPage) await extraPage.close();
+        }
+        return bootstrapPage;
+      }
+    }
     if (Date.now() >= deadline) throw new Error("ChatGPT bootstrap page was not available");
     await new Promise((resolveDelay) => setTimeout(resolveDelay, pollIntervalMs));
   }

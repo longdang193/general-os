@@ -472,6 +472,29 @@ await closeContext(attached);
     )
 
 
+def test_bootstrap_page_closes_restored_profile_pages_after_startup_settles():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ findBootstrapReviewPage }} from {CLI_RUNNER.as_uri()!r};
+
+const bootstrapPage = {{}};
+const restoredPage = {{ closeCount: 0, close: async () => {{ restoredPage.closeCount += 1; }} }};
+let pageReads = 0;
+const context = {{
+  pages: () => {{
+    pageReads += 1;
+    return pageReads < 2 ? [bootstrapPage] : [bootstrapPage, restoredPage];
+  }},
+}};
+
+const result = await findBootstrapReviewPage(context, {{ settleMs: 1, pollIntervalMs: 0 }});
+assert.equal(result, bootstrapPage);
+assert.equal(restoredPage.closeCount, 1);
+''',
+    )
+
+
 def test_attached_cdp_context_does_not_adopt_existing_pages():
     run_node_assertion(
         f'''
@@ -1212,16 +1235,17 @@ assert.equal(responses.length, 0);
     )
 
 
-def test_bootstrap_page_selection_fails_closed_on_zero_or_multiple_pages():
+def test_bootstrap_page_selection_fails_closed_on_zero_pages_and_closes_restored_pages():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
 import {{ findBootstrapReviewPage }} from {CLI_RUNNER.as_uri()!r};
 
 const page = {{}};
+const restoredPage = {{ close: async () => {{}} }};
 assert.equal(await findBootstrapReviewPage({{ pages: () => [page] }}), page);
 await assert.rejects(findBootstrapReviewPage({{ pages: () => [] }}, {{ timeoutMs: 0 }}), /bootstrap page/);
-await assert.rejects(findBootstrapReviewPage({{ pages: () => [page, {{}}] }}), /Ambiguous/);
+assert.equal(await findBootstrapReviewPage({{ pages: () => [page, restoredPage] }}), page);
 '''
     )
 
