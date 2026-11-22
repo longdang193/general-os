@@ -404,7 +404,7 @@ export function evaluateReviewCompletion({
     && Boolean(assistantMessageId)
     && assistantTurnCount > baselineAssistantTurnCount
     && Boolean(assistantText.trim())
-    && stableSampleCount >= 2
+    && (stableSampleCount >= 2 || responseActionsReady)
     && submittedTurnObserved;
 }
 

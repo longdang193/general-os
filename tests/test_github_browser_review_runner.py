@@ -163,6 +163,31 @@ assert.equal(evaluateReviewCompletion({{
     )
 
 
+def test_completion_accepts_terminal_response_marker_before_two_stable_samples():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ evaluateReviewCompletion }} from {RUNNER.as_uri()!r};
+
+assert.equal(evaluateReviewCompletion({{
+  assistantMessageId: "assistant-new",
+  assistantText: "Reviewed the pinned revision; findings follow.",
+  assistantTurnCount: 1,
+  baselineAssistantTurnCount: 0,
+  composerReady: true,
+  conversationId: "review",
+  expectedConversationId: "review",
+  generationObserved: true,
+  generating: false,
+  interrupted: false,
+  responseActionsReady: true,
+  stableSampleCount: 0,
+  submittedTurnObserved: true,
+}}), true);
+'''
+    )
+
+
 def test_existing_conversation_interruption_returns_without_waiting_for_timeout():
     run_node_assertion(
         f'''
