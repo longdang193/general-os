@@ -1114,7 +1114,7 @@ export async function runReviewTransaction(context, options) {
     result.response_path = relative(process.cwd(), join(outputDir, "response.md"));
     await persist();
 
-    stage = "selection";
+    stage = options.existingConversationUrl ? "completion" : "selection";
     const runPromptOptions = {
       effort: options.effort,
       model: options.model,

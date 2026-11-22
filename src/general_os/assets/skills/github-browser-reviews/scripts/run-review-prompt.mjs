@@ -202,7 +202,15 @@ async function closeModelMenu(page) {
 }
 
 export function extractConversationIdentity(url) {
-  const match = url.match(/\/c\/([^/?#]+)/);
+  if (typeof url !== "string") return null;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!(parsed.protocol === "https:" && ["chatgpt.com", "www.chatgpt.com"].includes(parsed.hostname))) return null;
+  const match = parsed.pathname.match(/^\/c\/([^/]+)\/?$/);
   if (!match) return null;
   try {
     return decodeURIComponent(match[1]);
@@ -360,15 +368,16 @@ export async function isPromptVisibleInComposer(composer, prompt) {
 }
 
 async function readCompletionSnapshot(page, { includeText } = {}) {
+  const initialUrl = page.url();
   const stopButton = page.getByRole("button", { name: /^(Stop generating|Stop response)$/i }).first();
   const generating = await stopButton.isVisible();
   const assistantMessage = await readVisibleAssistantMessage(page, {
     includeText: includeText ?? !generating,
   });
+  const assistantUrl = page.url();
   const responseAction = page.getByRole("button", { name: /^(Regenerate response|Rate response|Feedback)$/i }).last();
   const composer = page.getByRole("textbox", { name: "Ask ChatGPT" }).first();
   const currentUrl = page.url();
-  const conversationId = extractConversationIdentity(currentUrl);
   let responseCompleteVisible = false;
   if (typeof page.getByText === "function") {
     try {
@@ -397,14 +406,18 @@ async function readCompletionSnapshot(page, { includeText } = {}) {
   }
   if (!assistantTurnScopeAvailable && !responseActionsReady) responseActionsReady = await responseAction.isVisible() || responseCompleteVisible;
 
+  const interrupted = await readVisibleInterruption(page);
+  const finalUrl = page.url();
+  const routeStable = initialUrl === assistantUrl && assistantUrl === currentUrl && currentUrl === finalUrl;
   return {
-    ...assistantMessage,
-    composerReady: await composer.isVisible() && !generating,
-    conversationId,
-    currentUrl,
-    generating,
-    interrupted: await readVisibleInterruption(page),
-    responseActionsReady,
+    ...(routeStable ? assistantMessage : { assistantMessageId: null, assistantText: "", assistantTurnCount: 0 }),
+    composerReady: routeStable && await composer.isVisible() && !generating,
+    conversationId: routeStable ? extractConversationIdentity(finalUrl) : null,
+    currentUrl: finalUrl,
+    generating: routeStable && generating,
+    interrupted: routeStable && interrupted,
+    responseActionsReady: routeStable && responseActionsReady,
+    routeStable,
   };
 }
 
@@ -583,6 +596,12 @@ export async function waitForReviewCompletion(page, {
     }
 
     snapshot = await readCompletionSnapshot(page);
+    if (snapshot.routeStable === false) {
+      if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: false, responseTurnObserved: false });
+      await page.waitForTimeout(backoffMs);
+      backoffMs = Math.min(backoffMs * 2, COMPLETION_MAX_BACKOFF_MS);
+      continue;
+    }
     const conversationChanged = !responseConversationId
       && expectedConversationId
       && snapshot.conversationId
@@ -732,10 +751,11 @@ export async function waitForReviewCompletion(page, {
   const finalSubmittedTurnObserved = (submittedTurnAnchorObserved
     && (!finalSnapshot.conversationId || finalSnapshot.conversationId === submittedTurnAnchorConversationId))
     || await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
-  const finalResponseTurnObserved = finalSnapshot.generating
+  const finalResponseTurnObserved = finalSnapshot.routeStable !== false && (finalSnapshot.generating
     || finalSnapshot.assistantTurnCount > baselineAssistantTurnCount
-    || Boolean(finalSnapshot.assistantMessageId && finalSnapshot.assistantMessageId !== baseline.assistantMessageId);
-  const finalCheckpointAccepted = (!expectedConversationId || finalSnapshot.conversationId === expectedConversationId)
+    || Boolean(finalSnapshot.assistantMessageId && finalSnapshot.assistantMessageId !== baseline.assistantMessageId));
+  const finalCheckpointAccepted = finalSnapshot.routeStable !== false
+    && (!expectedConversationId || finalSnapshot.conversationId === expectedConversationId)
     && finalSubmittedTurnObserved;
   if (onSnapshot && finalCheckpointAccepted) {
     await onSnapshot({ ...finalSnapshot, checkpointAccepted: true, responseTurnObserved: finalResponseTurnObserved });
@@ -777,6 +797,11 @@ export async function waitForExistingReviewCompletion(page, {
       throw error;
     }
     snapshot = await readCompletionSnapshot(page, { includeText: true });
+    if (snapshot.routeStable === false) {
+      if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: false, responseTurnObserved: false });
+      await page.waitForTimeout(COMPLETION_INITIAL_BACKOFF_MS);
+      continue;
+    }
     if (!snapshot.conversationId) {
       routeTransitionDeadline ||= Date.now() + Math.min(COMPOSER_READINESS_TIMEOUT_MS, timeoutMs);
       if (Date.now() <= routeTransitionDeadline) {

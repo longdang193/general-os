@@ -571,6 +571,89 @@ await assert.rejects(
     )
 
 
+def test_conversation_identity_requires_a_chatgpt_conversation_path():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ extractConversationIdentity }} from {RUNNER.as_uri()!r};
+
+assert.equal(extractConversationIdentity("https://chatgpt.com/c/requested"), "requested");
+for (const url of [
+  "https://chatgpt.com/?next=/c/requested",
+  "https://chatgpt.com/#/c/requested",
+  "https://example.invalid/c/requested",
+]) assert.equal(extractConversationIdentity(url), null);
+''',
+    )
+
+
+def test_route_unstable_snapshot_cannot_confirm_stale_assistant_content():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
+
+let urlReads = 0;
+const page = {{
+  url() {{
+    const sample = Math.floor(urlReads / 4);
+    const phase = sample === 0
+      ? ["https://chatgpt.com/c/existing-review", "https://chatgpt.com/c/existing-review", "https://chatgpt.com/c/other", "https://chatgpt.com/c/other"]
+      : ["https://chatgpt.com/c/existing-review", "https://chatgpt.com/c/existing-review", "https://chatgpt.com/c/existing-review", "https://chatgpt.com/c/existing-review"];
+    return phase[urlReads++ % 4];
+  }},
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    const interruptionSelector = selector.includes("conversation-turn-error")
+      || selector.includes("response-error")
+      || selector.includes("error-message")
+      || selector.includes("role=alert");
+    const locator = {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      nth() {{ return this; }},
+      count: async () => interruptionSelector ? 0 : 1,
+      isVisible: async () => !interruptionSelector,
+      evaluateAll: async (callback, includeText) => callback([{{
+        innerText: includeText && urlReads < 4 ? "stale response" : "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.",
+        getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+      }}], includeText),
+      innerText: async () => "",
+      getByRole: () => locator,
+      getByText: () => locator,
+    }};
+    return locator;
+  }},
+  getByRole(role, options) {{
+    const completionAction = typeof options?.name === "string"
+      && /Feedback|Regenerate response|Rate response/.test(options.name);
+    const locator = {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      nth() {{ return this; }},
+      isVisible: async () => role === "textbox" || completionAction,
+      getByRole: () => locator,
+      getByText: () => locator,
+    }};
+    return locator;
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => true }}),
+}};
+
+const snapshots = [];
+const result = await waitForExistingReviewCompletion(page, {{
+  conversationUrl: "https://chatgpt.com/c/existing-review",
+  timeoutMs: 1000,
+  onSnapshot: async (snapshot) => snapshots.push(snapshot),
+}});
+assert.equal(result.status, "confirmed");
+assert.equal(result.conversationId, "existing-review");
+assert.equal(snapshots[0].checkpointAccepted, false);
+assert.notEqual(snapshots[0].assistantText, "stale response");
+''',
+    )
+
+
 def test_submit_prompt_does_not_dispatch_after_termination_signal():
     run_node_assertion(
         f'''
@@ -1887,6 +1970,53 @@ assert.equal(result.submission, "not_attempted");
 assert.equal(result.submission_attempted, false);
 assert.equal(result.conversation_url, "https://chatgpt.com/c/existing-review");
 '''
+    )
+
+
+def test_read_only_interruption_is_classified_as_completion_failure():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const page = {{
+  isClosed: () => false,
+  url: () => "https://chatgpt.com/",
+  close: async () => {{}},
+}};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-read-only-interrupted",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  existingConversationUrl: "https://chatgpt.com/c/existing-review",
+  dependencies: {{
+    runReviewPromptInNewTab: async () => {{
+      const error = new Error("Existing conversation verification interrupted by termination signal");
+      error.code = "REVIEW_INTERRUPTED";
+      error.reviewPage = page;
+      error.reviewBaseline = {{ conversationUrl: "https://chatgpt.com/c/existing-review", conversationId: "existing-review" }};
+      error.interruptionSnapshot = {{
+        currentUrl: "https://chatgpt.com/",
+        conversationId: null,
+        assistantText: "",
+        checkpointAccepted: false,
+      }};
+      throw error;
+    }},
+    writeResult: async () => {{}},
+    writeResponse: async () => {{}},
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.failure_stage, "completion");
+assert.equal(result.submission, "not_started");
+''',
     )
 
 
