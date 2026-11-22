@@ -1339,10 +1339,8 @@ export async function runReviewTransaction(context, options) {
         if (result.failure_stage !== "artifacts") {
           result.status = "blocked";
           result.failure_stage = "artifacts";
-          result.failure_reason = artifactReason;
-        } else {
-          result.failure_reason = `${result.failure_reason}; result write failed: ${artifactReason}`;
         }
+        result.failure_reason = appendFailureReason(result.failure_reason, `result write failed: ${artifactReason}`);
       }
     }
 

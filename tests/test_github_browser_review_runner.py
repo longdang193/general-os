@@ -2315,6 +2315,63 @@ await rm(outputDir, {{ recursive: true, force: true }});
     )
 
 
+def test_final_checkpoint_failure_preserves_prior_failure_reason():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, readFile, rm }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const outputDir = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "review-final-checkpoint-preservation-"));
+let writeCount = 0;
+const page = {{ close: async () => {{}} }};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: outputDir,
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  existingConversationUrl: "https://chatgpt.com/c/review",
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      readOnlyVerification: true,
+      submission: "not_attempted",
+      dispatchState: "not_dispatched",
+      currentUrl: "https://chatgpt.com/c/review",
+      conversationId: "review",
+      completion: {{
+        status: "incomplete",
+        checkpointAccepted: false,
+        responseTurnObserved: false,
+        currentUrl: "https://chatgpt.com/c/review",
+        conversationId: "review",
+        failureReason: "review timeout",
+      }},
+    }}),
+    writeResult: async (directory, value) => {{
+      writeCount += 1;
+      if (writeCount === 3) throw new Error("disk full");
+      await (await import("node:fs/promises")).writeFile(join(directory, "result.json"), JSON.stringify(value));
+    }},
+  }},
+}});
+
+assert.equal(result.status, "blocked");
+assert.match(result.failure_reason, /review timeout/i);
+assert.match(result.failure_reason, /result write failed: disk full/i);
+const persisted = JSON.parse(await readFile(join(outputDir, "result.json"), "utf8"));
+assert.match(persisted.failure_reason, /review timeout/i);
+assert.match(persisted.failure_reason, /result write failed: disk full/i);
+await rm(outputDir, {{ recursive: true, force: true }});
+''',
+    )
+
+
 def test_read_only_interruption_is_classified_as_completion_failure():
     run_node_assertion(
         f'''
