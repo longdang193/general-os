@@ -18,6 +18,7 @@ import {
   COMPLETION_TIMEOUT_MS,
   normalizeExistingConversationUrl,
   waitForReviewCompletion,
+  isResponseContentReady,
 } from "./run-review-prompt.mjs";
 import {
   SUPPORTED_EFFORTS,
@@ -222,12 +223,14 @@ export function validateReviewProvenance({ repository, commitSha, reviewUrls, pr
 
 export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (typeof response !== "string" || !response.trim()) return false;
-  if (/(?:could not|unable to|failed to|cannot|can't)\s+(?:access|review|inspect|load|read)|\b(?:don't|do not)\s+have access\b|\bnot able to access\b|\baccess(?:ing)?(?: the| to)?\s+[^.\n]{0,40}\bfailed\b|\b(?:not|never|not yet|pending)\s+approved\b/i.test(response)) return false;
-  const provisionalLanguage = /\b(?:i|we)\s+(?:will|'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:if|when|once|until)\b[^.\n]{0,120}\b(?:confirm(?:ed)?|inspect|review|check|verify|findings?|severity|report)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|analyzed|analysed|investigated|compared|looked at|confirmed))\b/i;
+  const responseLines = response.split(/\r?\n/);
+  const accessFailureLanguage = responseLines.some((line) => /^\s*(?:[-*]\s*)?(?:(?:i|we)\s+(?:could not|couldn't|cannot|can't|am unable to|are unable to|do not|don't)\s+(?:access|review|inspect|load|read)|(?:could not|unable to|not able to|cannot|can't)\s+(?:access|review|inspect|load|read)|(?:i|we)\s+(?:do not|don't)\s+have access)\b/i.test(line));
+  if (accessFailureLanguage || /\b(?:not|never|not yet|pending)\s+approved\b/i.test(response)) return false;
+  const provisionalLanguage = /\b(?:i|we)(?:\s+(?:will|may|might)|\s*'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|analyzed|analysed|investigated|compared|looked at|confirmed))\b/i;
   const severityPattern = /(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\b)\s*[-:—;]\s*\S|^\s*(?:(?:[-*]|\d+[.)])\s+)?(?:critical|high|medium|low)\b(?=\s*(?:[-:—]|$)))/i;
   const conclusiveSeverity = response.split(/\r?\n/).some((line) => severityPattern.test(line)
-    && !/\b(?:if|when|once|until|will|'ll|pending|tentative|provisional|to be confirmed|not yet)\b/i.test(line)
-    && !/\b(?:confidence|risk\s+(?:level|assessment|score|rating)|review plan|planning|approach|strategy|possible|potential|suspected|may|might|expected|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|analyzed|analysed|investigated|compared|looked at|confirmed))\b/i.test(line));
+    && !/\b(?:will|'ll|pending|tentative|provisional|to be confirmed|not yet)\b/i.test(line)
+    && !/\b(?:confidence|risk\s+(?:level|assessment|score|rating)|review plan|planning|approach|strategy|suspected|expected|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|analyzed|analysed|investigated|compared|looked at|confirmed))\b/i.test(line));
   const normalizedResponse = response.toLowerCase();
   let revisionMarkerFound = typeof commitSha === "string" && commitSha && normalizedResponse.includes(commitSha.toLowerCase());
   for (const reviewUrl of reviewUrls || []) {
@@ -360,6 +363,7 @@ export function createResult(options) {
     cleanup_status: "not_started",
     cleanup_warning: null,
     stale_response_cleanup_error: null,
+    content_evidence_unconfirmed: false,
     failure_scope: null,
     failure_stage: null,
     failure_reason: null,
@@ -687,12 +691,16 @@ export async function waitForChromeCdpEndpoint(
   const activePortPath = join(profilePath, "DevToolsActivePort");
   const deadline = Date.now() + timeoutMs;
   let lastError;
+  let discoveredPort;
+  let attemptedEndpoint;
   while (Date.now() <= deadline) {
     try {
       const [portLine] = (await readFileImpl(activePortPath, "utf8")).trim().split(/\r?\n/);
       const port = Number(portLine);
       if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Invalid Chrome DevTools port: ${portLine}`);
+      discoveredPort = port;
       const endpoint = `http://127.0.0.1:${port}`;
+      attemptedEndpoint = endpoint;
       await waitForEndpoint(endpoint, { timeoutMs, pollIntervalMs });
       return endpoint;
     } catch (error) {
@@ -700,7 +708,10 @@ export async function waitForChromeCdpEndpoint(
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, pollIntervalMs));
   }
-  throw new Error(`Timed out waiting for Chrome DevTools port file ${activePortPath}: ${errorMessage(lastError)}`);
+  throw new Error(
+    `Timed out waiting for Chrome DevTools port file ${activePortPath}`
+    + ` (profile ${profilePath}, port ${discoveredPort ?? "unknown"}, endpoint ${attemptedEndpoint ?? "unknown"}): ${errorMessage(lastError)}`,
+  );
 }
 
 export async function waitForProcessExit(child, { timeoutMs = PROCESS_EXIT_TIMEOUT_MS } = {}) {
@@ -837,7 +848,10 @@ export async function openContext(chromium, options, dependencies = {}) {
   }
   let context;
   try {
-    context = await chromium.launchPersistentContext(profilePath, { headless: false });
+    context = await chromium.launchPersistentContext(profilePath, {
+      headless: false,
+      executablePath: resolveChromeExecutable(),
+    });
     const reviewPage = await findBootstrapReviewPage(context);
     return {
       browser: null,
@@ -1058,11 +1072,19 @@ export async function runReviewTransaction(context, options) {
   let resultPersisted = false;
   let checkpointResponse = null;
   let lastAcceptedSnapshot = null;
+  let completionDeadlineAt = null;
 
   const persist = async () => {
     if (!outputDir) throw new Error("Review output directory was not allocated");
     await persistResult(outputDir, result);
     resultPersisted = true;
+  };
+
+  const persistResponse = async (response) => {
+    const responseText = typeof response === "string" ? response.trim() : "";
+    if (!outputDir || !responseText || (checkpointResponse && responseText.length < checkpointResponse.length)) return;
+    await writeResponse(join(outputDir, "response.md"), `${responseText}\n`);
+    checkpointResponse = responseText;
   };
 
   const persistSnapshot = async (snapshot) => {
@@ -1098,14 +1120,13 @@ export async function runReviewTransaction(context, options) {
     if (snapshot.conversationId) result.conversation_id = snapshot.conversationId;
     const responseTurnObserved = snapshot.responseTurnObserved !== false;
     const responseText = snapshot.assistantText?.trim();
-    if (responseTurnObserved && responseText && responseText !== checkpointResponse && outputDir) {
+    if (responseTurnObserved && responseText && (!checkpointResponse || responseText.length >= checkpointResponse.length)) {
       try {
-        await writeResponse(join(outputDir, "response.md"), `${responseText}\n`);
+        await persistResponse(responseText);
       } catch (error) {
         result.failure_reason = appendFailureReason(result.failure_reason, `response checkpoint failed: ${errorMessage(error)}`);
         return;
       }
-      checkpointResponse = responseText;
     }
     lastAcceptedSnapshot = snapshot;
     if (responseTurnObserved && snapshot.assistantMessageId) result.assistant_message_id = snapshot.assistantMessageId;
@@ -1144,6 +1165,8 @@ export async function runReviewTransaction(context, options) {
         stage = "submission";
         result.submission_attempted = true;
         result.submission = "attempted";
+        result.dispatch_state = "possibly_dispatched";
+        dispatchState = "possibly_dispatched";
         try {
           await persist();
         } catch (error) {
@@ -1167,7 +1190,7 @@ export async function runReviewTransaction(context, options) {
     result.model_verified = review.modelVerified ?? (options.existingConversationUrl ? null : review.model);
     result.effort_verified = review.effortVerified ?? (options.existingConversationUrl ? null : review.effort);
     result.submission = options.existingConversationUrl ? "not_attempted" : review.submission;
-    dispatchState = review.dispatchState || "acknowledged";
+    dispatchState = review.dispatchState || (options.existingConversationUrl ? "not_dispatched" : "acknowledged");
     result.dispatch_state = dispatchState;
     if (review.checkpointAccepted !== false) {
       result.conversation_url = review.currentUrl || result.conversation_url;
@@ -1179,10 +1202,12 @@ export async function runReviewTransaction(context, options) {
     await persist();
 
     stage = "completion";
+    completionDeadlineAt ||= Date.now() + COMPLETION_TIMEOUT_MS;
     const completion = review.completion || await waitForCompletion(page, {
       baseline: review,
+      deadlineAt: completionDeadlineAt,
       onSnapshot: persistSnapshot,
-      acceptSnapshot: (snapshot) => hasRevisionEvidence(snapshot.assistantText, options),
+      acceptSnapshot: (snapshot) => isResponseContentReady(snapshot.assistantText),
       signal: options.abortSignal,
     });
     const rejectedCompletion = completion.checkpointAccepted === false
@@ -1193,6 +1218,7 @@ export async function runReviewTransaction(context, options) {
         : null
       : completion;
     result.completion = completion.status;
+    result.content_evidence_unconfirmed = completion.contentEvidenceUnconfirmed === true;
     if (completionSnapshot) {
       result.conversation_url = completionSnapshot.currentUrl || result.conversation_url || null;
       result.conversation_id = completionSnapshot.conversationId || result.conversation_id || null;
@@ -1202,12 +1228,9 @@ export async function runReviewTransaction(context, options) {
       }
     }
 
-    if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && !rejectedCompletion) {
+    if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false) {
       stage = "artifacts";
-      await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
-    } else if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && rejectedCompletion && lastAcceptedSnapshot) {
-      stage = "artifacts";
-      await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
+      await persistResponse(completionSnapshot.response);
     }
     if (completion.status !== "confirmed") {
       result.status = "incomplete";
@@ -1215,10 +1238,20 @@ export async function runReviewTransaction(context, options) {
       result.failure_stage = "completion";
       result.failure_reason = appendFailureReason(result.failure_reason, completion.failureReason || "Review completion was not confirmed");
     } else if (!hasRevisionEvidence(completionSnapshot.response, options)) {
+      result.content_evidence_unconfirmed = true;
       result.status = "incomplete";
       result.failure_scope = "review";
       result.failure_stage = "completion";
       result.failure_reason = appendFailureReason(result.failure_reason, "Review response completed without citing the requested revision or file marker");
+    } else {
+      if (!options.existingConversationUrl) {
+        result.submission = "acknowledged";
+        result.dispatch_state = "acknowledged";
+      }
+      result.status = "completed";
+      result.failure_scope = null;
+      result.failure_stage = null;
+      result.failure_reason = null;
     }
   } catch (error) {
     const transactionFailureReason = errorMessage(error);
@@ -1259,19 +1292,22 @@ export async function runReviewTransaction(context, options) {
         && baseline
         && result.completion !== "confirmed") {
         try {
+          completionDeadlineAt ||= Date.now() + COMPLETION_TIMEOUT_MS;
           const timeoutMs = dispatchState === "possibly_dispatched" && result.submission !== "acknowledged"
             ? AMBIGUOUS_DISPATCH_TIMEOUT_MS
             : undefined;
           const completion = await waitForCompletion(page, {
             baseline,
+            deadlineAt: completionDeadlineAt,
             timeoutMs,
             initialTimeoutMs: timeoutMs,
             completionTimeoutMs: COMPLETION_TIMEOUT_MS,
             onSnapshot: persistSnapshot,
-            acceptSnapshot: (snapshot) => hasRevisionEvidence(snapshot.assistantText, options),
+            acceptSnapshot: (snapshot) => isResponseContentReady(snapshot.assistantText),
             signal: options.abortSignal,
           });
           result.completion = completion.status;
+           result.content_evidence_unconfirmed = completion.contentEvidenceUnconfirmed === true;
            const rejectedCompletion = completion.checkpointAccepted === false
              || (lastAcceptedSnapshot && completion.conversationId && completion.conversationId !== lastAcceptedSnapshot.conversationId);
             const completionSnapshot = rejectedCompletion
@@ -1288,7 +1324,7 @@ export async function runReviewTransaction(context, options) {
               }
             }
             if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && outputDir) {
-             await writeResponse(join(outputDir, "response.md"), `${completionSnapshot.response}\n`);
+             await persistResponse(completionSnapshot.response);
           }
            if (completion.status === "confirmed" && hasRevisionEvidence(completionSnapshot.response, options)) {
             if (!options.existingConversationUrl) {
@@ -1300,6 +1336,7 @@ export async function runReviewTransaction(context, options) {
             result.failure_stage = null;
             result.failure_reason = null;
            } else if (completion.status === "confirmed" && !hasRevisionEvidence(completionSnapshot.response, options)) {
+             result.content_evidence_unconfirmed = true;
             result.status = "incomplete";
             result.failure_scope = "review";
             result.failure_stage = "completion";
@@ -1315,6 +1352,13 @@ export async function runReviewTransaction(context, options) {
     }
     if (pageOpen && !result.visible_evidence) {
       result.visible_evidence = await captureVisibleEvidence(page).catch(() => null);
+    }
+    if (result.completion === "waiting") {
+      result.completion = "incomplete";
+      result.failure_reason = appendFailureReason(
+        result.failure_reason,
+        "Review completion could not be confirmed after recovery",
+      );
     }
     if (result.status !== "completed") {
       result.status = stage === "artifacts" || stage === "selection" ? "blocked" : "incomplete";
@@ -1401,7 +1445,12 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
       const dispatchMayHaveStarted = result.dispatch_state == null
         ? result.submission_attempted === true || result.submission === "ambiguous"
         : result.dispatch_state !== "not_dispatched";
-      if (result.status !== "completed" && (result.failure_scope !== "review" || dispatchMayHaveStarted)) {
+      const lifecycleSettled = result.completion === "confirmed"
+        && result.cleanup_status === "completed"
+        && result.submission !== "ambiguous"
+        && result.dispatch_state !== "possibly_dispatched"
+        && result.cleanup_warning == null;
+      if (result.status !== "completed" && !lifecycleSettled && (result.failure_scope !== "review" || dispatchMayHaveStarted)) {
         for (let skippedIndex = index + 1; skippedIndex < validatedReviews.length; skippedIndex += 1) {
           const skippedReview = validatedReviews[skippedIndex];
           results.push({
@@ -1642,14 +1691,29 @@ export async function main(argv, dependencies = {}) {
     } else if (options.batchFile) {
       const reason = errorMessage(error);
       const skipped = await Promise.all(reviews.map(async (review, index) => {
+        const resultPath = join(resolve(review.runOutputDir), "result.json");
+        try {
+          const persisted = JSON.parse(await readFile(resultPath, "utf8"));
+          if (persisted?.transaction_started
+            || persisted?.submission_attempted
+            || persisted?.completion !== "not_started"
+            || persisted?.status === "completed") {
+            return {
+              ...persisted,
+              output_dir: persisted.output_dir || relative(process.cwd(), review.runOutputDir),
+            };
+          }
+        } catch {
+          // Synthesize a skipped record when no durable transaction state exists.
+        }
         const skippedResult = {
-        ...createResult({ ...review, reviewIndex: review.reviewIndex ?? index }),
-        status: "skipped",
-        output_dir: relative(process.cwd(), review.runOutputDir),
-        failure_scope: "shared_context",
-        failure_stage: "browser",
-        failure_reason: `Skipped because the shared batch context was unavailable: ${reason}`,
-        visible_evidence: error.visibleEvidence || null,
+          ...createResult({ ...review, reviewIndex: review.reviewIndex ?? index }),
+          status: "skipped",
+          output_dir: relative(process.cwd(), review.runOutputDir),
+          failure_scope: "shared_context",
+          failure_stage: "browser",
+          failure_reason: `Skipped because the shared batch context was unavailable: ${reason}`,
+          visible_evidence: error.visibleEvidence || null,
         };
         await writeResult(review.runOutputDir, skippedResult).catch(() => {});
         return skippedResult;

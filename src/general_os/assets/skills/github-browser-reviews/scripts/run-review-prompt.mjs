@@ -107,7 +107,10 @@ async function openChatGPT(page) {
   }
 
   await assertComposerReadinessCanRetry(page);
-  throw new Error("Authenticated ChatGPT composer was not found");
+  throw new ReviewPromptError(
+    "Could not find the ChatGPT message composer in the current browser session. Verify that ChatGPT is open, fully loaded, and signed in.",
+    "shared_context",
+  );
 }
 
 export async function captureVisibleEvidence(page) {

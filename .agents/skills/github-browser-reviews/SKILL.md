@@ -167,14 +167,15 @@ const { page } = await runReviewPromptInNewTab(context, {
 });
 ```
 
-The runner must either launch the dedicated project profile over TCP CDP or
-receive an already authenticated Playwright `context`. The CLI's
-`--launch-cdp` mode launches Chrome with the repository-bound profile and
-attaches to its endpoint. Use one dedicated project profile such as
+The runner must either launch the dedicated project profile directly with
+visible Chrome, launch it over TCP CDP, or receive an already authenticated
+Playwright `context`. The CLI's `--launch-cdp` mode launches Chrome with the
+repository-bound profile and attaches to its endpoint. The CLI's
+`--user-data-dir` mode launches the installed Chrome executable directly with
+Playwright and does not use TCP CDP. Use one dedicated project profile such as
 `~/.codex/profiles/github-review/<project>` and never the normal Chrome `User
-Data` directory. The CLI's `--user-data-dir` mode remains the owned Playwright
-fallback. The library helpers and `--cdp-endpoint` mode require the caller to
-provide an existing context or endpoint.
+Data` directory. The library helpers and `--cdp-endpoint` mode require the
+caller to provide an existing context or endpoint.
 Use a browser tool's `filename` or `sourcePath` option only when it supports
 file-backed Node execution. If the helper cannot be loaded or the authenticated
 context cannot be created or attached, report `incomplete` or `blocked`; do not
@@ -253,9 +254,16 @@ assistant message, and response text while the page is still available. Only
 identity-accepted snapshots become checkpoints; rejected route/conversation
 snapshots remain diagnostic-only. If the page or context closes during cleanup,
 the final result uses that last durable checkpoint instead of querying the
-closed page. Current visible completion
-markers include `Response complete` and `Feedback`, while stable assistant text
-and composer readiness remain required.
+closed page. `response.md` is the latest accepted response checkpoint, not
+proof that the transaction is complete; `result.json` remains the lifecycle
+authority. Current visible completion markers include `Response complete` and
+`Feedback`. When those controls are unavailable, repeated stable assistant
+text can confirm completion after the new-turn, identity, interruption, and
+submitted-turn checks pass; composer readiness is not required for that
+fallback. If structural completion is observed but revision evidence is
+rejected, the bounded observer carries `content_evidence_unconfirmed: true`
+into the terminal `result.json` and settles the transaction as `incomplete`
+with a specific reason rather than a generic association timeout.
 
 Submitted-review completion evidence stays bound to the same review page,
 requires a new stable assistant turn, and must remain continuous with the
@@ -414,19 +422,37 @@ If the automatic dedicated TCP-CDP attempt encounters a Cloudflare or
 human-verification loop, an HTML challenge page, or a pre-submission
 `Invalid content type: text/html` diagnostic, stop the attempt. Do not retry,
 resubmit, clear cookies or site data, switch profiles, use Incognito, or
-solve/bypass a CAPTCHA. Complete verification and login in the already launched
-dedicated profile, and explicitly confirm `logged in`.
+solve/bypass a CAPTCHA. Use the no-CDP recovery below to complete verification
+in ordinary visible Chrome, then explicitly confirm `logged in` and the normal
+composer before restarting the review.
 
 After that confirmation, verify the exact profile path, repository/profile
 binding, authenticated composer, requested model, and reasoning effort. A
 `logged in` message or visible composer alone is insufficient: the requested
 model and effort must be visibly confirmed, separately, before submission.
-Verify an explicit TCP CDP endpoint as described above. Attach once using
-`--cdp-endpoint` and the verified `--context-index` when required; do not pass
-`--user-data-dir` to the attached run. This is a single pre-submission
-owned-profile-to-CDP transition, not a review retry. If the user cannot confirm
-the composer, model, effort, or CDP endpoint, return `blocked` or `incomplete`
-without submitting.
+
+#### No-CDP recovery
+
+Prefer the direct visible-Chrome path when Cloudflare or Turnstile blocks the
+TCP-CDP attempt. Stop the runner, close any Chrome process using the dedicated
+profile, and launch the same profile without remote-debugging flags:
+
+```powershell
+$projectKey = "<owner-repository>"
+$profile = "$env:USERPROFILE\.codex\profiles\github-review\$projectKey"
+
+& "$env:ProgramFiles\Google\Chrome\Application\chrome.exe" `
+  "--user-data-dir=$profile" `
+  "https://chatgpt.com/"
+```
+
+Complete the human-verification check there and wait until the normal composer
+is visible. Close that Chrome window before restarting the review with the same
+review arguments, using `--user-data-dir $profile --project-key $projectKey` and
+omitting both `--launch-cdp` and `--cdp-endpoint`. This direct mode is the
+non-CDP review path; it must not run concurrently with another process using
+the same profile. If the challenge loops in ordinary Chrome, return `blocked`
+or `incomplete` rather than retrying automatically.
 
 #### Manual CDP recovery
 
@@ -442,22 +468,27 @@ $profile = "$env:USERPROFILE\.codex\profiles\github-review\$projectKey"
 
 & "$env:ProgramFiles\Google\Chrome\Application\chrome.exe" `
   --user-data-dir="$profile" `
-  --remote-debugging-port=9222 `
+  --remote-debugging-port=0 `
   --remote-debugging-address=127.0.0.1 `
   https://chatgpt.com/
 ```
 
-Verify the same endpoint that will be passed to the CLI before attaching:
+Read the profile-owned port and verify the same endpoint that will be passed to
+the CLI before attaching:
 
 ```powershell
-Invoke-RestMethod http://localhost:9222/json/version
-Invoke-RestMethod http://localhost:9222/json/list
+$port = [int](Get-Content "$profile\DevToolsActivePort" | Select-Object -First 1)
+$endpoint = "http://127.0.0.1:$port"
+Invoke-RestMethod "$endpoint/json/version"
+Invoke-RestMethod "$endpoint/json/list"
 ```
 
-Then use `--cdp-endpoint http://localhost:9222` with the normal repository,
-full-SHA, and pinned-URL provenance arguments. This is an operator-owned
-fallback, not a second normal browser lifecycle owner; do not use it for a
-pipe-backed Playwright MCP browser.
+Then use `--cdp-endpoint $endpoint` with the normal repository, full-SHA, and
+pinned-URL provenance arguments. Do not replace the profile-owned endpoint with
+another loopback address based only on a successful CDP response: a fixed-port
+collision can expose an unrelated browser. This is an operator-owned fallback,
+not a second normal browser lifecycle owner; do not use it for a pipe-backed
+Playwright MCP browser.
 
 ### 3. Open the review
 

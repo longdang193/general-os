@@ -848,7 +848,10 @@ export async function openContext(chromium, options, dependencies = {}) {
   }
   let context;
   try {
-    context = await chromium.launchPersistentContext(profilePath, { headless: false });
+    context = await chromium.launchPersistentContext(profilePath, {
+      headless: false,
+      executablePath: resolveChromeExecutable(),
+    });
     const reviewPage = await findBootstrapReviewPage(context);
     return {
       browser: null,

@@ -572,6 +572,40 @@ assert.equal(page.closeCount, 0);
     )
 
 
+def test_missing_composer_reports_availability_without_claiming_authentication_failed():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ preflightAuthenticatedContext }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/",
+  reload: async () => {{}},
+  locator: () => ({{ innerText: async () => "" }}),
+  getByRole: () => ({{
+    first() {{ return this; }},
+    waitFor: async () => {{ throw new Error("composer unavailable"); }},
+    isVisible: async () => false,
+  }}),
+}};
+
+await assert.rejects(
+  () => preflightAuthenticatedContext({{ newPage: async () => page }}, page),
+  (error) => {{
+    assert.equal(error.failureScope, "shared_context");
+    assert.equal(
+      error.message,
+      "Could not find the ChatGPT message composer in the current browser session. Verify that ChatGPT is open, fully loaded, and signed in.",
+    );
+    assert.equal(error.visibleEvidence.composerVisible, false);
+    assert.equal(error.visibleEvidence.loginVisible, false);
+    return true;
+  }},
+);
+'''
+    )
+
+
 def test_owned_profile_context_reuses_bootstrap_page_for_review():
     run_node_assertion(
         f'''
@@ -585,8 +619,13 @@ const root = await mkdtemp(join(tmpdir(), "github-review-profile-"));
 const profile = join(root, "github-review", "owner-repo");
 const page = {{}};
 const context = {{ pages: () => [page], close: async () => {{}} }};
+let launchOptions;
+process.env.CHROME_PATH = "C:/test/chrome.exe";
 const chromium = {{
-  launchPersistentContext: async () => context,
+  launchPersistentContext: async (_profilePath, options) => {{
+    launchOptions = options;
+    return context;
+  }},
 }};
 const attached = await openContext(chromium, {{
   userDataDir: profile,
@@ -594,6 +633,7 @@ const attached = await openContext(chromium, {{
   repository: "owner/repo",
 }});
 assert.equal(attached.reviewPage, page);
+assert.deepEqual(launchOptions, {{ headless: false, executablePath: "C:/test/chrome.exe" }});
 await closeContext(attached);
 '''
     )
