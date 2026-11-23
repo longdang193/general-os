@@ -486,8 +486,8 @@ non-VPN/non-proxy connection, allow JavaScript and cookies, and remove only
 known extensions that interfere with challenge scripts. Do not repeatedly
 reload or submit automated attempts to force a challenge through. These
 operational mitigations reduce session churn but cannot guarantee acceptance.
-Reference: <https://developers.cloudflare.com/turnstile/troubleshooting/> and
-<https://developers.cloudflare.com/turnstile/get-started/testing/>.
+Reference: <https://developers.cloudflare.com/cloudflare-challenges/troubleshooting/challenge-solve-issues/> and
+<https://developers.cloudflare.com/turnstile/troubleshooting/testing/>.
 
 #### Manual CDP recovery
 
