@@ -364,6 +364,7 @@ export function createResult(options) {
     cleanup_warning: null,
     stale_response_cleanup_error: null,
     content_evidence_unconfirmed: false,
+    failure_code: null,
     failure_scope: null,
     failure_stage: null,
     failure_reason: null,
@@ -1258,6 +1259,7 @@ export async function runReviewTransaction(context, options) {
     dispatchState = error.dispatchState
       || (error.submissionAttempted || (stage === "submission" && result.submission_attempted) ? "possibly_dispatched" : dispatchState);
     result.dispatch_state = dispatchState;
+    result.failure_code = error?.code || result.failure_code || null;
     if (error.visibleEvidence) result.visible_evidence = error.visibleEvidence;
     if (error?.reviewPage) {
       page = error.reviewPage;

@@ -1864,6 +1864,81 @@ await assert.rejects(findBootstrapReviewPage({{ pages: () => [page, {{}}] }}), /
     )
 
 
+
+def test_challenge_evidence_stops_before_refresh_and_reports_distinct_code():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ openChatGPT }} from {RUNNER.as_uri()!r};
+
+let reloadCount = 0;
+const composer = {{
+  waitFor: async () => {{ throw new Error("not ready"); }},
+  isVisible: async () => false,
+}};
+const page = {{
+  url: () => "https://chatgpt.com/",
+  title: async () => "Just a moment...",
+  getByRole: () => ({{ first: () => composer }}),
+  locator: (selector) => selector === "body"
+    ? {{ innerText: async () => "" }}
+    : {{ evaluateAll: async () => ["https://challenges.cloudflare.com/turnstile/v0/api.js"] }},
+  reload: async () => {{ reloadCount += 1; }},
+}};
+
+await assert.rejects(
+  openChatGPT(page),
+  (error) => {{
+    assert.equal(error.code, "CHATGPT_CHALLENGE");
+    assert.equal(error.visibleEvidence.challengeDetected, true);
+    assert.deepEqual(error.visibleEvidence.frameSources, ["https://challenges.cloudflare.com/turnstile/v0/api.js"]);
+    return true;
+  }},
+);
+assert.equal(reloadCount, 0);
+'''
+    )
+
+
+def test_challenge_failure_code_is_persisted_without_marking_dispatch():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, readFile, rm, writeFile }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const outputDir = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "review-challenge-result-"));
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: outputDir,
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: "0123456789abcdef0123456789abcdef01234567",
+  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => {{
+      const error = new Error("ChatGPT challenge page blocked the authenticated composer");
+      error.code = "CHATGPT_CHALLENGE";
+      error.visibleEvidence = {{ challengeDetected: true }};
+      throw error;
+    }},
+    writeResult: async (directory, value) => writeFile(join(directory, "result.json"), JSON.stringify(value)),
+  }},
+}});
+
+assert.equal(result.status, "blocked");
+assert.equal(result.failure_code, "CHATGPT_CHALLENGE");
+assert.equal(result.transaction_started, true);
+assert.equal(result.submission_attempted, false);
+const persisted = JSON.parse(await readFile(join(outputDir, "result.json"), "utf8"));
+assert.equal(persisted.failure_code, "CHATGPT_CHALLENGE");
+await rm(outputDir, {{ recursive: true, force: true }});
+'''
+    )
+
 def test_owned_profile_context_closes_before_releasing_lease_on_bootstrap_failure():
     run_node_assertion(
         f'''

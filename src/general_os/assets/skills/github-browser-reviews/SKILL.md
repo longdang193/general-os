@@ -436,15 +436,25 @@ either `.mjs` helper to that VM as a raw file.
 If the automatic dedicated TCP-CDP attempt encounters a Cloudflare or
 human-verification loop, an HTML challenge page, or a pre-submission
 `Invalid content type: text/html` diagnostic, stop the attempt. Do not retry,
-resubmit, clear cookies or site data, switch profiles, use Incognito, or
-solve/bypass a CAPTCHA. Use the no-CDP recovery below to complete verification
-in ordinary visible Chrome, then explicitly confirm `logged in` and the normal
-composer before restarting the review.
+refresh, resubmit, clear cookies or site data, switch profiles, use Incognito,
+or solve/bypass a CAPTCHA. The runner records challenge evidence (including
+page title and challenge iframe URLs) and fails before any refresh or submit
+attempt when that evidence is visible.
 
-After that confirmation, verify the exact profile path, repository/profile
-binding, authenticated composer, requested model, and reasoning effort. A
-`logged in` message or visible composer alone is insufficient: the requested
-model and effort must be visibly confirmed, separately, before submission.
+Use the no-CDP recovery below only as an operator handoff. Completing the
+challenge in ordinary Chrome does not turn that browser into a runner session:
+the CLI's direct `--user-data-dir` mode still launches a Playwright-controlled
+persistent context without TCP CDP, and Cloudflare may assess that automated
+context differently. Manual clearance may carry over through the profile's
+cookies, but it is not guaranteed and is not a bypass. If the challenge returns
+in the runner, report `blocked` or `incomplete`; do not keep retrying.
+
+After manual recovery, explicitly confirm `logged in` and the normal composer,
+then verify the exact profile path, repository/profile binding, requested model,
+and reasoning effort. A `logged in` message or visible composer alone is
+insufficient: the requested model and effort must be visibly confirmed,
+separately, before submission.
+
 #### No-CDP recovery
 
 Prefer the direct visible-Chrome path when Cloudflare or Turnstile blocks the
@@ -463,10 +473,21 @@ $profile = "$env:USERPROFILE\.codex\profiles\github-review\$projectKey"
 Complete the human-verification check there and wait until the normal composer
 is visible. Close that Chrome window before restarting the review with the same
 review arguments, using `--user-data-dir $profile --project-key $projectKey` and
-omitting both `--launch-cdp` and `--cdp-endpoint`. This direct mode is the
-non-CDP review path; it must not run concurrently with another process using
-the same profile. If the challenge loops in ordinary Chrome, return `blocked`
-or `incomplete` rather than retrying automatically.
+omitting both `--launch-cdp` and `--cdp-endpoint`. This is a bounded
+pre-dispatch recovery attempt, not ordinary-Chrome control: the runner must
+still acquire the profile lease and launch its own visible Playwright context,
+and it must not run concurrently with another process using the same profile.
+If the challenge loops in ordinary Chrome or returns in the runner, return
+`blocked` or `incomplete` rather than retrying automatically.
+
+Cloudflare documents that Turnstile and challenge behavior depends on browser,
+network, and client-side signals; keep the dedicated profile on a stable,
+non-VPN/non-proxy connection, allow JavaScript and cookies, and remove only
+known extensions that interfere with challenge scripts. Do not repeatedly
+reload or submit automated attempts to force a challenge through. These
+operational mitigations reduce session churn but cannot guarantee acceptance.
+Reference: <https://developers.cloudflare.com/turnstile/troubleshooting/> and
+<https://developers.cloudflare.com/turnstile/get-started/testing/>.
 
 #### Manual CDP recovery
 

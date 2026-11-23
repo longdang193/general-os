@@ -58,8 +58,9 @@ function throwIfAborted(signal) {
   throw error;
 }
 
-function isChallengeEvidence(evidence) {
-  const content = `${evidence?.currentUrl || ""} ${evidence?.visibleText || ""}`;
+export function isChallengeEvidence(evidence) {
+  const frameSources = Array.isArray(evidence?.frameSources) ? evidence.frameSources.join(" ") : "";
+  const content = `${evidence?.currentUrl || ""} ${evidence?.pageTitle || ""} ${evidence?.visibleText || ""} ${frameSources}`;
   return /(?:cloudflare|challenge-platform|verify you are human|checking your browser|just a moment|human verification)/i.test(content);
 }
 
@@ -80,15 +81,21 @@ async function waitForVisibleComposer(composer) {
 
 async function assertComposerReadinessCanRetry(page) {
   const evidence = await captureVisibleEvidence(page).catch(() => null);
-  if (isChallengeEvidence(evidence)) {
-    throw new ReviewPromptError("ChatGPT challenge page blocked the authenticated composer", "shared_context");
+  if (evidence?.challengeDetected || isChallengeEvidence(evidence)) {
+    const error = new ReviewPromptError("ChatGPT challenge page blocked the authenticated composer", "shared_context");
+    error.code = "CHATGPT_CHALLENGE";
+    error.visibleEvidence = evidence;
+    throw error;
   }
   if (evidence?.loginVisible) {
-    throw new ReviewPromptError("ChatGPT authentication is required for the dedicated profile", "shared_context");
+    const error = new ReviewPromptError("ChatGPT authentication is required for the dedicated profile", "shared_context");
+    error.code = "AUTHENTICATION_REQUIRED";
+    error.visibleEvidence = evidence;
+    throw error;
   }
 }
 
-async function openChatGPT(page) {
+export async function openChatGPT(page) {
   if (!page.url().startsWith("https://chatgpt.com/")) {
     await page.goto(CHATGPT_URL, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
   }
@@ -107,10 +114,13 @@ async function openChatGPT(page) {
   }
 
   await assertComposerReadinessCanRetry(page);
-  throw new ReviewPromptError(
+  const error = new ReviewPromptError(
     "Could not find the ChatGPT message composer in the current browser session. Verify that ChatGPT is open, fully loaded, and signed in.",
     "shared_context",
   );
+  error.code = "COMPOSER_UNAVAILABLE";
+  error.visibleEvidence = await captureVisibleEvidence(page).catch(() => null);
+  throw error;
 }
 
 export async function captureVisibleEvidence(page) {
@@ -130,6 +140,21 @@ export async function captureVisibleEvidence(page) {
   } catch {
     visibleText = "";
   }
+  let pageTitle = "";
+  try {
+    pageTitle = typeof page.title === "function" ? await page.title() : "";
+  } catch {
+    pageTitle = "";
+  }
+  let frameSources = [];
+  try {
+    frameSources = await page.locator("iframe").evaluateAll((elements) => elements
+      .map((element) => element.getAttribute("src") || "")
+      .filter(Boolean)
+      .slice(0, 20));
+  } catch {
+    frameSources = [];
+  }
   let composerVisible = false;
   try {
     composerVisible = await page.getByRole("textbox", { name: "Ask ChatGPT" }).first().isVisible();
@@ -142,12 +167,16 @@ export async function captureVisibleEvidence(page) {
   } catch {
     loginVisible = false;
   }
-  return {
+  const evidence = {
     currentUrl,
+    pageTitle,
     visibleText,
+    frameSources,
     composerVisible,
     loginVisible,
   };
+  evidence.challengeDetected = isChallengeEvidence(evidence);
+  return evidence;
 }
 
 export async function preflightAuthenticatedContext(context, existingPage = null) {
