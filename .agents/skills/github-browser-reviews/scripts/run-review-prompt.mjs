@@ -523,7 +523,7 @@ export function evaluateReviewCompletion({
     && assistantTurnCount > baselineAssistantTurnCount
     && Boolean(assistantText.trim())
     && (responseActionsReady && stableSampleCount >= 1 && (generationObserved || assistantTurnCount > baselineAssistantTurnCount)
-      || allowStableTextFallback && stableSampleCount >= 2)
+      || allowStableTextFallback && composerReady && stableSampleCount >= 2)
     && submittedTurnObserved;
 }
 

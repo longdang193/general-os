@@ -88,17 +88,20 @@ export async function findModelOption(menu, model) {
   for (let index = 0; index < await options.count(); index += 1) {
     const option = options.nth(index);
     const optionText = normalizeText(await option.innerText());
-    if (optionText === expectedLabel) {
-      return option;
-    }
+    const getAttribute = typeof option.getAttribute === "function"
+      ? (name) => option.getAttribute(name)
+      : async () => null;
     const unavailable = /(?:locked|unavailable|usage limit|limit reached|not available)/i.test(optionText)
-      || (await option.getAttribute("aria-disabled")) === "true"
-      || (await option.getAttribute("data-disabled")) === "true";
+      || (await getAttribute("aria-disabled")) === "true"
+      || (await getAttribute("data-disabled")) === "true";
     if (unavailable && optionText.startsWith(expectedLabel)) {
       throw createModelSelectionError(
         `Visible model option is unavailable: ${expectedLabel}`,
         "MODEL_UNAVAILABLE",
       );
+    }
+    if (optionText === expectedLabel) {
+      return option;
     }
   }
 

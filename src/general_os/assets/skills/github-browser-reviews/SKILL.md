@@ -258,9 +258,8 @@ closed page. `response.md` is the latest accepted response checkpoint, not
 proof that the transaction is complete; `result.json` remains the lifecycle
 authority. Current visible completion markers include `Response complete` and
 `Feedback`. When those controls are unavailable, repeated stable assistant
-text can confirm completion after the new-turn, identity, interruption, and
-submitted-turn checks pass; composer readiness is not required for that
-fallback. If structural completion is observed but revision evidence is
+text can confirm completion after the new-turn, identity, interruption,
+submitted-turn, and composer-readiness checks pass. If structural completion is observed but revision evidence is
 rejected, the bounded observer carries `content_evidence_unconfirmed: true`
 into the terminal `result.json` and settles the transaction as `incomplete`
 with a specific reason rather than a generic association timeout.
@@ -378,8 +377,10 @@ The runner validates every entry before opening the browser, reuses one
 composer readiness state is page-local and review-scoped; failure to create a
  page or loss of the shared browser context remains shared-context scoped. If a
  send acknowledgement is ambiguous, preserve the owned page and any visible
- conversation/completion evidence before cleanup. If that evidence confirms a
- new stable response, promote the transaction to the normal acknowledged,
+ conversation/completion evidence before cleanup. A read-only existing-conversation
+ verification that remains incomplete stops the batch: `not_dispatched` means
+ that invocation sent nothing, not that the existing conversation is settled.
+ If that evidence confirms a new stable response, promote the transaction to the normal acknowledged,
  completed state; otherwise mark `submission` as `ambiguous`. Never send the
  prompt again. Batch summaries include requested,
 transaction-started, submission-attempted, acknowledged, completed, failed, and

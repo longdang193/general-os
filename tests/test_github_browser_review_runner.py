@@ -64,11 +64,23 @@ await assert.rejects(
   findModelOption(unavailableMenu, "GPT-6.2"),
   (error) => error.code === "MODEL_UNAVAILABLE",
 );
+
+const disabledExactOption = {{
+  innerText: async () => "GPT-6.2",
+  getAttribute: async (name) => name === "data-disabled" ? "true" : null,
+}};
+const disabledExactMenu = {{
+  locator: () => ({{ count: async () => 1, nth: () => disabledExactOption }}),
+}};
+await assert.rejects(
+  findModelOption(disabledExactMenu, "GPT-6.2"),
+  (error) => error.code === "MODEL_UNAVAILABLE",
+);
 ''',
     )
 
 
-def test_stable_new_assistant_turn_confirms_without_transient_ui_signal():
+def test_stable_text_without_terminal_ui_signal_does_not_confirm():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -80,6 +92,30 @@ assert.equal(evaluateReviewCompletion({{
   assistantTurnCount: 2,
   baselineAssistantTurnCount: 1,
   composerReady: false,
+  conversationId: "conversation-2",
+  expectedConversationId: "conversation-2",
+  generationObserved: false,
+  generating: false,
+  interrupted: false,
+  responseActionsReady: false,
+  stableSampleCount: 2,
+  allowStableTextFallback: true,
+}}), false);
+'''
+    )
+
+def test_stable_text_fallback_requires_composer_readiness():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ evaluateReviewCompletion }} from {RUNNER.as_uri()!r};
+
+assert.equal(evaluateReviewCompletion({{
+  assistantMessageId: "assistant-2",
+  assistantText: "## Review\\n\\nNo findings.",
+  assistantTurnCount: 2,
+  baselineAssistantTurnCount: 1,
+  composerReady: true,
   conversationId: "conversation-2",
   expectedConversationId: "conversation-2",
   generationObserved: false,
@@ -3914,6 +3950,61 @@ const results = await runReviewBatch({{
 assert.equal(calls, 2);
 assert.equal(results[0].status, "blocked");
 assert.equal(results[1].status, "completed");
+'''
+    )
+
+def test_batch_stops_after_incomplete_existing_conversation_verification():
+    run_node_assertion(
+        f'''import assert from "node:assert/strict";
+import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const reviewUrl = `https://github.com/owner/repo/blob/${{sha}}/file.md`;
+const reviews = [
+  {{
+    model: "GPT-5.6-Sol",
+    effort: "High",
+    prompt: `Review ${{reviewUrl}} at ${{sha}}`,
+    repository: "owner/repo",
+    commitSha: sha,
+    reviewUrls: [reviewUrl],
+    existingConversationUrl: "https://chatgpt.com/c/existing-review",
+    runOutputDir: "review-output/run-existing",
+  }},
+  {{
+    model: "GPT-6.2",
+    effort: "High",
+    prompt: `Review ${{reviewUrl}} at ${{sha}}`,
+    repository: "owner/repo",
+    commitSha: sha,
+    reviewUrls: [reviewUrl],
+    runOutputDir: "review-output/run-next",
+  }},
+];
+let calls = 0;
+const results = await runReviewBatch({{
+  attached: {{ context: {{}}, projectKey: "owner-repo", repository: "owner/repo" }},
+  reviews,
+  runTransaction: async () => {{
+    calls += 1;
+    return calls === 1
+      ? {{
+          status: "incomplete",
+          failure_scope: "review",
+          failure_stage: "completion",
+          failure_reason: "bounded existing conversation verification timeout",
+          dispatch_state: "not_dispatched",
+          cleanup_status: "completed",
+          cleanup_warning: null,
+          request_provenance: {{ existing_conversation_url: "https://chatgpt.com/c/existing-review" }},
+        }}
+      : {{ status: "completed" }};
+  }},
+  closeContextFn: async () => {{}},
+}});
+
+assert.equal(calls, 1);
+assert.equal(results[1].status, "skipped");
 '''
     )
 
