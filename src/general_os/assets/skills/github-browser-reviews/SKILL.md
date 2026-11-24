@@ -256,9 +256,9 @@ identity-accepted snapshots become checkpoints; rejected route/conversation
 snapshots remain diagnostic-only. If the page or context closes during cleanup,
 the final result uses that last durable checkpoint instead of querying the
 closed page. `response.partial.md` is checkpoint evidence only; `response.md` is
-written only after a final response is observed. A complete `response.md` does
-not prove that revision evidence was accepted; `result.json` remains the
-lifecycle authority. Current visible completion markers include `Response complete` and
+written after structural final-response observation, even when review-content
+evidence is still unconfirmed. A complete `response.md` does not prove that
+revision evidence was accepted; `result.json` remains the lifecycle authority. Current visible completion markers include `Response complete` and
 `Feedback`. When those controls are unavailable, repeated stable assistant
 text can confirm completion after the new-turn, identity, interruption,
 submitted-turn, and composer-readiness checks pass. If structural completion is observed but revision evidence is
@@ -292,9 +292,10 @@ final result artifact cannot be persisted, the runner reports `incomplete` and
 returns nonzero even when the response itself completed. A technically complete
   response must cite the requested full SHA or a pinned file marker and contain
   a review outcome (for example, a no-findings conclusion or structured
-  findings); planning text alone is recorded as `incomplete`. The controller
-  still owns the final `verified`
-classification. The runner never retries or silently recovers a failed
+  findings). Missing revision evidence records `incomplete` but does not discard
+  a structurally final response from `response.md`; planning-only text remains
+  incomplete until structural completion is observed. The controller still owns
+  the final `verified` classification. The runner never retries or silently recovers a failed
 submission. In a sequential batch, a confirmed response that only lacks
 revision text evidence may proceed to the next model when dispatch was
 acknowledged and cleanup completed without warning; that review remains

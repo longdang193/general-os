@@ -842,12 +842,7 @@ export async function waitForReviewCompletion(page, {
       allowStableTextFallback: true,
     });
     if (completionReady) {
-      // Do not settle on a stable planning checkpoint; keep observing the same turn.
-      if (!(await acceptSnapshot(snapshot))) {
-        await page.waitForTimeout(backoffMs);
-        backoffMs = Math.min(backoffMs * 2, COMPLETION_MAX_BACKOFF_MS);
-        continue;
-      }
+      const contentAccepted = await acceptSnapshot(snapshot);
       return {
         ...snapshot,
         assistantTurnIndex: snapshot.assistantTurnCount - 1,
@@ -855,7 +850,7 @@ export async function waitForReviewCompletion(page, {
         status: "confirmed",
         checkpointAccepted: true,
         responseTurnObserved: true,
-        contentEvidenceUnconfirmed: false,
+        contentEvidenceUnconfirmed: !contentAccepted,
       };
     }
 

@@ -365,6 +365,7 @@ export function createResult(options) {
     response_capture: "none",
     cleanup_status: "not_started",
     cleanup_warning: null,
+    response_cleanup_warning: null,
     stale_response_cleanup_error: null,
     content_evidence_unconfirmed: false,
     failure_code: null,
@@ -1118,7 +1119,13 @@ export async function runReviewTransaction(context, options) {
     await writeResponse(responsePath, `${responseText}\n`);
     checkpointResponse = responseText;
     result.response_capture = authoritative ? "final" : "partial";
-    if (authoritative) await rm(join(outputDir, "response.partial.md"), { force: true });
+    if (authoritative) {
+      try {
+        await rm(join(outputDir, "response.partial.md"), { force: true });
+      } catch (error) {
+        result.response_cleanup_warning = errorMessage(error);
+      }
+    }
   };
 
   const persistSnapshot = async (snapshot) => {
@@ -1266,7 +1273,7 @@ export async function runReviewTransaction(context, options) {
 
     const responseContentReady = completion.status === "confirmed"
       && completionSnapshot?.responseTurnObserved !== false
-      && isResponseContentReady(completionSnapshot?.response);
+      && Boolean(completionSnapshot?.response?.trim());
     if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false) {
       stage = "artifacts";
       await persistResponse(completionSnapshot.response, { authoritative: responseContentReady });
@@ -1370,7 +1377,7 @@ export async function runReviewTransaction(context, options) {
             }
            const responseContentReady = completion.status === "confirmed"
              && completionSnapshot?.responseTurnObserved !== false
-             && isResponseContentReady(completionSnapshot?.response);
+             && Boolean(completionSnapshot?.response?.trim());
            if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && outputDir) {
              await persistResponse(completionSnapshot.response, { authoritative: responseContentReady });
           }
@@ -1507,6 +1514,7 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
       const dispatchMayHaveStarted = result.dispatch_state !== "not_dispatched";
       const mayContinueBeforeDispatch = result.status !== "completed"
         && result.failure_scope === "review"
+        && result.failure_code === "MODEL_UNAVAILABLE"
         && !review.existingConversationUrl
         && !hasClosedContextEvidence(result)
         && !dispatchMayHaveStarted
@@ -1518,7 +1526,9 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         && result.completion === "confirmed"
         && result.response_capture === "final"
         && result.content_evidence_unconfirmed === true
-        && result.dispatch_state !== "ambiguous"
+        && !review.existingConversationUrl
+        && result.submission === "acknowledged"
+        && result.dispatch_state === "acknowledged"
         && result.cleanup_status === "completed"
         && result.cleanup_warning == null;
       if (result.status !== "completed" && !mayContinueBeforeDispatch && !mayContinueAfterEvidenceGap) {

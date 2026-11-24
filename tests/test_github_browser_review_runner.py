@@ -322,9 +322,9 @@ const result = await waitForReviewCompletion(page, {{
   timeoutMs: 20,
   acceptSnapshot: () => {{ acceptanceChecks += 1; return false; }},
 }});
-assert.equal(result.status, "incomplete");
+assert.equal(result.status, "confirmed");
 assert.ok(acceptanceChecks > 0);
-assert.equal(result.contentEvidenceUnconfirmed, false);
+assert.equal(result.contentEvidenceUnconfirmed, true);
 '''
     )
 
@@ -3045,12 +3045,12 @@ const result = await runReviewTransaction({{}}, {{
 
 assert.equal(result.completion, "confirmed");
 assert.equal(result.status, "incomplete");
-assert.match(result.failure_reason, /final response was observed/);
+assert.match(result.failure_reason, /requested revision or file marker/);
 '''
     )
 
 
-def test_planning_checkpoint_is_partial_and_final_response_is_preserved_without_revision_evidence():
+def test_structurally_final_response_is_preserved_without_revision_evidence():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -3100,17 +3100,21 @@ const base = (runOutputDir, response) => ({{
 
 const planning = await runReviewTransaction({{}}, base(planningDir, "I will inspect the pull request and report findings."));
 assert.equal(planning.status, "incomplete");
-assert.equal(planning.response_capture, "partial");
-assert.equal(existsSync(join(planningDir, "response.partial.md")), true);
-assert.equal(existsSync(join(planningDir, "response.md")), false);
+assert.equal(planning.response_capture, "final");
+assert.equal(planning.content_evidence_unconfirmed, true);
+assert.equal(existsSync(join(planningDir, "response.partial.md")), false);
+assert.equal(existsSync(join(planningDir, "response.md")), true);
+assert.equal(readFileSync(join(planningDir, "response.md"), "utf8"), "I will inspect the pull request and report findings.\\n");
 
+await mkdir(join(finalDir, "response.partial.md"), {{ recursive: true }});
 const final = await runReviewTransaction({{}}, base(finalDir, "Review complete; no findings."));
 assert.equal(final.status, "incomplete");
+assert.match(final.response_cleanup_warning, /EISDIR|is a directory/i);
 assert.equal(final.response_capture, "final");
 assert.equal(final.content_evidence_unconfirmed, true);
 assert.equal(existsSync(join(finalDir, "response.md")), true);
 assert.equal(readFileSync(join(finalDir, "response.md"), "utf8"), "Review complete; no findings.\\n");
-assert.equal(existsSync(join(finalDir, "response.partial.md")), false);
+assert.equal(existsSync(join(finalDir, "response.partial.md")), true);
 
 await rm(root, {{ recursive: true, force: true }});
 ''',
@@ -4022,7 +4026,7 @@ assert.equal(results[1].status, "skipped");
 '''
     )
 
-def test_batch_continues_after_generic_pre_dispatch_selection_failure():
+def test_batch_stops_after_generic_pre_dispatch_selection_failure():
     run_node_assertion(
         f'''import assert from "node:assert/strict";
 import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
@@ -4058,9 +4062,9 @@ const results = await runReviewBatch({{
   closeContextFn: async () => {{}},
 }});
 
-assert.equal(calls, 2);
+assert.equal(calls, 1);
 assert.equal(results[0].status, "blocked");
-assert.equal(results[1].status, "completed");
+assert.equal(results[1].status, "skipped");
 '''
     )
 
