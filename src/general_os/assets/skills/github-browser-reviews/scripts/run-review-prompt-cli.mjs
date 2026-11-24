@@ -1514,7 +1514,6 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
       const dispatchMayHaveStarted = result.dispatch_state !== "not_dispatched";
       const mayContinueBeforeDispatch = result.status !== "completed"
         && result.failure_scope === "review"
-        && result.failure_code === "MODEL_UNAVAILABLE"
         && !review.existingConversationUrl
         && !hasClosedContextEvidence(result)
         && !dispatchMayHaveStarted

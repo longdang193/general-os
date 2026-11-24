@@ -380,6 +380,18 @@ assert.equal(result.contentEvidenceUnconfirmed, false);
 '''
     )
 
+
+def test_structured_or_long_planning_checkpoint_stays_provisional():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ isResponseContentReady }} from {RUNNER.as_uri()!r};
+
+assert.equal(isResponseContentReady("## Plan\\nI will inspect the lifecycle in three stages:\\n\\n1. Trace completion detection.\\n2. Examine response persistence.\\n3. Identify incorrect continuation conditions."), false);
+assert.equal(isResponseContentReady("I will inspect the lifecycle and report findings.\\n" + "I will check the observer and persistence path.\\n".repeat(8)), false);
+assert.equal(isResponseContentReady("## Findings\\nReviewed the pinned revision; no actionable findings."), true);
+'''
+    )
 def test_planning_only_response_does_not_count_as_review_completion():
     run_node_assertion(
         f'''
@@ -4077,7 +4089,7 @@ assert.equal(results[1].status, "skipped");
 '''
     )
 
-def test_batch_stops_after_generic_pre_dispatch_selection_failure():
+def test_batch_continues_after_clean_pre_dispatch_selection_failure():
     run_node_assertion(
         f'''import assert from "node:assert/strict";
 import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
@@ -4113,9 +4125,9 @@ const results = await runReviewBatch({{
   closeContextFn: async () => {{}},
 }});
 
-assert.equal(calls, 1);
+assert.equal(calls, 2);
 assert.equal(results[0].status, "blocked");
-assert.equal(results[1].status, "skipped");
+assert.equal(results[1].status, "completed");
 '''
     )
 
