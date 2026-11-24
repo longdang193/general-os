@@ -364,13 +364,12 @@ The runner validates every entry before opening the browser, reuses one
  ownership stays blocked for operator-confirmed recovery; the runner never
  deletes a stale lock based only on a PID, timestamp, or profile path, and
   release removes only the current lease token. Normal SIGINT/SIGTERM cleanup
- makes a best-effort release when ownership remains provable. Selection failures
- carry an explicit scope: a model-specific `MODEL_UNAVAILABLE` failure is
- review-scoped and may let the batch continue only when the visible model item
- is explicitly locked/unavailable, no prompt was dispatched, and cleanup is
- clean. A missing or transient model option is not proof of unavailability and
- stops the batch. Missing or unknown dispatch evidence is treated as
- possibly dispatched. Any other non-`completed` result stops the shared batch.
+ makes a best-effort release when ownership remains provable. Selection and page-local failures carry an explicit scope. A clean,
+ definitely pre-dispatch review-scoped failure may let the batch continue to
+ the next already-authorized model; a closed/disconnected page or browser,
+ missing or unknown dispatch evidence, or any cleanup warning stops the shared
+ batch. A missing or transient model option is not proof of unavailability,
+ and the failed review is never silently switched to another model.
  A confirmed response that only lacks revision-evidence validation may proceed
  to the next already-authorized model when dispatch is acknowledged and cleanup
  is clean; it remains `incomplete` and is never resubmitted. The failed review
