@@ -543,10 +543,8 @@ export function isResponseContentReady(response) {
   const planningLanguage = /\b(?:i|we)(?:\s+(?:will|shall|am going to|are going to)|\s*'ll)\s+(?:read|inspect|review|trace|report|focus|keep|return|narrow|verify|check|assess)\b|\b(?:i|we)(?:\s+am|\s*'m|\s+are)\s+(?:(?:currently|now)\s+)?(?:reading|inspecting|reviewing|tracing|narrowing|focusing|checking|looking)\b|\b(?:first pass|narrowing the review)\b/i.test(normalized);
   const concreteOutcome = /(?:\b(?:review complete|no (?:actionable )?(?:findings|issues|problems|defects|vulnerabilities|concerns)|approved|changes requested|findings?\s*:|root cause\s*:|impact\s*:|recommendations?\s*:|identified\s+(?:a|an|the)\s+(?:bug|issue|risk|defect))\b|\[P[0-3]\]\s+\S)/i.test(normalized);
   const planningOnly = planningLanguage && !concreteOutcome;
-  const shortUnstructured = normalized.length <= 240
-    && nonEmptyLines.length <= 4
-    && !concreteOutcome;
-  return !planningOnly && !shortUnstructured;
+  const reviewStructure = /(?:^|\n)\s{0,3}(?:#{1,6}\s+(?:review|summary|findings|analysis|recommendations?|conclusion)\b|(?:[-*]|\d+[.)])\s+\S)/im.test(normalized);
+  return !planningOnly && (concreteOutcome || reviewStructure);
 }
 
 export async function submitPrompt(page, composer, prompt, { beforeSubmit, signal } = {}) {

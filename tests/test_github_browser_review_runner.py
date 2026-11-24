@@ -80,7 +80,7 @@ await assert.rejects(
     )
 
 
-def test_stable_text_without_terminal_ui_signal_does_not_confirm():
+def test_stable_text_fallback_requires_composer_readiness():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -104,7 +104,7 @@ assert.equal(evaluateReviewCompletion({{
 '''
     )
 
-def test_stable_text_fallback_requires_composer_readiness():
+def test_stable_text_without_terminal_ui_signal_does_not_confirm():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -149,6 +149,10 @@ assert.equal(
 );
 assert.equal(
   isResponseContentReady("The pinned documentation already states the intended invariant. I\u2019m now checking whether the implementation enforces it."),
+  false,
+);
+assert.equal(
+  isResponseContentReady("A confirmed design smell is emerging: the observer's contentEvidenceUnconfirmed flag is set when a structural-response heuristic rejects text, but its failure message calls that revision evidence. That mixes two validation layers before the CLI's actual revision-evidence check even runs."),
   false,
 );
 assert.equal(isResponseContentReady("Reviewed completion logic"), false);
@@ -2029,7 +2033,7 @@ const result = await runReviewTransaction({{}}, {{
 }});
 
 assert.equal(result.status, "completed");
-assert.equal(responses.at(-1), `${{shortResponse}}\\n`);
+assert.equal(responses.at(-1), `${{fullResponse}}\\n`);
 '''
     )
 def test_accepted_route_transition_replaces_initial_transaction_checkpoint():

@@ -259,12 +259,17 @@ closed page. `response.partial.md` is checkpoint evidence only; `response.md` is
 written after structural final-response observation, even when review-content
 evidence is still unconfirmed. A complete `response.md` does not prove that
 revision evidence was accepted; `result.json` remains the lifecycle authority. Current visible completion markers include `Response complete` and
-`Feedback`. When those controls are unavailable, repeated stable assistant
-text can confirm completion after the new-turn, identity, interruption,
-submitted-turn, and composer-readiness checks pass. If structural completion is observed but revision evidence is
-rejected, the bounded observer carries `content_evidence_unconfirmed: true`
-into the terminal `result.json` and settles the transaction as `incomplete`
-with a specific reason rather than a generic association timeout.
+`Feedback`. Composer visibility and repeated stable assistant text are not
+sufficient by themselves: the bounded observer also requires a new response
+turn, continuous conversation identity, and a positive review-content gate.
+This compatibility fallback avoids depending on one volatile terminal marker
+while still rejecting planning-only checkpoints. If the content gate does not
+pass before the bounded deadline, the observer returns `incomplete` and
+preserves the latest checkpoint rather than treating an intermediate response
+as final. If structural completion is observed but revision evidence is rejected, the bounded observer carries
+`content_evidence_unconfirmed: true` into the terminal `result.json` and
+settles the transaction as `incomplete` with a specific reason rather than a
+generic association timeout.
 
 Submitted-review completion evidence stays bound to the same review page,
 requires a new stable assistant turn, and must remain continuous with the

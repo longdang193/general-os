@@ -1114,10 +1114,13 @@ export async function runReviewTransaction(context, options) {
 
   const persistResponse = async (response, { authoritative = false } = {}) => {
     const responseText = typeof response === "string" ? response.trim() : "";
-    if (!outputDir || !responseText || (!authoritative && checkpointResponse && responseText.length < checkpointResponse.length)) return;
+    if (!outputDir || !responseText) return;
+    const acceptedResponse = checkpointResponse && responseText.length < checkpointResponse.length
+      ? checkpointResponse
+      : responseText;
     const responsePath = join(outputDir, authoritative ? "response.md" : "response.partial.md");
-    await writeResponse(responsePath, `${responseText}\n`);
-    checkpointResponse = responseText;
+    await writeResponse(responsePath, `${acceptedResponse}\n`);
+    checkpointResponse = acceptedResponse;
     result.response_capture = authoritative ? "final" : "partial";
     if (authoritative) {
       try {
