@@ -1472,9 +1472,8 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         abortSignal,
       });
       results.push(result);
-      const dispatchMayHaveStarted = result.dispatch_state == null
-        ? result.submission_attempted === true || result.submission === "ambiguous"
-        : result.dispatch_state !== "not_dispatched";
+      // Missing dispatch evidence is unsafe: do not risk a duplicate submission.
+      const dispatchMayHaveStarted = result.dispatch_state !== "not_dispatched";
       const mayContinueBeforeDispatch = result.status !== "completed"
         && result.failure_scope === "review"
         && !dispatchMayHaveStarted

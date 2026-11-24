@@ -3727,6 +3727,45 @@ assert.equal(results[1].status, "skipped");
 '''
     )
 
+def test_batch_stops_when_dispatch_evidence_is_missing():
+    run_node_assertion(
+        f'''import assert from "node:assert/strict";
+import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const reviewUrl = `https://github.com/owner/repo/blob/${{sha}}/file.md`;
+const reviews = ["GPT-5.6-Sol", "GPT-6"].map((model) => ({{
+  model,
+  effort: "High",
+  prompt: `Review ${{reviewUrl}} at ${{sha}}`,
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [reviewUrl],
+  runOutputDir: `review-output/run-${{model}}`,
+}}));
+let calls = 0;
+const results = await runReviewBatch({{
+  attached: {{ context: {{}}, projectKey: "owner-repo", repository: "owner/repo" }},
+  reviews,
+  runTransaction: async () => {{
+    calls += 1;
+    return calls === 1
+      ? {{
+          status: "incomplete",
+          failure_scope: "review",
+          cleanup_warning: null,
+          submission: "acknowledged",
+        }}
+      : {{ status: "completed" }};
+  }},
+  closeContextFn: async () => {{}},
+}});
+
+assert.equal(calls, 1);
+assert.equal(results[1].status, "skipped");
+'''
+    )
+
 def test_closed_shared_review_page_stops_batch_and_skips_following_review():
     run_node_assertion(
         f'''

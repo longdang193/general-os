@@ -363,7 +363,8 @@ The runner validates every entry before opening the browser, reuses one
  makes a best-effort release when ownership remains provable. Selection failures
  carry an explicit scope: a model-specific `MODEL_UNAVAILABLE` failure is
  review-scoped and may let the batch continue only when no prompt was dispatched
- and cleanup is clean. Any other non-`completed` result stops the shared batch,
+ and cleanup is clean. Missing or unknown dispatch evidence is treated as
+ possibly dispatched. Any other non-`completed` result stops the shared batch,
  including a confirmed response that fails revision-evidence validation; the
  next model must not start after a review has been submitted but not accepted.
  The failed review is never
