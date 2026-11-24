@@ -294,7 +294,8 @@ returns nonzero even when the response itself completed. A technically complete
   a review outcome (for example, a no-findings conclusion or structured
   findings). Missing revision evidence records `incomplete` but does not discard
   a structurally final response from `response.md`; planning-only text remains
-  incomplete until structural completion is observed. The controller still owns
+  a checkpoint until accepted response content is observed, or the bounded
+  observer times out and records it only as partial evidence. The controller still owns
   the final `verified` classification. The runner never retries or silently recovers a failed
 submission. In a sequential batch, a confirmed response that only lacks
 revision text evidence may proceed to the next model when dispatch was

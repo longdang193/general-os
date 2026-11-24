@@ -843,15 +843,19 @@ export async function waitForReviewCompletion(page, {
     });
     if (completionReady) {
       const contentAccepted = await acceptSnapshot(snapshot);
-      return {
-        ...snapshot,
-        assistantTurnIndex: snapshot.assistantTurnCount - 1,
-        response: snapshot.assistantText,
-        status: "confirmed",
-        checkpointAccepted: true,
-        responseTurnObserved: true,
-        contentEvidenceUnconfirmed: !contentAccepted,
-      };
+      if (contentAccepted) {
+        return {
+          ...snapshot,
+          assistantTurnIndex: snapshot.assistantTurnCount - 1,
+          response: snapshot.assistantText,
+          status: "confirmed",
+          checkpointAccepted: true,
+          responseTurnObserved: true,
+          contentEvidenceUnconfirmed: false,
+        };
+      }
+      // Structural signals can settle briefly while the assistant is still composing.
+      contentEvidenceUnconfirmed = true;
     }
 
     await page.waitForTimeout(backoffMs);

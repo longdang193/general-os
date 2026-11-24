@@ -1273,7 +1273,7 @@ export async function runReviewTransaction(context, options) {
 
     const responseContentReady = completion.status === "confirmed"
       && completionSnapshot?.responseTurnObserved !== false
-      && Boolean(completionSnapshot?.response?.trim());
+      && isResponseContentReady(completionSnapshot?.response);
     if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false) {
       stage = "artifacts";
       await persistResponse(completionSnapshot.response, { authoritative: responseContentReady });
@@ -1377,7 +1377,7 @@ export async function runReviewTransaction(context, options) {
             }
            const responseContentReady = completion.status === "confirmed"
              && completionSnapshot?.responseTurnObserved !== false
-             && Boolean(completionSnapshot?.response?.trim());
+              && isResponseContentReady(completionSnapshot?.response);
            if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && outputDir) {
              await persistResponse(completionSnapshot.response, { authoritative: responseContentReady });
           }

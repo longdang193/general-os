@@ -289,7 +289,7 @@ try {{
     )
 
 
-def test_completion_separates_lifecycle_from_review_evidence():
+def test_completion_waits_for_accepted_response_content():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -322,12 +322,63 @@ const result = await waitForReviewCompletion(page, {{
   timeoutMs: 20,
   acceptSnapshot: () => {{ acceptanceChecks += 1; return false; }},
 }});
-assert.equal(result.status, "confirmed");
+assert.equal(result.status, "incomplete");
 assert.ok(acceptanceChecks > 0);
 assert.equal(result.contentEvidenceUnconfirmed, true);
 '''
     )
 
+
+def test_planning_checkpoint_does_not_settle_before_final_response():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ isResponseContentReady, waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const planningText = "I'll trace the lifecycle and report findings.";
+const finalText = "Reviewed the pinned revision; no actionable findings.";
+const assistantSequences = [
+  [{{ innerText: planningText, getAttribute: (name) => name === "data-response-body" ? "assistant-new" : null }}],
+  [{{ innerText: planningText, getAttribute: (name) => name === "data-response-body" ? "assistant-new" : null }}],
+  [{{ innerText: finalText, getAttribute: (name) => name === "data-response-body" ? "assistant-new" : null }}],
+  [{{ innerText: finalText, getAttribute: (name) => name === "data-response-body" ? "assistant-new" : null }}],
+];
+let reads = 0;
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForTimeout: async () => {{}},
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      count: async () => 0,
+      isVisible: async () => false,
+      evaluateAll: async (callback, includeText) => selector.includes("data-response-body")
+        ? callback(assistantSequences[Math.min(reads++, assistantSequences.length - 1)], includeText)
+        : selector.includes("data-user-message-bubble")
+          ? callback([{{ innerText: "Review the pinned change.", getAttribute: () => null }}], includeText)
+          : callback([], includeText),
+    }};
+  }},
+  getByRole(role, options) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      isVisible: async () => role === "textbox" || options?.name === "Feedback",
+    }};
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "assistant-old", assistantTurnCount: 0, conversationId: "review", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 100,
+  acceptSnapshot: (snapshot) => isResponseContentReady(snapshot.assistantText),
+}});
+assert.equal(result.status, "confirmed");
+assert.equal(result.response, finalText);
+assert.equal(result.contentEvidenceUnconfirmed, false);
+'''
+    )
 
 def test_planning_only_response_does_not_count_as_review_completion():
     run_node_assertion(
@@ -3003,7 +3054,7 @@ assert.equal(result.submission, "not_started");
     )
 
 
-def test_planning_only_transaction_remains_incomplete_after_technical_completion():
+def test_planning_only_transaction_remains_partial_after_technical_completion():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -3045,7 +3096,7 @@ const result = await runReviewTransaction({{}}, {{
 
 assert.equal(result.completion, "confirmed");
 assert.equal(result.status, "incomplete");
-assert.match(result.failure_reason, /requested revision or file marker/);
+assert.match(result.failure_reason, /final response was observed/);
 '''
     )
 
@@ -3100,11 +3151,11 @@ const base = (runOutputDir, response) => ({{
 
 const planning = await runReviewTransaction({{}}, base(planningDir, "I will inspect the pull request and report findings."));
 assert.equal(planning.status, "incomplete");
-assert.equal(planning.response_capture, "final");
-assert.equal(planning.content_evidence_unconfirmed, true);
-assert.equal(existsSync(join(planningDir, "response.partial.md")), false);
-assert.equal(existsSync(join(planningDir, "response.md")), true);
-assert.equal(readFileSync(join(planningDir, "response.md"), "utf8"), "I will inspect the pull request and report findings.\\n");
+assert.equal(planning.response_capture, "partial");
+assert.equal(planning.content_evidence_unconfirmed, false);
+assert.equal(existsSync(join(planningDir, "response.partial.md")), true);
+assert.equal(existsSync(join(planningDir, "response.md")), false);
+assert.equal(readFileSync(join(planningDir, "response.partial.md"), "utf8"), "I will inspect the pull request and report findings.\\n");
 
 await mkdir(join(finalDir, "response.partial.md"), {{ recursive: true }});
 const final = await runReviewTransaction({{}}, base(finalDir, "Review complete; no findings."));
