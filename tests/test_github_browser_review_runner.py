@@ -310,6 +310,7 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo 
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings; I may inspect the pinned file next.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe evidence gate was too strict.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n[P1] The workflow is not yet suitable for production; a pending external check does not change this finding. The evidence still needs verification by the operator.\\nReview complete.", provenance), true);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n[P1] The parser drops a valid finding when a suspected issue needs verification against an external dependency.\\nReview complete.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHigh — parser defect.\\nI still need to analyze the remaining pinned file.", provenance), false);
 '''
     )
@@ -1821,7 +1822,7 @@ const result = await runReviewTransaction({{}}, {{
 }});
 
 assert.equal(result.status, "completed");
-assert.deepEqual(responses, [`${{fullResponse}}\\n`]);
+assert.equal(responses.at(-1), `${{shortResponse}}\\n`);
 '''
     )
 def test_accepted_route_transition_replaces_initial_transaction_checkpoint():
@@ -3273,6 +3274,69 @@ assert.equal(result.status, "completed");
 assert.equal(result.completion, "confirmed");
 assert.equal(result.conversation_id, "checkpoint-recovery");
 assert.deepEqual(writes, [`Reviewed ${{sha}}; no findings.\\n`]);
+'''
+    )
+
+
+def test_model_unavailable_selection_failure_is_review_scoped():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const selectionError = new Error("requested model is unavailable");
+selectionError.code = "MODEL_UNAVAILABLE";
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-model-unavailable",
+  model: "GPT-6.2",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [`https://github.com/owner/repo/blob/${{sha}}/file.md`],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => {{ throw selectionError; }},
+    writeResult: async () => {{}},
+    closePage: async () => {{}},
+  }},
+}});
+
+assert.equal(result.status, "blocked");
+assert.equal(result.failure_stage, "selection");
+assert.equal(result.failure_scope, "review");
+assert.equal(result.dispatch_state, "not_dispatched");
+'''
+    )
+
+
+def test_launch_fails_promptly_when_chrome_spawn_emits_error():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ EventEmitter }} from "node:events";
+import {{ mkdtemp, rm }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ launchDedicatedChrome }} from {CLI_RUNNER.as_uri()!r};
+
+const profile = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "github-review-cdp-error-"));
+const chromeProcess = new EventEmitter();
+chromeProcess.exitCode = null;
+chromeProcess.signalCode = null;
+chromeProcess.kill = () => {{
+  chromeProcess.exitCode = 1;
+  chromeProcess.emit("exit", 1, null);
+}};
+const spawnError = new Error("Chrome spawn failed");
+const launch = launchDedicatedChrome(profile, {{
+  spawnProcess: () => {{
+    queueMicrotask(() => chromeProcess.emit("error", spawnError));
+    return chromeProcess;
+  }},
+}});
+await assert.rejects(launch, /Chrome spawn failed/);
+await rm(profile, {{ recursive: true, force: true }});
 '''
     )
 

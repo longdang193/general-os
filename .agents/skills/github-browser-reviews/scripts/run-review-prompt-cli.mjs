@@ -246,7 +246,10 @@ export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (!revisionMarkerFound) return false;
   const outcome = /\bno (?:actionable )?(?:findings?|issues?|defects?|vulnerabilities?|concerns?)\b(?!\s+(?:yet|pending|tbd|so far|to be|until|will|next)\b)|\b(?:changes requested|request changes|review complete|approved)\b/i.test(response)
     || conclusiveSeverity;
-  return outcome && !provisionalLanguage.test(response);
+  const terminalOutcome = /\b(?:final conclusion|review assessment|changes warranted|changes requested|request changes|review complete|approved)\b/i.test(response);
+  const structuredFinding = responseLines.some((line) => /(?:\[[Pp][0-3]\]|\bP[0-3]\b)/.test(line)
+    && !/^\s*(?:severity|confidence|risk)\s*:/i.test(line));
+  return outcome && (!provisionalLanguage.test(response) || (structuredFinding && terminalOutcome));
 }
 
 function resolveExistingConversationUrl(review, index) {
@@ -762,8 +765,17 @@ export async function launchDedicatedChrome(
     ],
     { detached: false, stdio: "ignore", windowsHide: true },
   );
+  let spawnErrorListener;
+  let spawnErrorPromise;
   try {
-    const endpoint = await waitForChromeCdpEndpoint(profilePath, { waitForEndpoint });
+    if (typeof chromeProcess.once === "function") {
+      spawnErrorPromise = new Promise((_, reject) => {
+        spawnErrorListener = (error) => reject(error);
+        chromeProcess.once("error", spawnErrorListener);
+      });
+    }
+    const endpointWait = waitForChromeCdpEndpoint(profilePath, { waitForEndpoint });
+    const endpoint = spawnErrorPromise ? await Promise.race([endpointWait, spawnErrorPromise]) : await endpointWait;
     const actualPort = Number(new URL(endpoint).port);
     return { endpoint, port: actualPort, process: chromeProcess };
   } catch (error) {
@@ -776,6 +788,8 @@ export async function launchDedicatedChrome(
       error.cleanupError = cleanupError;
     }
     throw error;
+  } finally {
+    if (spawnErrorListener) chromeProcess.removeListener?.("error", spawnErrorListener);
   }
 }
 
@@ -1015,7 +1029,7 @@ async function classifyFailureScope(stage, error, context) {
   if (/(?:browser|context|target).*(?:closed|close|disconnect)|(?:closed|close|disconnect).*(?:browser|context|target)/i.test(errorMessage(error))) {
     return "shared_context";
   }
-  if (stage === "selection") return error?.code === "MODEL_UNAVAILABLE" ? "shared_context" : "review";
+  if (stage === "selection") return "review";
   if (stage === "submission" || stage === "completion") return "review";
   return null;
 }
@@ -1082,9 +1096,9 @@ export async function runReviewTransaction(context, options) {
     resultPersisted = true;
   };
 
-  const persistResponse = async (response) => {
+  const persistResponse = async (response, { authoritative = false } = {}) => {
     const responseText = typeof response === "string" ? response.trim() : "";
-    if (!outputDir || !responseText || (checkpointResponse && responseText.length < checkpointResponse.length)) return;
+    if (!outputDir || !responseText || (!authoritative && checkpointResponse && responseText.length < checkpointResponse.length)) return;
     await writeResponse(join(outputDir, "response.md"), `${responseText}\n`);
     checkpointResponse = responseText;
   };
@@ -1232,7 +1246,7 @@ export async function runReviewTransaction(context, options) {
 
     if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false) {
       stage = "artifacts";
-      await persistResponse(completionSnapshot.response);
+      await persistResponse(completionSnapshot.response, { authoritative: completion.status === "confirmed" });
     }
     if (completion.status !== "confirmed") {
       result.status = "incomplete";
@@ -1327,7 +1341,7 @@ export async function runReviewTransaction(context, options) {
               }
             }
             if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && outputDir) {
-             await persistResponse(completionSnapshot.response);
+             await persistResponse(completionSnapshot.response, { authoritative: completion.status === "confirmed" });
           }
            if (completion.status === "confirmed" && hasRevisionEvidence(completionSnapshot.response, options)) {
             if (!options.existingConversationUrl) {

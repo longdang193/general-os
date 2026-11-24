@@ -29,7 +29,7 @@ export class ReviewPromptError extends Error {
 function withFailureScope(error, failureScope) {
   if (error?.failureScope) return error;
   const message = error instanceof Error ? error.message : String(error);
-  const sharedScope = error?.code === "MODEL_UNAVAILABLE" || error?.code === "AUTHENTICATION_REQUIRED";
+  const sharedScope = error?.code === "AUTHENTICATION_REQUIRED";
   const wrapped = new ReviewPromptError(message, sharedScope ? "shared_context" : failureScope, error);
   if (error && typeof error === "object") {
     wrapped.reviewPage = error.reviewPage;
