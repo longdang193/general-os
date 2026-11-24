@@ -260,21 +260,22 @@ always persists and validates the exact same selected snapshot, never the
 longest response. If the page or context closes during cleanup, the final
 result uses that last durable checkpoint instead of querying the
 closed page. `response.partial.md` is checkpoint evidence only; `response.md` is
-written only from a response that passes the positive review-content gate.
-Structural completion without that gate remains checkpoint evidence. A complete `response.md` does not prove that
-revision evidence was accepted; `result.json` remains the lifecycle authority. Current visible completion markers include `Response complete` and
-`Feedback`. Composer visibility and repeated stable assistant text are not
-sufficient by themselves: the bounded observer also requires a new response
-turn, continuous conversation identity, and a positive review-content gate.
-This compatibility fallback avoids depending on one volatile terminal marker
-while still requiring a concrete review outcome rather than generic headings or
-lists. If the content gate does not
-pass before the bounded deadline, the observer returns `incomplete` and
-preserves the latest checkpoint rather than treating an intermediate response
-as final. If structural completion is observed but revision evidence is rejected, the bounded observer carries
-`content_evidence_unconfirmed: true` into the terminal `result.json` and
-settles the transaction as `incomplete` with a specific reason rather than a
-generic association timeout.
+written from the selected structurally final response, even when semantic review
+or revision evidence is insufficient. Structural completion requires a new
+response turn, continuous conversation identity, stable visible completion
+signals, and non-empty response text; the content classifier is advisory and
+must not block capture. A complete `response.md` does not prove that revision
+evidence was accepted; `result.json` remains the lifecycle authority. Current
+visible completion markers include `Response complete` and `Feedback`.
+Composer visibility and repeated stable assistant text are not sufficient by
+themselves. This compatibility fallback avoids depending on one volatile
+terminal marker. If structural completion is observed but content or revision
+evidence is rejected, the runner preserves the exact captured answer in
+`response.md`, carries `content_evidence_unconfirmed: true` into the terminal
+`result.json`, and settles the transaction as `incomplete` with a specific
+reason. If the bounded observer times out before structural completion, it
+preserves the latest checkpoint as `response.partial.md` instead of treating an
+intermediate response as final.
 
 Submitted-review completion evidence stays bound to the same review page,
 requires a new stable assistant turn, and must remain continuous with the
@@ -303,9 +304,9 @@ returns nonzero even when the response itself completed. A technically complete
   response must cite the requested full SHA or a pinned file marker and contain
   a review outcome (for example, a no-findings conclusion or structured
   findings). Missing revision evidence records `incomplete` but does not discard
-  a structurally final response from `response.md`; planning-only text remains
-  a checkpoint until accepted response content is observed, or the bounded
-  observer times out and records it only as partial evidence. The controller still owns
+  a structurally final response from `response.md`; planning-only text may still
+  be captured there when the browser shows structural completion, but the
+  lifecycle remains `incomplete` until semantic and revision evidence pass. The controller still owns
   the final `verified` classification. The runner never retries or silently recovers a failed
 submission. In a sequential batch, a confirmed response that only lacks
 revision text evidence may proceed to the next model when dispatch was

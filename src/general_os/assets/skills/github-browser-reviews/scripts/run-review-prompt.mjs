@@ -540,7 +540,8 @@ export function isResponseContentReady(response) {
   if (!text) return false;
   const normalized = text.replace(/[\u2019\u2018]/g, "'");
   const planningLanguage = /\b(?:i|we)(?:\s+(?:will|shall|am going to|are going to)|\s*'ll)\s+(?:read|inspect|review|trace|report|focus|keep|return|narrow|verify|check|assess)\b|\b(?:i|we)(?:\s+am|\s*'m|\s+are)\s+(?:(?:currently|now)\s+)?(?:reading|inspecting|reviewing|tracing|narrowing|focusing|checking|looking)\b|\b(?:first pass|narrowing the review)\b/i.test(normalized);
-  const concreteOutcome = /(?:\b(?:review complete|no (?:actionable )?(?:findings|issues|problems|defects|vulnerabilities|concerns)|approved|changes requested|findings?\s*:|root cause\s*:|impact\s*:|recommendations?\s*:|identified\s+(?:a|an|the)\s+(?:bug|issue|risk|defect)|(?:found|identified|detected|observed)\s+(?:(?:\d+|one|two|three|several|multiple)\s+)?(?:actionable\s+)?(?:findings?|issues?|problems?|defects?|risks?|concerns?))\b|\[P[0-3]\]\s+\S)/i.test(normalized);
+  const severityFinding = /^\s*(?:[-*]\s*)?(?:critical|high|medium|low)\s*(?:[-:;\u2014])\s*(?!\b(?:i|we)\s+(?:(?:will|'ll|am|are)|(?:still\s+)?need\s+to)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet)\b)\S/i.test(normalized);
+  const concreteOutcome = /(?:\b(?:review complete|no (?:actionable )?(?:findings|issues|problems|defects|vulnerabilities|concerns)|approved|changes requested|findings?\s*:|root cause\s*:|impact\s*:|recommendations?\s*:|identified\s+(?:a|an|the)\s+(?:bug|issue|risk|defect)|(?:found|identified|detected|observed)\s+(?:(?:\d+|one|two|three|several|multiple)\s+)?(?:actionable\s+)?(?:findings?|issues?|problems?|defects?|risks?|concerns?))\b|\[P[0-3]\]\s+\S)/i.test(normalized) || severityFinding;
   const planningOnly = planningLanguage && !concreteOutcome;
   return !planningOnly && concreteOutcome;
 }
@@ -647,7 +648,6 @@ export async function waitForReviewCompletion(page, {
   let stableSampleCount = 0;
   let snapshot;
   let baselineAssistantTurnCount = baseline.assistantTurnCount;
-  let contentEvidenceUnconfirmed = false;
   let expectedConversationId = baseline.conversationId || null;
   let responseConversationId = null;
   let submittedUserTurnId = baseline.submittedUserTurnId || null;
@@ -700,7 +700,7 @@ export async function waitForReviewCompletion(page, {
       };
     }
 
-    snapshot = await readCompletionSnapshot(page);
+    snapshot = await readCompletionSnapshot(page, { includeText: generationObserved || undefined });
     if (snapshot.routeStable === false) {
       if (onSnapshot) await onSnapshot({ ...snapshot, checkpointAccepted: false, responseTurnObserved: false });
       await page.waitForTimeout(backoffMs);
@@ -843,20 +843,21 @@ export async function waitForReviewCompletion(page, {
       allowStableTextFallback: true,
     });
     if (completionReady) {
-      const contentAccepted = await acceptSnapshot(snapshot);
-      if (contentAccepted) {
-        return {
-          ...snapshot,
-          assistantTurnIndex: snapshot.assistantTurnCount - 1,
-          response: snapshot.assistantText,
-          status: "confirmed",
-          checkpointAccepted: true,
-          responseTurnObserved: true,
-          contentEvidenceUnconfirmed: false,
-        };
+      let contentAccepted = false;
+      try {
+        contentAccepted = await acceptSnapshot(snapshot);
+      } catch {
+        contentAccepted = false;
       }
-      // Structural signals can settle briefly while the assistant is still composing.
-      contentEvidenceUnconfirmed = true;
+      return {
+        ...snapshot,
+        assistantTurnIndex: snapshot.assistantTurnCount - 1,
+        response: snapshot.assistantText,
+        status: "confirmed",
+        checkpointAccepted: true,
+        responseTurnObserved: true,
+        contentEvidenceUnconfirmed: !contentAccepted,
+      };
     }
 
     await page.waitForTimeout(backoffMs);
@@ -882,10 +883,7 @@ export async function waitForReviewCompletion(page, {
     responseTurnObserved: finalResponseTurnObserved,
     status: "incomplete",
     checkpointAccepted: finalCheckpointAccepted,
-    contentEvidenceUnconfirmed,
-    failureReason: contentEvidenceUnconfirmed
-      ? "content_evidence_unconfirmed: stable response did not satisfy revision evidence"
-      : "bounded completion timeout or ambiguous response association",
+    failureReason: "bounded completion timeout or ambiguous response association",
   };
 }
 
@@ -985,7 +983,7 @@ export async function waitForExistingReviewCompletion(page, {
       responseTurnObserved,
     };
     if (onSnapshot) await onSnapshot(observedSnapshot);
-    if (responseTurnObserved && isResponseContentReady(snapshot.assistantText) && evaluateReviewCompletion({
+    if (responseTurnObserved && evaluateReviewCompletion({
       ...observedSnapshot,
       assistantTurnCount: 1,
       baselineAssistantTurnCount: 0,
@@ -999,6 +997,7 @@ export async function waitForExistingReviewCompletion(page, {
         response: snapshot.assistantText,
         status: "confirmed",
         checkpointAccepted: true,
+        contentEvidenceUnconfirmed: !isResponseContentReady(snapshot.assistantText),
       };
     }
     await page.waitForTimeout(COMPLETION_INITIAL_BACKOFF_MS);

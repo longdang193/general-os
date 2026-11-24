@@ -314,7 +314,7 @@ try {{
     )
 
 
-def test_completion_waits_for_accepted_response_content():
+def test_structural_completion_does_not_wait_for_content_acceptance():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -347,7 +347,7 @@ const result = await waitForReviewCompletion(page, {{
   timeoutMs: 20,
   acceptSnapshot: () => {{ acceptanceChecks += 1; return false; }},
 }});
-assert.equal(result.status, "incomplete");
+assert.equal(result.status, "confirmed");
 assert.ok(acceptanceChecks > 0);
 assert.equal(result.contentEvidenceUnconfirmed, true);
 '''
@@ -463,7 +463,7 @@ const page = {{
     return {{
       first() {{ return this; }},
       last() {{ return this; }},
-      isVisible: async () => role === "textbox" || options?.name === "Feedback",
+      isVisible: async () => role === "textbox" || (options?.name === "Feedback" && reads >= 3),
     }};
   }},
   getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
@@ -495,6 +495,70 @@ assert.equal(isResponseContentReady("I found two actionable issues in the pinned
 assert.equal(isResponseContentReady("## Findings\\nReviewed the pinned revision; no actionable findings."), true);
 '''
     )
+
+
+def test_structurally_final_response_settles_without_content_acceptance():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForTimeout: async () => {{}} ,
+  locator(selector) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      getByRole(role, options) {{
+        return {{
+          first() {{ return this; }},
+          last() {{ return this; }},
+          isVisible: async () => options?.name instanceof RegExp ? options.name.test("Feedback") : options?.name === "Feedback",
+        }};
+      }},
+      count: async () => 0,
+      isVisible: async () => selector.includes("data-message-author-role=assistant") ? false : selector.includes("data-user-message-bubble") ? true : false,
+      evaluateAll: async (callback, includeText) => selector.includes("data-response-body")
+        ? callback([{{ innerText: includeText ? "I will inspect the pinned revision next." : "", getAttribute: (name) => name === "data-response-body" ? "assistant-new" : null }}], includeText)
+        : selector.includes("data-user-message-bubble")
+          ? callback([{{ innerText: "Review the pinned change.", getAttribute: () => null }}], includeText)
+          : callback([], includeText),
+    }};
+  }},
+  getByRole(role, options) {{
+    return {{
+      first() {{ return this; }},
+      last() {{ return this; }},
+      isVisible: async () => role === "textbox" || (options?.name instanceof RegExp ? options.name.test("Feedback") : options?.name === "Feedback"),
+    }};
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "assistant-old", assistantTurnCount: 0, conversationId: "review", submittedPrompt: "Review the pinned change." }},
+  timeoutMs: 100,
+  acceptSnapshot: () => false,
+}});
+assert.equal(result.status, "confirmed");
+assert.equal(result.contentEvidenceUnconfirmed, true);
+assert.equal(result.response, "I will inspect the pinned revision next.");
+''',
+    )
+
+
+def test_severity_led_substantive_finding_is_content_ready():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ isResponseContentReady }} from {RUNNER.as_uri()!r};
+
+assert.equal(isResponseContentReady("High - Confirmed defect: the lifecycle can finalize a checkpoint too early."), true);
+assert.equal(isResponseContentReady("High - I will inspect the remaining files next."), false);
+''',
+    )
+
 def test_planning_only_response_does_not_count_as_review_completion():
     run_node_assertion(
         f'''
@@ -3275,7 +3339,9 @@ const result = await runReviewTransaction({{}}, {{
 
 assert.equal(result.completion, "confirmed");
 assert.equal(result.status, "incomplete");
-assert.match(result.failure_reason, /final response was observed/);
+assert.equal(result.response_capture, "final");
+assert.equal(result.content_evidence_unconfirmed, true);
+assert.match(result.failure_reason, /conclusive review outcome/);
 '''
     )
 
@@ -3330,11 +3396,11 @@ const base = (runOutputDir, response) => ({{
 
 const planning = await runReviewTransaction({{}}, base(planningDir, "I will inspect the pull request and report findings."));
 assert.equal(planning.status, "incomplete");
-assert.equal(planning.response_capture, "partial");
-assert.equal(planning.content_evidence_unconfirmed, false);
-assert.equal(existsSync(join(planningDir, "response.partial.md")), true);
-assert.equal(existsSync(join(planningDir, "response.md")), false);
-assert.equal(readFileSync(join(planningDir, "response.partial.md"), "utf8"), "I will inspect the pull request and report findings.\\n");
+assert.equal(planning.response_capture, "final");
+assert.equal(planning.content_evidence_unconfirmed, true);
+assert.equal(existsSync(join(planningDir, "response.partial.md")), false);
+assert.equal(existsSync(join(planningDir, "response.md")), true);
+assert.equal(readFileSync(join(planningDir, "response.md"), "utf8"), "I will inspect the pull request and report findings.\\n");
 
 await mkdir(join(finalDir, "response.partial.md"), {{ recursive: true }});
 const final = await runReviewTransaction({{}}, base(finalDir, "Review complete; no findings."));
