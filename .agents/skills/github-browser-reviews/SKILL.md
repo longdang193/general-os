@@ -339,8 +339,9 @@ For the two-model batch described here, process the manifest in this exact order
    `GPT-5.6-Sol` at `High`, submit once, wait for its terminal result, and close
    that tab.
 2. Only after step 1 settles, open one different fresh tab in the same
-   authenticated context, select `GPT-6` at `High`, submit once, wait for its
-   terminal result, and close that tab.
+   authenticated context, select the requested second model (`GPT-6` or
+   `GPT-6.2`) at `High`, submit once, wait for its terminal result, and close
+   that tab.
 
 Do not open both review tabs in advance, run the reviews concurrently, reuse the
 first review tab, or switch profiles or browser contexts between models.
