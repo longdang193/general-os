@@ -3766,6 +3766,47 @@ assert.equal(results[1].status, "skipped");
 '''
     )
 
+def test_batch_stops_after_generic_pre_dispatch_selection_failure():
+    run_node_assertion(
+        f'''import assert from "node:assert/strict";
+import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const reviewUrl = `https://github.com/owner/repo/blob/${{sha}}/file.md`;
+const reviews = ["GPT-5.6-Sol", "GPT-6.2"].map((model) => ({{
+  model,
+  effort: "High",
+  prompt: `Review ${{reviewUrl}} at ${{sha}}`,
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [reviewUrl],
+  runOutputDir: `review-output/run-${{model}}`,
+}}));
+let calls = 0;
+const results = await runReviewBatch({{
+  attached: {{ context: {{}}, projectKey: "owner-repo", repository: "owner/repo" }},
+  reviews,
+  runTransaction: async () => {{
+    calls += 1;
+    return calls === 1
+      ? {{
+          status: "blocked",
+          failure_code: "MODEL_SELECTION_FAILED",
+          failure_scope: "review",
+          dispatch_state: "not_dispatched",
+          cleanup_warning: null,
+        }}
+      : {{ status: "completed" }};
+  }},
+  closeContextFn: async () => {{}},
+}});
+
+assert.equal(calls, 1);
+assert.equal(results[0].status, "blocked");
+assert.equal(results[1].status, "skipped");
+'''
+    )
+
 def test_closed_shared_review_page_stops_batch_and_skips_following_review():
     run_node_assertion(
         f'''
