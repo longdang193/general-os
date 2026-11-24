@@ -1102,7 +1102,7 @@ export async function runReviewTransaction(context, options) {
   let stage = "artifacts";
   let resultPersisted = false;
   let checkpointResponse = null;
-  let finalEligibleResponse = null;
+  let checkpointSnapshot = null;
   let lastAcceptedSnapshot = null;
   let completionDeadlineAt = null;
   let recoveredCompletionSettled = false;
@@ -1113,25 +1113,28 @@ export async function runReviewTransaction(context, options) {
     resultPersisted = true;
   };
 
-  const persistResponse = async (response, { authoritative = false } = {}) => {
+  const sameResponseIdentity = (left, right) => Boolean(
+    left?.conversationId
+      && right?.conversationId
+      && left?.assistantMessageId
+      && right?.assistantMessageId
+      && left.conversationId === right.conversationId
+      && left.assistantMessageId === right.assistantMessageId,
+  );
+
+  const persistResponse = async (response, { authoritative = false, snapshot = null } = {}) => {
     const responseText = typeof response === "string" ? response.trim() : "";
     if (!outputDir || !responseText) return;
-    const acceptedResponse = authoritative
-      ? finalEligibleResponse && responseText.length < finalEligibleResponse.length
-        ? finalEligibleResponse
-        : responseText
-      : checkpointResponse && responseText.length < checkpointResponse.length
-        ? checkpointResponse
-        : responseText;
+    const preserveCheckpoint = !authoritative
+      && checkpointResponse
+      && sameResponseIdentity(checkpointSnapshot, snapshot)
+      && responseText.length < checkpointResponse.length;
+    const acceptedResponse = preserveCheckpoint ? checkpointResponse : responseText;
+    const acceptedSnapshot = preserveCheckpoint ? checkpointSnapshot : snapshot;
     const responsePath = join(outputDir, authoritative ? "response.md" : "response.partial.md");
     await writeResponse(responsePath, `${acceptedResponse}\n`);
     checkpointResponse = acceptedResponse;
-    if (isResponseContentReady(responseText)) {
-      finalEligibleResponse = finalEligibleResponse && responseText.length < finalEligibleResponse.length
-        ? finalEligibleResponse
-        : responseText;
-    }
-    if (authoritative) finalEligibleResponse = acceptedResponse;
+    checkpointSnapshot = acceptedSnapshot || checkpointSnapshot;
     result.response_capture = authoritative ? "final" : "partial";
     if (authoritative) {
       try {
@@ -1140,6 +1143,7 @@ export async function runReviewTransaction(context, options) {
         result.response_cleanup_warning = errorMessage(error);
       }
     }
+    return acceptedSnapshot;
   };
 
   const persistSnapshot = async (snapshot) => {
@@ -1148,6 +1152,7 @@ export async function runReviewTransaction(context, options) {
     if (snapshot.checkpointAccepted === false) {
       if (options.existingConversationUrl && snapshot.responseTurnObserved === false && outputDir) {
         checkpointResponse = null;
+        checkpointSnapshot = null;
         lastAcceptedSnapshot = null;
         result.assistant_message_id = null;
         result.assistant_turn_index = null;
@@ -1177,15 +1182,17 @@ export async function runReviewTransaction(context, options) {
     if (snapshot.conversationId) result.conversation_id = snapshot.conversationId;
     const responseTurnObserved = snapshot.responseTurnObserved !== false;
     const responseText = snapshot.assistantText?.trim();
-    if (responseTurnObserved && responseText && (!checkpointResponse || responseText.length >= checkpointResponse.length)) {
+    if (responseTurnObserved && responseText) {
       try {
-        await persistResponse(responseText);
+        const acceptedSnapshot = await persistResponse(responseText, { snapshot });
+        lastAcceptedSnapshot = acceptedSnapshot || snapshot;
       } catch (error) {
         result.failure_reason = appendFailureReason(result.failure_reason, `response checkpoint failed: ${errorMessage(error)}`);
         return;
       }
+    } else {
+      lastAcceptedSnapshot = snapshot;
     }
-    lastAcceptedSnapshot = snapshot;
     if (responseTurnObserved && snapshot.assistantMessageId) result.assistant_message_id = snapshot.assistantMessageId;
     if (responseTurnObserved && snapshot.assistantTurnCount !== undefined && snapshot.assistantTurnCount !== null) {
       result.assistant_turn_index = Math.max(0, snapshot.assistantTurnCount - 1);
@@ -1290,7 +1297,7 @@ export async function runReviewTransaction(context, options) {
       && isResponseContentReady(completionSnapshot?.response);
     if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false) {
       stage = "artifacts";
-      await persistResponse(completionSnapshot.response, { authoritative: responseContentReady });
+      await persistResponse(completionSnapshot.response, { authoritative: responseContentReady, snapshot: completionSnapshot });
     }
     if (completion.status !== "confirmed") {
       result.status = "incomplete";
@@ -1393,7 +1400,7 @@ export async function runReviewTransaction(context, options) {
              && completionSnapshot?.responseTurnObserved !== false
               && isResponseContentReady(completionSnapshot?.response);
            if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && outputDir) {
-             await persistResponse(completionSnapshot.response, { authoritative: responseContentReady });
+             await persistResponse(completionSnapshot.response, { authoritative: responseContentReady, snapshot: completionSnapshot });
           }
            if (completion.status === "confirmed") {
              if (!options.existingConversationUrl) {

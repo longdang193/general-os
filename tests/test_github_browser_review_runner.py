@@ -1995,7 +1995,7 @@ assert.equal(result.status, "completed");
     )
 
 
-def test_longer_response_checkpoint_is_not_overwritten_by_shorter_completion_snapshot():
+def test_authoritative_completion_uses_selected_response_snapshot():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -2029,7 +2029,7 @@ const result = await runReviewTransaction({{}}, {{
     waitForReviewCompletion: async (_page, {{ onSnapshot }}) => {{
       await onSnapshot({{ currentUrl: "https://chatgpt.com/c/monotonic", conversationId: "monotonic", assistantMessageId: "assistant-1", assistantTurnCount: 2, assistantText: fullResponse }});
       await onSnapshot({{ currentUrl: "https://chatgpt.com/c/monotonic", conversationId: "monotonic", assistantMessageId: "assistant-1", assistantTurnCount: 2, assistantText: shortResponse }});
-      return {{ status: "confirmed", currentUrl: "https://chatgpt.com/c/monotonic", conversationId: "monotonic", assistantMessageId: "assistant-1", assistantTurnIndex: 1, response: shortResponse }};
+      return {{ status: "confirmed", currentUrl: "https://chatgpt.com/c/monotonic", conversationId: "monotonic", assistantMessageId: "assistant-2", assistantTurnIndex: 1, response: shortResponse }};
     }},
     writeResult: async () => {{}},
     writeResponse: async (_filePath, content) => responses.push(content),
@@ -2037,7 +2037,8 @@ const result = await runReviewTransaction({{}}, {{
 }});
 
 assert.equal(result.status, "completed");
-assert.equal(responses.at(-1), `${{fullResponse}}\\n`);
+assert.equal(responses.at(-1), `${{shortResponse}}\\n`);
+assert.equal(result.assistant_message_id, "assistant-2");
 '''
     )
 def test_longer_planning_checkpoint_does_not_overwrite_shorter_final_response():

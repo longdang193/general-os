@@ -253,8 +253,12 @@ stops and stability can be checked.
 After dispatch, the runner checkpoints the current conversation URL, ID,
 assistant message, and response text while the page is still available. Only
 identity-accepted snapshots become checkpoints; rejected route/conversation
-snapshots remain diagnostic-only. If the page or context closes during cleanup,
-the final result uses that last durable checkpoint instead of querying the
+snapshots remain diagnostic-only. A shorter checkpoint replaces an earlier one
+only when it belongs to a different conversation or assistant message; for the same response
+identity, length only protects against a truncated extraction. Finalization
+always persists and validates the exact same selected snapshot, never the
+longest response. If the page or context closes during cleanup, the final
+result uses that last durable checkpoint instead of querying the
 closed page. `response.partial.md` is checkpoint evidence only; `response.md` is
 written only from a response that passes the positive review-content gate.
 Structural completion without that gate remains checkpoint evidence. A complete `response.md` does not prove that
