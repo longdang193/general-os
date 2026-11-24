@@ -1475,12 +1475,11 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
       const dispatchMayHaveStarted = result.dispatch_state == null
         ? result.submission_attempted === true || result.submission === "ambiguous"
         : result.dispatch_state !== "not_dispatched";
-      const lifecycleSettled = result.completion === "confirmed"
-        && result.cleanup_status === "completed"
-        && result.submission !== "ambiguous"
-        && result.dispatch_state !== "possibly_dispatched"
+      const mayContinueBeforeDispatch = result.status !== "completed"
+        && result.failure_scope === "review"
+        && !dispatchMayHaveStarted
         && result.cleanup_warning == null;
-      if (result.status !== "completed" && !lifecycleSettled && (result.failure_scope !== "review" || dispatchMayHaveStarted)) {
+      if (result.status !== "completed" && !mayContinueBeforeDispatch) {
         for (let skippedIndex = index + 1; skippedIndex < validatedReviews.length; skippedIndex += 1) {
           const skippedReview = validatedReviews[skippedIndex];
           results.push({

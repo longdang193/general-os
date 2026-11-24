@@ -3677,7 +3677,7 @@ assert.equal(result.status, "completed");
     )
 
 
-def test_batch_continues_after_lifecycle_settlement_with_content_evidence_failure():
+def test_batch_stops_after_content_evidence_failure_even_when_lifecycle_settled():
     run_node_assertion(
         f'''import assert from "node:assert/strict";
 import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
@@ -3720,10 +3720,10 @@ const results = await runReviewBatch({{
   closeContextFn: async () => {{}},
 }});
 
-assert.equal(calls, 2);
+assert.equal(calls, 1);
 assert.equal(results.length, 2);
-assert.equal(results[1].status, "completed");
-assert.notEqual(results[1].status, "skipped");
+assert.equal(results[0].status, "incomplete");
+assert.equal(results[1].status, "skipped");
 '''
     )
 

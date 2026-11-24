@@ -362,8 +362,11 @@ The runner validates every entry before opening the browser, reuses one
   release removes only the current lease token. Normal SIGINT/SIGTERM cleanup
  makes a best-effort release when ownership remains provable. Selection failures
  carry an explicit scope: a model-specific `MODEL_UNAVAILABLE` failure is
- review-scoped and may let the batch continue when no prompt was dispatched;
- the batch stops for shared-context, unknown, or possibly-dispatched failures. The failed review is never
+ review-scoped and may let the batch continue only when no prompt was dispatched
+ and cleanup is clean. Any other non-`completed` result stops the shared batch,
+ including a confirmed response that fails revision-evidence validation; the
+ next model must not start after a review has been submitted but not accepted.
+ The failed review is never
  resubmitted or silently switched to another model. Do not add a keep-open flag
  or a second browser lifecycle owner. A newly created tab that does not reach the
 composer readiness state is page-local and review-scoped; failure to create a
