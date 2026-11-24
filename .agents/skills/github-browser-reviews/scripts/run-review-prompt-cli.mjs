@@ -50,7 +50,7 @@ const VALUE_ARGUMENTS = new Set([
   "--batch-file",
   "--user-data-dir",
 ]);
-const USAGE = "Usage: node run-review-prompt-cli.mjs (--launch-cdp --user-data-dir <path> --project-key <owner-repository> | --user-data-dir <path> --project-key <owner-repository> | --cdp-endpoint <url>) (--model <GPT-5.6-Sol|GPT-6> --effort <Instant|Medium|High> --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... [--existing-conversation-url <url>]) | --batch-file <path>) [--cdp-port <port>] [--output-dir <path>] [--context-index <number>]";
+const USAGE = "Usage: node run-review-prompt-cli.mjs (--launch-cdp --user-data-dir <path> --project-key <owner-repository> | --user-data-dir <path> --project-key <owner-repository> | --cdp-endpoint <url>) (--model <GPT-5.6-Sol|GPT-6|GPT-6.2> --effort <Instant|Medium|High> --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... [--existing-conversation-url <url>]) | --batch-file <path>) [--cdp-port <port>] [--output-dir <path>] [--context-index <number>]";
 const FLAG_ARGUMENTS = new Set(["--launch-cdp"]);
 const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/i;
 const GITHUB_BLOB_URL_PATTERN = /https:\/\/github\.com\/[^\s<>"']+/gi;
@@ -227,7 +227,7 @@ export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   const accessFailureLanguage = responseLines.some((line) => /^\s*(?:[-*]\s*)?(?:(?:i|we)\s+(?:could not|couldn't|cannot|can't|am unable to|are unable to|do not|don't)\s+(?:access|review|inspect|load|read)|(?:could not|unable to|not able to|cannot|can't)\s+(?:access|review|inspect|load|read)|(?:i|we)\s+(?:do not|don't)\s+have access)\b/i.test(line));
   const unapprovedReviewLanguage = /\b(?:review|assessment|analysis|inspection|verification|conclusion|result|status|decision)\b[^\r\n.]{0,80}\b(?:not|never|not yet|pending)\s+approved\b|\b(?:not|never|not yet|pending)\s+approved\b[^\r\n.]{0,80}\b(?:review|assessment|analysis|inspection|verification|conclusion|result|status|decision)\b/i.test(response);
   if (accessFailureLanguage || unapprovedReviewLanguage) return false;
-  const provisionalLanguage = /\b(?:i|we)(?:\s+(?:will|may|might)|\s*'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|not started)\s+(?:until|before|while)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|not started)\b[^\r\n.]{0,80}\b(?:inspect|review|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)\b|\b(?:review|assessment|analysis|inspection|verification|conclusion|report|result|status|decision)\b[^\r\n.]{0,80}\b(?:pending|tentative|provisional|to be confirmed|not yet|not started)\b|\b(?:possible|suspected|potential)\s+(?:issue|finding|problem|defect)\b[^\r\n.]{0,80}\bneeds?\s+(?:investigation|verification)\b|\b(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)|\b(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|analyzed|analysed|investigated|compared|looked at|confirmed)\b/i;
+  const reviewStateFailureLanguage = /\b(?:review|assessment|analysis|inspection|verification)\s+(?:has\s+)?(?:not|never)\s+(?:started|begun|completed)\b|\b(?:i|we)\s+(?:have\s+not|haven't)\s+(?:inspected|reviewed|verified|checked|read|examined|analyzed|analysed|investigated|compared|looked at|confirmed)\b|\b(?:i|we)\s+(?:still\s+)?(?:need\s+to|may|might)\s+(?:inspect|review|check|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)\b|\b(?:i|we)(?:\s+(?:will)|\s*'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b/i;
   const severityPattern = /(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\b)\s*[-:—;]\s*\S|^\s*(?:(?:[-*]|\d+[.)])\s+)?(?:critical|high|medium|low)\b(?=\s*(?:[-:—]|$)))/i;
   const conclusiveSeverity = response.split(/\r?\n/).some((line) => severityPattern.test(line)
     && !/\b(?:will|'ll|pending|tentative|provisional|to be confirmed|not yet)\b/i.test(line)
@@ -246,10 +246,7 @@ export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (!revisionMarkerFound) return false;
   const outcome = /\bno (?:actionable )?(?:findings?|issues?|defects?|vulnerabilities?|concerns?)\b(?!\s+(?:yet|pending|tbd|so far|to be|until|will|next)\b)|\b(?:changes requested|request changes|review complete|approved)\b/i.test(response)
     || conclusiveSeverity;
-  const terminalOutcome = /\b(?:final conclusion|review assessment|changes warranted|changes requested|request changes|review complete|approved)\b/i.test(response);
-  const structuredFinding = responseLines.some((line) => /(?:\[[Pp][0-3]\]|\bP[0-3]\b)/.test(line)
-    && !/^\s*(?:severity|confidence|risk)\s*:/i.test(line));
-  return outcome && (!provisionalLanguage.test(response) || (structuredFinding && terminalOutcome));
+  return outcome && !reviewStateFailureLanguage.test(response);
 }
 
 function resolveExistingConversationUrl(review, index) {
@@ -392,13 +389,28 @@ export async function createRunOutputDirectory(parentDir) {
   return { outputDir, runId: basename(outputDir) };
 }
 
-export async function atomicWrite(filePath, content) {
-  const tempPath = `${filePath}.${process.pid}.tmp`;
+
+export async function atomicWrite(filePath, content, {
+  write = writeFile,
+  move = rename,
+  remove = rm,
+  makeTempId = randomUUID,
+  sleep = (delayMs) => new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs)),
+} = {}) {
+  const tempPath = `${filePath}.${process.pid}.${makeTempId()}.tmp`;
   try {
-    await writeFile(tempPath, content, "utf8");
-    await rename(tempPath, filePath);
+    await write(tempPath, content, "utf8");
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await move(tempPath, filePath);
+        break;
+      } catch (error) {
+        if (!new Set(["EPERM", "EACCES", "EBUSY"]).has(error?.code) || attempt >= 2) throw error;
+        await sleep(25 * (attempt + 1));
+      }
+    }
   } finally {
-    await rm(tempPath, { force: true }).catch(() => {});
+    await remove(tempPath, { force: true }).catch(() => {});
   }
 }
 

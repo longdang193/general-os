@@ -305,8 +305,8 @@ the Node controller. The Node controller must supply validated `projectKey` and
 `repository`; the attached browser context cannot establish repository identity
 safely. The standalone CLI validates each review's repository, full commit SHA,
 and pinned URLs. The standalone CLI derives the project key from each validated
-review's repository provenance. In standalone CLI CDP mode, do not pass `--project-key`;
-the CLI reserves that flag for owned-profile mode. The standalone CLI also
+review's repository provenance. In standalone CLI mode, pass the canonical `--project-key` whenever using `--user-data-dir` (with or without `--launch-cdp`); omit it only when attaching through `--cdp-endpoint`. The CLI reserves that flag for owned-profile mode.
+The standalone CLI also
 accepts a manifest:
 
 ```json

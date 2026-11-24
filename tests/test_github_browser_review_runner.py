@@ -311,6 +311,7 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo 
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe evidence gate was too strict.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n[P1] The workflow is not yet suitable for production; a pending external check does not change this finding. The evidence still needs verification by the operator.\\nReview complete.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n[P1] The parser drops a valid finding when a suspected issue needs verification against an external dependency.\\nReview complete.", provenance), true);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n[P1] Runtime behavior remains unverified until the external dependency is available.\\nReview complete.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHigh — parser defect.\\nI still need to analyze the remaining pinned file.", provenance), false);
 '''
     )
@@ -3957,5 +3958,60 @@ const result = await waitForExistingReviewCompletion(pageFor([
 assert.equal(result.status, "confirmed");
 assert.equal(result.conversationId, "existing-review");
 assert.equal(result.response, "Existing review");
+'''
+    )
+
+def test_atomic_write_uses_unique_temp_files_and_retries_transient_windows_rename_errors():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ atomicWrite }} from {CLI_RUNNER.as_uri()!r};
+
+const operations = [];
+let moveAttempts = 0;
+await atomicWrite("C:/tmp/result.json", "content", {{
+  makeTempId: () => "unique-id",
+  write: async (path, value, encoding) => operations.push(["write", path, value, encoding]),
+  move: async (source, target) => {{
+    operations.push(["move", source, target]);
+    moveAttempts += 1;
+    if (moveAttempts < 3) {{
+      const error = new Error("file is temporarily locked");
+      error.code = "EPERM";
+      throw error;
+    }}
+  }},
+  remove: async (path) => operations.push(["remove", path]),
+  sleep: async () => {{}},
+}});
+
+assert.equal(moveAttempts, 3);
+assert.equal(operations[0][0], "write");
+assert.match(operations[0][1], /result\\.json\\.\\d+\\.unique-id\\.tmp$/);
+assert.equal(new Set(operations.filter(([kind]) => kind === "move").map(([, source]) => source)).size, 1);
+assert.equal(operations.at(-1)[0], "remove");
+'''
+    )
+
+
+def test_cli_requires_project_key_for_owned_user_data_dir_mode():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ parseArguments }} from {CLI_RUNNER.as_uri()!r};
+
+const common = [
+  "--user-data-dir", "C:/tmp/.codex/profiles/github-review/owner-repo",
+  "--model", "GPT-6.2",
+  "--effort", "High",
+  "--prompt-file", "review.txt",
+  "--repository", "owner/repo",
+  "--commit-sha", "0123456789abcdef0123456789abcdef01234567",
+  "--review-url", "https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md",
+];
+
+assert.throws(() => parseArguments(common), /Missing required argument: --project-key/);
+const options = parseArguments([...common, "--project-key", "owner-repo"]);
+assert.equal(options.projectKey, "owner-repo");
 '''
     )
