@@ -294,7 +294,10 @@ returns nonzero even when the response itself completed. A technically complete
   findings); planning text alone is recorded as `incomplete`. The controller
   still owns the final `verified`
 classification. The runner never retries or silently recovers a failed
-submission.
+submission. In a sequential batch, a confirmed response that only lacks
+revision text evidence may proceed to the next model when dispatch was
+acknowledged and cleanup completed without warning; that review remains
+`incomplete` and is not treated as `verified`.
 
 For a multi-model review driven by a Node controller, validate the complete
 review list against one repository-derived project key before opening the

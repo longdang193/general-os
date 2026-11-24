@@ -1479,7 +1479,15 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         && !dispatchMayHaveStarted
         && result.cleanup_status === "completed"
         && result.cleanup_warning == null;
-      if (result.status !== "completed" && !mayContinueBeforeDispatch) {
+      const mayContinueAfterEvidenceGap = result.status !== "completed"
+        && result.failure_scope === "review"
+        && result.failure_stage === "completion"
+        && result.completion === "confirmed"
+        && result.content_evidence_unconfirmed === true
+        && result.dispatch_state === "acknowledged"
+        && result.cleanup_status === "completed"
+        && result.cleanup_warning == null;
+      if (result.status !== "completed" && !mayContinueBeforeDispatch && !mayContinueAfterEvidenceGap) {
         for (let skippedIndex = index + 1; skippedIndex < validatedReviews.length; skippedIndex += 1) {
           const skippedReview = validatedReviews[skippedIndex];
           results.push({
