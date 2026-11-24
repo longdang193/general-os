@@ -51,7 +51,7 @@ that the review inspected local state.
    pipe-backed Playwright MCP browser has no TCP CDP endpoint; do not attempt
    to attach the standalone CLI to it. Use ChromeDev only for session
    attachment or low-level diagnostics when the primary runner cannot operate.
-5. **Model invariant:** Let the user select either `GPT-5.6-Sol` or `GPT-6`.
+5. **Model invariant:** Let the user select one of `GPT-5.6-Sol`, `GPT-6`, or `GPT-6.2`.
 6. **Reasoning invariant:** Let the user select `Instant`, `Medium`, or `High`
    and preserve that choice in the review request.
 7. **Scope invariant:** Keep the request read-only and identify the stable
@@ -106,7 +106,7 @@ branch or commit, and the reviewed revision must be reachable from GitHub.
 Before opening the review, let the user choose one model and one reasoning
 level. The supported choices are:
 
-- `GPT-5.6-Sol` or `GPT-6`;
+- `GPT-5.6-Sol`, `GPT-6`, or `GPT-6.2`;
 - `Instant`, `Medium`, or `High` response mode.
 
 Use the bounded page helper to select the requested visible model and effort,
@@ -546,7 +546,7 @@ https://github.com/<owner>/<repo>/blob/<full-sha>/<path>
 
 Scope: read-only review of the selected revision.
 Context: <stable review or work-item identifier>
-Model: <GPT-5.6-Sol|GPT-6>
+Model: <GPT-5.6-Sol|GPT-6|GPT-6.2>
 Reasoning: <instant|medium|high>
 Plan/source: <exact plan file and/or commit-pinned GitHub URL>
 Question: <one precise review question>

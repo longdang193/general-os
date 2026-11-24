@@ -1,6 +1,6 @@
-const SUPPORTED_MODELS = new Set(["GPT-5.6-Sol", "GPT-6"]);
+const SUPPORTED_MODELS = new Set(["GPT-5.6-Sol", "GPT-6", "GPT-6.2"]);
 const SUPPORTED_EFFORTS = new Set(["Instant", "Medium", "High"]);
-const MODEL_LABELS = { "GPT-5.6-Sol": "GPT-5.6 Sol", "GPT-6": "GPT-6" };
+const MODEL_LABELS = { "GPT-5.6-Sol": "GPT-5.6 Sol", "GPT-6": "GPT-6", "GPT-6.2": "GPT-6.2" };
 const EFFORT_ORDER = ["Instant", "Medium", "High"];
 export const UI_ACTION_TIMEOUT_MS = 5000;
 export const MENU_TRANSITION_TIMEOUT_MS = 5000;

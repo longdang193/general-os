@@ -20,6 +20,24 @@ def run_node_assertion(source: str) -> None:
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
+def test_model_catalog_accepts_gpt_6_2_and_matches_visible_label():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ findModelOption, SUPPORTED_MODELS }} from {(ROOT / "src/general_os/assets/skills/github-browser-reviews/scripts/select-review-model.mjs").as_uri()!r};
+
+assert.equal(SUPPORTED_MODELS.has("GPT-6.2"), true);
+const option = {{ innerText: async () => "GPT-6.2" }};
+const menu = {{
+  locator: (selector) => {{
+    assert.equal(selector, '[role="menuitemradio"]:visible');
+    return {{ count: async () => 1, nth: () => option }};
+  }},
+}};
+assert.equal(await findModelOption(menu, "GPT-6.2"), option);
+'''
+    )
+
 
 def test_stable_new_assistant_turn_confirms_without_transient_ui_signal():
     run_node_assertion(
