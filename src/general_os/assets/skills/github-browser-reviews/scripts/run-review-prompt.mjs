@@ -842,13 +842,8 @@ export async function waitForReviewCompletion(page, {
       allowStableTextFallback: true,
     });
     if (completionReady) {
-      // Do not wait on revision evidence, but avoid settling a planning-only transient.
-      if (!(await acceptSnapshot(snapshot))) {
-        await page.waitForTimeout(backoffMs);
-        backoffMs = Math.min(backoffMs * 2, COMPLETION_MAX_BACKOFF_MS);
-        continue;
-      }
-      contentEvidenceUnconfirmed = false;
+      // Lifecycle settlement is independent from review-content classification.
+      contentEvidenceUnconfirmed = !(await acceptSnapshot(snapshot));
       return {
         ...snapshot,
         assistantTurnIndex: snapshot.assistantTurnCount - 1,

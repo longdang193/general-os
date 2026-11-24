@@ -284,11 +284,11 @@ let acceptanceChecks = 0;
 const result = await waitForReviewCompletion(page, {{
   baseline: {{ assistantMessageId: "assistant-old", assistantTurnCount: 0, conversationId: "review", submittedPrompt: "Review the pinned change." }},
   timeoutMs: 20,
-  acceptSnapshot: () => {{ acceptanceChecks += 1; return true; }},
+  acceptSnapshot: () => {{ acceptanceChecks += 1; return false; }},
 }});
 assert.equal(result.status, "confirmed");
 assert.ok(acceptanceChecks > 0);
-assert.equal(result.contentEvidenceUnconfirmed, false);
+assert.equal(result.contentEvidenceUnconfirmed, true);
 '''
     )
 
@@ -3213,6 +3213,73 @@ assert.deepEqual(writes, [`Reviewed ${{sha}}; no findings.\\n`]);
     )
 
 
+def test_exception_recovery_acknowledges_confirmed_response_without_revision_evidence():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const page = {{
+  isClosed: () => false,
+  url: () => "https://chatgpt.com/c/recovered-review-no-marker",
+  close: async () => {{}},
+}};
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-completion-recovery-no-marker",
+  model: "GPT-6.2",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [`https://github.com/owner/repo/blob/${{sha}}/file.md`],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6.2",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: page.url(),
+      conversationId: "recovered-review-no-marker",
+    }}),
+    waitForReviewCompletion: async () => {{
+      const error = new Error("page observer failed during completion");
+      error.reviewPage = page;
+      error.reviewBaseline = {{ conversationUrl: page.url(), conversationId: "recovered-review-no-marker" }};
+      if (!globalThis.recoveryAttempted) {{
+        globalThis.recoveryAttempted = true;
+        throw error;
+      }}
+      return {{
+        status: "confirmed",
+        checkpointAccepted: true,
+        responseTurnObserved: true,
+        currentUrl: page.url(),
+        conversationId: "recovered-review-no-marker",
+        assistantMessageId: "assistant-recovered",
+        assistantTurnIndex: 0,
+        response: "Review complete; no findings.",
+      }};
+    }},
+    writeResult: async () => {{}},
+    writeResponse: async () => {{}},
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.completion, "confirmed");
+assert.equal(result.submission, "acknowledged");
+assert.equal(result.dispatch_state, "acknowledged");
+assert.equal(result.content_evidence_unconfirmed, true);
+assert.equal(result.failure_scope, "review");
+assert.equal(result.failure_stage, "completion");
+'''
+    )
+
+
 def test_existing_conversation_error_does_not_promote_submission_observer():
     run_node_assertion(
         f'''
@@ -3808,7 +3875,7 @@ assert.equal(results[1].status, "skipped");
 '''
     )
 
-def test_batch_stops_after_generic_pre_dispatch_selection_failure():
+def test_batch_continues_after_generic_pre_dispatch_selection_failure():
     run_node_assertion(
         f'''import assert from "node:assert/strict";
 import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
@@ -3836,6 +3903,7 @@ const results = await runReviewBatch({{
           failure_code: "MODEL_SELECTION_FAILED",
           failure_scope: "review",
           dispatch_state: "not_dispatched",
+          cleanup_status: "completed",
           cleanup_warning: null,
         }}
       : {{ status: "completed" }};
@@ -3843,9 +3911,9 @@ const results = await runReviewBatch({{
   closeContextFn: async () => {{}},
 }});
 
-assert.equal(calls, 1);
+assert.equal(calls, 2);
 assert.equal(results[0].status, "blocked");
-assert.equal(results[1].status, "skipped");
+assert.equal(results[1].status, "completed");
 '''
     )
 

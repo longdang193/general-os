@@ -1101,6 +1101,7 @@ export async function runReviewTransaction(context, options) {
   let checkpointResponse = null;
   let lastAcceptedSnapshot = null;
   let completionDeadlineAt = null;
+  let recoveredCompletionSettled = false;
 
   const persist = async () => {
     if (!outputDir) throw new Error("Review output directory was not allocated");
@@ -1355,22 +1356,25 @@ export async function runReviewTransaction(context, options) {
             if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && outputDir) {
              await persistResponse(completionSnapshot.response, { authoritative: completion.status === "confirmed" });
           }
-           if (completion.status === "confirmed" && hasRevisionEvidence(completionSnapshot.response, options)) {
-            if (!options.existingConversationUrl) {
-              result.submission = "acknowledged";
-              result.dispatch_state = "acknowledged";
-            }
-            result.status = "completed";
-            result.failure_scope = null;
-            result.failure_stage = null;
-            result.failure_reason = null;
-           } else if (completion.status === "confirmed" && !hasRevisionEvidence(completionSnapshot.response, options)) {
-             result.content_evidence_unconfirmed = true;
-            result.status = "incomplete";
-            result.failure_scope = "review";
-            result.failure_stage = "completion";
-            result.failure_reason = "Review response completed without citing the requested revision or file marker";
-          }
+           if (completion.status === "confirmed") {
+             if (!options.existingConversationUrl) {
+               result.submission = "acknowledged";
+               result.dispatch_state = "acknowledged";
+             }
+             recoveredCompletionSettled = true;
+             if (hasRevisionEvidence(completionSnapshot?.response, options)) {
+               result.status = "completed";
+               result.failure_scope = null;
+               result.failure_stage = null;
+               result.failure_reason = null;
+             } else {
+               result.content_evidence_unconfirmed = true;
+               result.status = "incomplete";
+               result.failure_scope = "review";
+               result.failure_stage = "completion";
+               result.failure_reason = "Review response completed without citing the requested revision or file marker";
+             }
+           }
         } catch (preservationError) {
           result.failure_reason = appendFailureReason(
             result.failure_reason || transactionFailureReason,
@@ -1392,7 +1396,7 @@ export async function runReviewTransaction(context, options) {
     if (result.status !== "completed") {
       result.status = stage === "artifacts" || stage === "selection" ? "blocked" : "incomplete";
     }
-    if (result.status !== "completed") {
+    if (result.status !== "completed" && !recoveredCompletionSettled) {
       result.failure_scope = options.reviewPage && isPageClosed(page)
         ? "shared_context"
         : await classifyFailureScope(stage, error, context);
@@ -1450,6 +1454,11 @@ export async function runReviewTransaction(context, options) {
   };
 }
 
+function hasClosedContextEvidence(result) {
+  const evidence = `${result.failure_code || ""} ${result.failure_reason || ""}`;
+  return /(?:browser|context|target|page).*(?:closed|close|disconnect)|(?:closed|close|disconnect).*(?:browser|context|target|page)/i.test(evidence);
+}
+
 export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, abortSignal, runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
   const results = [];
   let cleanupError;
@@ -1475,7 +1484,7 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
       const dispatchMayHaveStarted = result.dispatch_state !== "not_dispatched";
       const mayContinueBeforeDispatch = result.status !== "completed"
         && result.failure_scope === "review"
-        && result.failure_code === "MODEL_UNAVAILABLE"
+        && !hasClosedContextEvidence(result)
         && !dispatchMayHaveStarted
         && result.cleanup_status === "completed"
         && result.cleanup_warning == null;

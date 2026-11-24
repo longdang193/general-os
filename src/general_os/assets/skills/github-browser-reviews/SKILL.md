@@ -370,11 +370,11 @@ The runner validates every entry before opening the browser, reuses one
  is explicitly locked/unavailable, no prompt was dispatched, and cleanup is
  clean. A missing or transient model option is not proof of unavailability and
  stops the batch. Missing or unknown dispatch evidence is treated as
- possibly dispatched. Any other non-`completed` result stops the shared batch,
- including a confirmed response that fails revision-evidence validation; the
- next model must not start after a review has been submitted but not accepted.
- The failed review is never
- resubmitted or silently switched to another model. Do not add a keep-open flag
+ possibly dispatched. Any other non-`completed` result stops the shared batch.
+ A confirmed response that only lacks revision-evidence validation may proceed
+ to the next already-authorized model when dispatch is acknowledged and cleanup
+ is clean; it remains `incomplete` and is never resubmitted. The failed review
+ is never silently switched to another model. Do not add a keep-open flag
  or a second browser lifecycle owner. A newly created tab that does not reach the
 composer readiness state is page-local and review-scoped; failure to create a
  page or loss of the shared browser context remains shared-context scoped. If a
@@ -604,9 +604,11 @@ State the exact missing condition and do not substitute a local-only claim.
 If the review is incomplete, interrupted, stale, inconclusive, or otherwise
 missing required evidence, stop and report the exact condition. Do not
 automatically rerun it, retry the same request, submit a replacement request,
-or open another browser review. Continue only after the user explicitly orders
-the requested GitHub review to be rerun; a general request to continue, fix,
-review, or implement is not sufficient unless it explicitly authorizes the
+or open another browser review. A sequential batch may still start a different
+model that was already authorized when the prior transaction is safely settled
+and the batch policy allows continuation. Continue only after the user
+explicitly orders a rerun of the same review; a general request to continue,
+fix, review, or implement is not sufficient unless it explicitly authorizes the
 rerun.
 
 ## Evidence Checklist
