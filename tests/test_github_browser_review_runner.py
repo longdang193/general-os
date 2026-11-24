@@ -147,6 +147,10 @@ assert.equal(
   isResponseContentReady("The first pass already shows the key design tension. I\u2019m narrowing the review to the transaction wait/recovery path."),
   false,
 );
+assert.equal(
+  isResponseContentReady("The pinned documentation already states the intended invariant. I\u2019m now checking whether the implementation enforces it."),
+  false,
+);
 assert.equal(isResponseContentReady("Reviewed completion logic"), false);
 assert.equal(isResponseContentReady("No findings."), true);
 assert.equal(
@@ -328,6 +332,80 @@ assert.equal(result.contentEvidenceUnconfirmed, true);
 '''
     )
 
+
+def test_nested_assistant_match_does_not_replace_complete_response():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ isResponseContentReady, waitForReviewCompletion }} from {RUNNER.as_uri()!r};
+
+const finalText = "Reviewed the pinned revision; no actionable findings.";
+const planningText = "I am now checking the response state.";
+const nestedStatus = {{
+  innerText: planningText,
+  getAttribute: (name) => name === "data-response-body" ? "status-fragment" : null,
+  contains: () => false,
+}};
+const completeTurn = {{
+  innerText: finalText,
+  getAttribute: (name) => name === "data-message-id" ? "assistant-new" : null,
+  contains: (element) => element === nestedStatus,
+}};
+const assistantElements = [completeTurn, nestedStatus];
+const emptyLocator = {{
+  first() {{ return this; }},
+  last() {{ return this; }},
+  nth() {{ return this; }},
+  count: async () => 0,
+  isVisible: async () => false,
+  evaluateAll: async (callback, includeText) => callback([], includeText),
+  getByRole: () => this,
+  getByText: () => this,
+}};
+const assistantLocator = {{
+  first() {{ return this; }},
+  last() {{ return this; }},
+  nth() {{ return this; }},
+  count: async () => assistantElements.length,
+  isVisible: async () => false,
+  evaluateAll: async (callback, includeText) => callback(assistantElements, includeText),
+  getByRole(role, options) {{
+    const visible = role === "button" && options?.name?.test?.("Feedback") === true;
+    return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => visible }};
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+const userLocator = {{
+  evaluateAll: async (callback, includeText) => callback([{{
+    innerText: "Review the pinned change.",
+    getAttribute: () => "submitted-user",
+  }}], includeText),
+}};
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForTimeout: async () => {{}},
+  evaluate: async () => ({{ userTurnCount: 1, assistantTurnCount: 1, latestAssistantFollowsLatestUser: true }}),
+  locator(selector) {{
+    if (selector.includes("data-response-body") || selector.includes('data-message-author-role="assistant"')) return assistantLocator;
+    if (selector.includes("data-user-message-bubble") || selector.includes('data-message-author-role="user"')) return userLocator;
+    return emptyLocator;
+  }},
+  getByRole(role, options) {{
+    const visible = role === "textbox"
+      || (role === "button" && options?.name?.test?.("Feedback") === true);
+    return {{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => visible }};
+  }},
+  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+const result = await waitForReviewCompletion(page, {{
+  baseline: {{ assistantMessageId: "assistant-old", assistantTurnCount: 0, conversationId: "review", submittedPrompt: "Review the pinned change.", submittedUserTurnId: "submitted-user" }},
+  timeoutMs: 100,
+  acceptSnapshot: (snapshot) => isResponseContentReady(snapshot.assistantText),
+}});
+assert.equal(result.status, "confirmed");
+assert.equal(result.response, finalText);
+'''
+    )
 
 def test_planning_checkpoint_does_not_settle_before_final_response():
     run_node_assertion(

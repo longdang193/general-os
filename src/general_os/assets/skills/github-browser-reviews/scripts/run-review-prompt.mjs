@@ -295,12 +295,20 @@ async function readVisibleAssistantMessage(page, { includeText = true } = {}) {
     const turns = page.locator(selector);
     let snapshots;
     if (typeof turns.evaluateAll === "function") {
-      snapshots = await turns.evaluateAll((elements, readText) => elements.map((element) => ({
-        assistantMessageId: ["data-message-id", "data-turn-id", "data-chatgpt-selection-message-id", "data-response-body", "data-testid", "id"]
-          .map((attribute) => element.getAttribute(attribute))
-          .find(Boolean) || null,
-        assistantText: readText ? (element.innerText || "").trim() : "",
-      })), includeText);
+      snapshots = await turns.evaluateAll((elements, readText) => {
+        // Prefer the outer logical turn; nested response-body nodes are often status fragments.
+        const outerElements = elements.filter((element, index) => !elements.some((other, otherIndex) => (
+          otherIndex !== index
+          && typeof other.contains === "function"
+          && other.contains(element)
+        )));
+        return outerElements.map((element) => ({
+          assistantMessageId: ["data-message-id", "data-turn-id", "data-chatgpt-selection-message-id", "data-response-body", "data-testid", "id"]
+            .map((attribute) => element.getAttribute(attribute))
+            .find(Boolean) || null,
+          assistantText: readText ? (element.innerText || "").trim() : "",
+        }));
+      }, includeText);
     } else {
       const count = await turns.count();
       if (count === 0) continue;
@@ -532,7 +540,7 @@ export function isResponseContentReady(response) {
   if (!text) return false;
   const normalized = text.replace(/[\u2019\u2018]/g, "'");
   const nonEmptyLines = normalized.split(/\r?\n/).filter((line) => line.trim());
-  const planningLanguage = /\b(?:i|we)(?:\s+(?:will|shall|am going to|are going to)|\s*'ll)\s+(?:read|inspect|review|trace|report|focus|keep|return|narrow|verify|check|assess)\b|\b(?:i|we)(?:\s+am|\s*'m|\s+are)\s+(?:currently\s+)?(?:reading|inspecting|reviewing|tracing|narrowing|focusing|checking|looking)\b|\b(?:first pass|narrowing the review)\b/i.test(normalized);
+  const planningLanguage = /\b(?:i|we)(?:\s+(?:will|shall|am going to|are going to)|\s*'ll)\s+(?:read|inspect|review|trace|report|focus|keep|return|narrow|verify|check|assess)\b|\b(?:i|we)(?:\s+am|\s*'m|\s+are)\s+(?:(?:currently|now)\s+)?(?:reading|inspecting|reviewing|tracing|narrowing|focusing|checking|looking)\b|\b(?:first pass|narrowing the review)\b/i.test(normalized);
   const concreteOutcome = /(?:\b(?:review complete|no (?:actionable )?(?:findings|issues|problems|defects|vulnerabilities|concerns)|approved|changes requested|findings?\s*:|root cause\s*:|impact\s*:|recommendations?\s*:|identified\s+(?:a|an|the)\s+(?:bug|issue|risk|defect))\b|\[P[0-3]\]\s+\S)/i.test(normalized);
   const planningOnly = planningLanguage && !concreteOutcome;
   const shortUnstructured = normalized.length <= 240
