@@ -471,6 +471,10 @@ import {{ isResponseContentReady }} from {RUNNER.as_uri()!r};
 
 assert.equal(isResponseContentReady("## Plan\\nI will inspect the lifecycle in three stages:\\n\\n1. Trace completion detection.\\n2. Examine response persistence.\\n3. Identify incorrect continuation conditions."), false);
 assert.equal(isResponseContentReady("I will inspect the lifecycle and report findings.\\n" + "I will check the observer and persistence path.\\n".repeat(8)), false);
+assert.equal(isResponseContentReady("Plan:\\n- Inspect the pinned files\\n- Check the runner tests\\n- Report findings"), false);
+assert.equal(isResponseContentReady("## Analysis\\nChecking the completion path next."), false);
+assert.equal(isResponseContentReady("## Analysis\\nThe review identified a bug that can overwrite the final response."), true);
+assert.equal(isResponseContentReady("I found two actionable issues in the pinned revision."), true);
 assert.equal(isResponseContentReady("## Findings\\nReviewed the pinned revision; no actionable findings."), true);
 '''
     )
@@ -2036,6 +2040,69 @@ assert.equal(result.status, "completed");
 assert.equal(responses.at(-1), `${{fullResponse}}\\n`);
 '''
     )
+def test_longer_planning_checkpoint_does_not_overwrite_shorter_final_response():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const planningResponse = "## Plan\\n" + "- Inspect the pinned files\\n".repeat(12);
+const finalResponse = `${{sha}}\\n\\nNo findings.`;
+const page = {{ isClosed: () => false, close: async () => {{}} }};
+const responses = [];
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-planning-longer-than-final",
+  model: "GPT-6.2",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [`https://github.com/owner/repo/blob/${{sha}}/file.md`],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6.2",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/c/planning-longer-than-final",
+      conversationId: "planning-longer-than-final",
+    }}),
+    waitForReviewCompletion: async (_page, {{ onSnapshot }}) => {{
+      await onSnapshot({{
+        currentUrl: "https://chatgpt.com/c/planning-longer-than-final",
+        conversationId: "planning-longer-than-final",
+        assistantMessageId: "assistant-1",
+        assistantTurnCount: 2,
+        assistantText: planningResponse,
+      }});
+      return {{
+        status: "confirmed",
+        currentUrl: "https://chatgpt.com/c/planning-longer-than-final",
+        conversationId: "planning-longer-than-final",
+        assistantMessageId: "assistant-1",
+        assistantTurnIndex: 1,
+        response: finalResponse,
+      }};
+    }},
+    writeResult: async () => {{}},
+    writeResponse: async (filePath, content) => responses.push({{ filePath, content }}),
+  }},
+}});
+
+assert.equal(result.status, "completed");
+const finalWrite = responses.find((entry) => entry.filePath.endsWith("response.md"));
+assert.ok(finalWrite);
+assert.equal(finalWrite.content, `${{finalResponse}}\\n`);
+const partialWrite = responses.find((entry) => entry.filePath.endsWith("response.partial.md"));
+assert.ok(partialWrite);
+assert.equal(partialWrite.content, `${{planningResponse.trim()}}\\n`);
+''',
+    )
+
 def test_accepted_route_transition_replaces_initial_transaction_checkpoint():
     run_node_assertion(
         f'''

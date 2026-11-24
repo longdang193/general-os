@@ -256,14 +256,15 @@ identity-accepted snapshots become checkpoints; rejected route/conversation
 snapshots remain diagnostic-only. If the page or context closes during cleanup,
 the final result uses that last durable checkpoint instead of querying the
 closed page. `response.partial.md` is checkpoint evidence only; `response.md` is
-written after structural final-response observation, even when review-content
-evidence is still unconfirmed. A complete `response.md` does not prove that
+written only from a response that passes the positive review-content gate.
+Structural completion without that gate remains checkpoint evidence. A complete `response.md` does not prove that
 revision evidence was accepted; `result.json` remains the lifecycle authority. Current visible completion markers include `Response complete` and
 `Feedback`. Composer visibility and repeated stable assistant text are not
 sufficient by themselves: the bounded observer also requires a new response
 turn, continuous conversation identity, and a positive review-content gate.
 This compatibility fallback avoids depending on one volatile terminal marker
-while still rejecting planning-only checkpoints. If the content gate does not
+while still requiring a concrete review outcome rather than generic headings or
+lists. If the content gate does not
 pass before the bounded deadline, the observer returns `incomplete` and
 preserves the latest checkpoint rather than treating an intermediate response
 as final. If structural completion is observed but revision evidence is rejected, the bounded observer carries

@@ -539,12 +539,10 @@ export function isResponseContentReady(response) {
   const text = typeof response === "string" ? response.trim() : "";
   if (!text) return false;
   const normalized = text.replace(/[\u2019\u2018]/g, "'");
-  const nonEmptyLines = normalized.split(/\r?\n/).filter((line) => line.trim());
   const planningLanguage = /\b(?:i|we)(?:\s+(?:will|shall|am going to|are going to)|\s*'ll)\s+(?:read|inspect|review|trace|report|focus|keep|return|narrow|verify|check|assess)\b|\b(?:i|we)(?:\s+am|\s*'m|\s+are)\s+(?:(?:currently|now)\s+)?(?:reading|inspecting|reviewing|tracing|narrowing|focusing|checking|looking)\b|\b(?:first pass|narrowing the review)\b/i.test(normalized);
-  const concreteOutcome = /(?:\b(?:review complete|no (?:actionable )?(?:findings|issues|problems|defects|vulnerabilities|concerns)|approved|changes requested|findings?\s*:|root cause\s*:|impact\s*:|recommendations?\s*:|identified\s+(?:a|an|the)\s+(?:bug|issue|risk|defect))\b|\[P[0-3]\]\s+\S)/i.test(normalized);
+  const concreteOutcome = /(?:\b(?:review complete|no (?:actionable )?(?:findings|issues|problems|defects|vulnerabilities|concerns)|approved|changes requested|findings?\s*:|root cause\s*:|impact\s*:|recommendations?\s*:|identified\s+(?:a|an|the)\s+(?:bug|issue|risk|defect)|(?:found|identified|detected|observed)\s+(?:(?:\d+|one|two|three|several|multiple)\s+)?(?:actionable\s+)?(?:findings?|issues?|problems?|defects?|risks?|concerns?))\b|\[P[0-3]\]\s+\S)/i.test(normalized);
   const planningOnly = planningLanguage && !concreteOutcome;
-  const reviewStructure = /(?:^|\n)\s{0,3}(?:#{1,6}\s+(?:review|summary|findings|analysis|recommendations?|conclusion)\b|(?:[-*]|\d+[.)])\s+\S)/im.test(normalized);
-  return !planningOnly && (concreteOutcome || reviewStructure);
+  return !planningOnly && concreteOutcome;
 }
 
 export async function submitPrompt(page, composer, prompt, { beforeSubmit, signal } = {}) {

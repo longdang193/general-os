@@ -1102,6 +1102,7 @@ export async function runReviewTransaction(context, options) {
   let stage = "artifacts";
   let resultPersisted = false;
   let checkpointResponse = null;
+  let finalEligibleResponse = null;
   let lastAcceptedSnapshot = null;
   let completionDeadlineAt = null;
   let recoveredCompletionSettled = false;
@@ -1115,12 +1116,22 @@ export async function runReviewTransaction(context, options) {
   const persistResponse = async (response, { authoritative = false } = {}) => {
     const responseText = typeof response === "string" ? response.trim() : "";
     if (!outputDir || !responseText) return;
-    const acceptedResponse = checkpointResponse && responseText.length < checkpointResponse.length
-      ? checkpointResponse
-      : responseText;
+    const acceptedResponse = authoritative
+      ? finalEligibleResponse && responseText.length < finalEligibleResponse.length
+        ? finalEligibleResponse
+        : responseText
+      : checkpointResponse && responseText.length < checkpointResponse.length
+        ? checkpointResponse
+        : responseText;
     const responsePath = join(outputDir, authoritative ? "response.md" : "response.partial.md");
     await writeResponse(responsePath, `${acceptedResponse}\n`);
     checkpointResponse = acceptedResponse;
+    if (isResponseContentReady(responseText)) {
+      finalEligibleResponse = finalEligibleResponse && responseText.length < finalEligibleResponse.length
+        ? finalEligibleResponse
+        : responseText;
+    }
+    if (authoritative) finalEligibleResponse = acceptedResponse;
     result.response_capture = authoritative ? "final" : "partial";
     if (authoritative) {
       try {
