@@ -100,7 +100,7 @@ export async function findModelOption(menu, model) {
         "MODEL_UNAVAILABLE",
       );
     }
-    if (optionText === expectedLabel) {
+    if (optionText === expectedLabel || optionText.startsWith(`${expectedLabel} `)) {
       return option;
     }
   }

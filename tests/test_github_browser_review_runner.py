@@ -39,6 +39,23 @@ assert.equal(await findModelOption(menu, "GPT-6.2"), option);
     )
 
 
+def test_model_catalog_accepts_subscription_metadata_after_visible_label():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ findModelOption }} from {(ROOT / "src/general_os/assets/skills/github-browser-reviews/scripts/select-review-model.mjs").as_uri()!r};
+
+const option = {{ innerText: async () => "GPT-5.6 Sol\\nLeaving on December 23" }};
+const menu = {{
+  locator: (selector) => {{
+    assert.equal(selector, '[role="menuitemradio"]:visible');
+    return {{ count: async () => 1, nth: () => option }};
+  }},
+}};
+assert.equal(await findModelOption(menu, "GPT-5.6-Sol"), option);
+'''
+    )
+
 def test_model_selection_distinguishes_missing_from_visible_unavailable_option():
     run_node_assertion(
         f'''
