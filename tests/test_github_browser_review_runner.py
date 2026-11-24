@@ -309,6 +309,7 @@ assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo 
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings. I still need to look at the pinned file before I can conclude.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nNo findings; I may inspect the pinned file next.", provenance), false);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nMedium — verified finding.\\nThe evidence gate was too strict.", provenance), true);
+assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\n[P1] The workflow is not yet suitable for production; a pending external check does not change this finding. The evidence still needs verification by the operator.\\nReview complete.", provenance), true);
 assert.equal(hasRevisionEvidence("0123456789abcdef0123456789abcdef01234567\\nHigh — parser defect.\\nI still need to analyze the remaining pinned file.", provenance), false);
 '''
     )
@@ -1724,6 +1725,56 @@ assert.equal(result.conversation_id, "accepted");
 assert.equal(result.last_visible_conversation_url, "https://chatgpt.com/c/rejected");
 assert.equal(result.last_visible_conversation_id, "rejected");
 assert.equal(responses.at(-1), "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.\\n");
+'''
+    )
+
+
+def test_durable_checkpoint_stays_nonterminal_until_page_cleanup():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const page = {{ close: async () => {{}} }};
+const checkpoints = [];
+const result = await runReviewTransaction({{}}, {{
+  runOutputDir: "review-output/run-cleanup-checkpoint",
+  model: "GPT-6",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [`https://github.com/owner/repo/blob/${{sha}}/file.md`],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/c/cleanup-checkpoint",
+      conversationId: "cleanup-checkpoint",
+    }}),
+    waitForReviewCompletion: async () => ({{
+      status: "confirmed",
+      currentUrl: "https://chatgpt.com/c/cleanup-checkpoint",
+      conversationId: "cleanup-checkpoint",
+      assistantMessageId: "assistant-1",
+      assistantTurnIndex: 0,
+      response: `Reviewed ${{sha}}; no findings.`,
+    }}),
+    writeResult: async (_outputDir, snapshot) => checkpoints.push({{ ...snapshot }}),
+    writeResponse: async () => {{}},
+  }},
+}});
+
+const pendingCheckpoint = checkpoints.find((snapshot) => snapshot.cleanup_status === "pending");
+assert.ok(pendingCheckpoint);
+assert.equal(pendingCheckpoint.status, "incomplete");
+assert.equal(result.status, "completed");
 '''
     )
 

@@ -225,8 +225,9 @@ export function hasRevisionEvidence(response, { commitSha, reviewUrls } = {}) {
   if (typeof response !== "string" || !response.trim()) return false;
   const responseLines = response.split(/\r?\n/);
   const accessFailureLanguage = responseLines.some((line) => /^\s*(?:[-*]\s*)?(?:(?:i|we)\s+(?:could not|couldn't|cannot|can't|am unable to|are unable to|do not|don't)\s+(?:access|review|inspect|load|read)|(?:could not|unable to|not able to|cannot|can't)\s+(?:access|review|inspect|load|read)|(?:i|we)\s+(?:do not|don't)\s+have access)\b/i.test(line));
-  if (accessFailureLanguage || /\b(?:not|never|not yet|pending)\s+approved\b/i.test(response)) return false;
-  const provisionalLanguage = /\b(?:i|we)(?:\s+(?:will|may|might)|\s*'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|not started|needs?\s+(?:investigation|verification)|(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)|(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|analyzed|analysed|investigated|compared|looked at|confirmed))\b/i;
+  const unapprovedReviewLanguage = /\b(?:review|assessment|analysis|inspection|verification|conclusion|result|status|decision)\b[^\r\n.]{0,80}\b(?:not|never|not yet|pending)\s+approved\b|\b(?:not|never|not yet|pending)\s+approved\b[^\r\n.]{0,80}\b(?:review|assessment|analysis|inspection|verification|conclusion|result|status|decision)\b/i.test(response);
+  if (accessFailureLanguage || unapprovedReviewLanguage) return false;
+  const provisionalLanguage = /\b(?:i|we)(?:\s+(?:will|may|might)|\s*'ll)\s+(?:report|inspect|review|check|verify|confirm|determine|assess)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|not started)\s+(?:until|before|while)\b|\b(?:pending|tentative|provisional|to be confirmed|not yet|not started)\b[^\r\n.]{0,80}\b(?:inspect|review|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)\b|\b(?:review|assessment|analysis|inspection|verification|conclusion|report|result|status|decision)\b[^\r\n.]{0,80}\b(?:pending|tentative|provisional|to be confirmed|not yet|not started)\b|\b(?:possible|suspected|potential)\s+(?:issue|finding|problem|defect)\b[^\r\n.]{0,80}\bneeds?\s+(?:investigation|verification)\b|\b(?:still\s+)?needs?\s+to\s+(?:inspect|review|check|read|examine|analy[sz]e|investigate|compare|look(?:\s+at)?|verify|confirm)|\b(?:haven't|have\s+not)\s+(?:inspected|reviewed|verified|checked|read|examined|analyzed|analysed|investigated|compared|looked at|confirmed)\b/i;
   const severityPattern = /(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\s*\(P[0-3]\)|\bseverity\s*:\s*(?:\[[Pp][0-3]\]|\bP[0-3]\b|\b(?:critical|high|medium|low)\b)\s*[-:—;]\s*\S|^\s*(?:(?:[-*]|\d+[.)])\s+)?(?:critical|high|medium|low)\b(?=\s*(?:[-:—]|$)))/i;
   const conclusiveSeverity = response.split(/\r?\n/).some((line) => severityPattern.test(line)
     && !/\b(?:will|'ll|pending|tentative|provisional|to be confirmed|not yet)\b/i.test(line)
@@ -1380,6 +1381,7 @@ export async function runReviewTransaction(context, options) {
       try {
         stage = "artifacts";
         result.cleanup_status = page ? "pending" : "not_needed";
+        if (page && result.status === "completed") result.status = "incomplete";
         await persist();
       } catch (error) {
         const artifactReason = errorMessage(error);

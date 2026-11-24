@@ -573,6 +573,10 @@ The reviewer should confirm that it read the requested revision by citing a
 known heading, hash, file marker, or equivalent evidence before the review is
 accepted. The runner records the completed response and conversation identity;
 the caller remains responsible for judging file-specific review evidence.
+The runner only treats provisional language as a failure when it describes
+review state or an explicit future action; a finding about the reviewed subject
+(for example, that it is not yet suitable for production) does not invalidate
+revision evidence by itself.
 
 ### 6. Handle unavailable revisions
 
