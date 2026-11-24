@@ -243,8 +243,9 @@ The runner performs one non-submitting visible authentication preflight for the
 owned context. It reuses the bootstrap ChatGPT tab instead of opening a
 temporary second tab. An explicit login wall blocks the
 batch before review pages are opened. It selects and visibly verifies the requested model and effort,
-submits at most once, waits for a new stable visible assistant turn, writes
-`response.md` and a small `result.json`, and only then closes the owned browser
+submits at most once, waits for a new stable visible assistant turn, checkpoints
+interim text to `response.partial.md`, writes the complete final answer to
+`response.md`, and writes a small `result.json` before it closes the owned browser
 context. While the response is visibly generating, completion observation polls
 cheap visible state and defers full assistant-text extraction until generation
 stops and stability can be checked.
@@ -254,9 +255,10 @@ assistant message, and response text while the page is still available. Only
 identity-accepted snapshots become checkpoints; rejected route/conversation
 snapshots remain diagnostic-only. If the page or context closes during cleanup,
 the final result uses that last durable checkpoint instead of querying the
-closed page. `response.md` is the latest accepted response checkpoint, not
-proof that the transaction is complete; `result.json` remains the lifecycle
-authority. Current visible completion markers include `Response complete` and
+closed page. `response.partial.md` is checkpoint evidence only; `response.md` is
+written only after a final response is observed. A complete `response.md` does
+not prove that revision evidence was accepted; `result.json` remains the
+lifecycle authority. Current visible completion markers include `Response complete` and
 `Feedback`. When those controls are unavailable, repeated stable assistant
 text can confirm completion after the new-turn, identity, interruption,
 submitted-turn, and composer-readiness checks pass. If structural completion is observed but revision evidence is

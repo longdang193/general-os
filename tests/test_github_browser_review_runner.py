@@ -322,9 +322,9 @@ const result = await waitForReviewCompletion(page, {{
   timeoutMs: 20,
   acceptSnapshot: () => {{ acceptanceChecks += 1; return false; }},
 }});
-assert.equal(result.status, "confirmed");
+assert.equal(result.status, "incomplete");
 assert.ok(acceptanceChecks > 0);
-assert.equal(result.contentEvidenceUnconfirmed, true);
+assert.equal(result.contentEvidenceUnconfirmed, false);
 '''
     )
 
@@ -2188,7 +2188,7 @@ function pageFor() {{
         isVisible: async () => false,
         evaluateAll: async (callback, includeText) => callback([
           {{ innerText: "Older", getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null }},
-          {{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567", getAttribute: (name) => name === "data-message-id" ? "assistant-2" : null }},
+          {{ innerText: "Review complete; 0123456789abcdef0123456789abcdef01234567", getAttribute: (name) => name === "data-message-id" ? "assistant-2" : null }},
         ], includeText),
       }};
     }},
@@ -3045,8 +3045,75 @@ const result = await runReviewTransaction({{}}, {{
 
 assert.equal(result.completion, "confirmed");
 assert.equal(result.status, "incomplete");
-assert.match(result.failure_reason, /without citing/);
+assert.match(result.failure_reason, /final response was observed/);
 '''
+    )
+
+
+def test_planning_checkpoint_is_partial_and_final_response_is_preserved_without_revision_evidence():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ existsSync, readFileSync }} from "node:fs";
+import {{ mkdir, mkdtemp, rm }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const root = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "review-capture-"));
+const planningDir = join(root, "planning");
+const finalDir = join(root, "final");
+await mkdir(planningDir, {{ recursive: true }});
+await mkdir(finalDir, {{ recursive: true }});
+const page = {{ close: async () => {{}} }};
+const base = (runOutputDir, response) => ({{
+  runOutputDir,
+  model: "GPT-6.2",
+  effort: "High",
+  prompt: "review prompt",
+  promptFile: "review.txt",
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [`https://github.com/owner/repo/blob/${{sha}}/file.md`],
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      model: "GPT-6.2",
+      effort: "High",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      currentUrl: "https://chatgpt.com/c/review",
+      conversationId: "review",
+      completion: {{
+        status: "confirmed",
+        currentUrl: "https://chatgpt.com/c/review",
+        conversationId: "review",
+        assistantMessageId: "assistant-1",
+        assistantTurnIndex: 0,
+        response,
+      }},
+    }}),
+    writeResult: async () => {{ }},
+  }},
+}});
+
+const planning = await runReviewTransaction({{}}, base(planningDir, "I will inspect the pull request and report findings."));
+assert.equal(planning.status, "incomplete");
+assert.equal(planning.response_capture, "partial");
+assert.equal(existsSync(join(planningDir, "response.partial.md")), true);
+assert.equal(existsSync(join(planningDir, "response.md")), false);
+
+const final = await runReviewTransaction({{}}, base(finalDir, "Review complete; no findings."));
+assert.equal(final.status, "incomplete");
+assert.equal(final.response_capture, "final");
+assert.equal(final.content_evidence_unconfirmed, true);
+assert.equal(existsSync(join(finalDir, "response.md")), true);
+assert.equal(readFileSync(join(finalDir, "response.md"), "utf8"), "Review complete; no findings.\\n");
+assert.equal(existsSync(join(finalDir, "response.partial.md")), false);
+
+await rm(root, {{ recursive: true, force: true }});
+''',
     )
 
 
@@ -3846,6 +3913,7 @@ const results = await runReviewBatch({{
       ? {{
           status: "incomplete",
           completion: "confirmed",
+          response_capture: "final",
           cleanup_status: "completed",
           submission: "acknowledged",
           dispatch_state: "acknowledged",
@@ -3871,6 +3939,49 @@ assert.equal(results[0].content_evidence_unconfirmed, true);
 assert.equal(results[1].status, "completed");
 '''
     )
+
+
+def test_batch_stops_when_first_response_is_only_partial():
+    run_node_assertion(
+        f'''import assert from "node:assert/strict";
+import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const reviewUrl = `https://github.com/owner/repo/blob/${{sha}}/file.md`;
+const reviews = ["GPT-5.6-Sol", "GPT-6.2"].map((model) => ({{
+  model,
+  effort: "High",
+  prompt: `Review ${{reviewUrl}} at ${{sha}}`,
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [reviewUrl],
+  runOutputDir: `review-output/run-${{model}}`,
+}}));
+let calls = 0;
+const results = await runReviewBatch({{
+  attached: {{ context: {{}}, projectKey: "owner-repo", repository: "owner/repo" }},
+  reviews,
+  runTransaction: async () => {{
+    calls += 1;
+    return {{
+      status: "incomplete",
+      completion: "incomplete",
+      response_capture: "partial",
+      dispatch_state: "acknowledged",
+      cleanup_status: "completed",
+      failure_scope: "review",
+      failure_stage: "completion",
+    }};
+  }},
+  closeContextFn: async () => {{}} ,
+}});
+
+assert.equal(calls, 1);
+assert.equal(results[0].response_capture, "partial");
+assert.equal(results[1].status, "skipped");
+''',
+    )
+
 
 def test_batch_stops_when_dispatch_evidence_is_missing():
     run_node_assertion(
@@ -4307,13 +4418,13 @@ function pageFor(snapshots) {{
 }}
 
 const result = await waitForExistingReviewCompletion(pageFor([
-  {{ url: "https://chatgpt.com/c/existing-review", assistant: [["assistant-1", "Existing review"]] }},
-  {{ url: "https://chatgpt.com/c/existing-review", assistant: [["assistant-1", "Existing review"]] }},
-  {{ url: "https://chatgpt.com/c/existing-review", assistant: [["assistant-1", "Existing review"]] }},
+  {{ url: "https://chatgpt.com/c/existing-review", assistant: [["assistant-1", "Reviewed the pinned revision; no findings."]] }},
+  {{ url: "https://chatgpt.com/c/existing-review", assistant: [["assistant-1", "Reviewed the pinned revision; no findings."]] }},
+  {{ url: "https://chatgpt.com/c/existing-review", assistant: [["assistant-1", "Reviewed the pinned revision; no findings."]] }},
 ]), {{ conversationUrl: "https://chatgpt.com/c/existing-review", timeoutMs: 1000 }});
 assert.equal(result.status, "confirmed");
 assert.equal(result.conversationId, "existing-review");
-assert.equal(result.response, "Existing review");
+assert.equal(result.response, "Reviewed the pinned revision; no findings.");
 '''
     )
 

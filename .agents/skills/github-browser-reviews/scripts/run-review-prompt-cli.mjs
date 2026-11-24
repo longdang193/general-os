@@ -361,6 +361,8 @@ export function createResult(options) {
     assistant_message_id: null,
     assistant_turn_index: null,
     response_path: "response.md",
+    partial_response_path: "response.partial.md",
+    response_capture: "none",
     cleanup_status: "not_started",
     cleanup_warning: null,
     stale_response_cleanup_error: null,
@@ -1112,8 +1114,11 @@ export async function runReviewTransaction(context, options) {
   const persistResponse = async (response, { authoritative = false } = {}) => {
     const responseText = typeof response === "string" ? response.trim() : "";
     if (!outputDir || !responseText || (!authoritative && checkpointResponse && responseText.length < checkpointResponse.length)) return;
-    await writeResponse(join(outputDir, "response.md"), `${responseText}\n`);
+    const responsePath = join(outputDir, authoritative ? "response.md" : "response.partial.md");
+    await writeResponse(responsePath, `${responseText}\n`);
     checkpointResponse = responseText;
+    result.response_capture = authoritative ? "final" : "partial";
+    if (authoritative) await rm(join(outputDir, "response.partial.md"), { force: true });
   };
 
   const persistSnapshot = async (snapshot) => {
@@ -1127,6 +1132,8 @@ export async function runReviewTransaction(context, options) {
         result.assistant_turn_index = null;
         try {
           await rm(join(outputDir, "response.md"), { force: true });
+          await rm(join(outputDir, "response.partial.md"), { force: true });
+          result.response_capture = "none";
         } catch (error) {
           if (!result.stale_response_cleanup_error) {
             result.stale_response_cleanup_error = errorMessage(error);
@@ -1257,16 +1264,24 @@ export async function runReviewTransaction(context, options) {
       }
     }
 
+    const responseContentReady = completion.status === "confirmed"
+      && completionSnapshot?.responseTurnObserved !== false
+      && isResponseContentReady(completionSnapshot?.response);
     if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false) {
       stage = "artifacts";
-      await persistResponse(completionSnapshot.response, { authoritative: completion.status === "confirmed" });
+      await persistResponse(completionSnapshot.response, { authoritative: responseContentReady });
     }
     if (completion.status !== "confirmed") {
       result.status = "incomplete";
       result.failure_scope = "review";
       result.failure_stage = "completion";
       result.failure_reason = appendFailureReason(result.failure_reason, completion.failureReason || "Review completion was not confirmed");
-    } else if (!hasRevisionEvidence(completionSnapshot.response, options)) {
+    } else if (!responseContentReady) {
+      result.status = "incomplete";
+      result.failure_scope = "review";
+      result.failure_stage = "completion";
+      result.failure_reason = appendFailureReason(result.failure_reason, "Review lifecycle settled before a final response was observed");
+    } else if (!hasRevisionEvidence(completionSnapshot?.response, options)) {
       result.content_evidence_unconfirmed = true;
       result.status = "incomplete";
       result.failure_scope = "review";
@@ -1353,8 +1368,11 @@ export async function runReviewTransaction(context, options) {
                 result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? null;
               }
             }
-            if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && outputDir) {
-             await persistResponse(completionSnapshot.response, { authoritative: completion.status === "confirmed" });
+           const responseContentReady = completion.status === "confirmed"
+             && completionSnapshot?.responseTurnObserved !== false
+             && isResponseContentReady(completionSnapshot?.response);
+           if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && outputDir) {
+             await persistResponse(completionSnapshot.response, { authoritative: responseContentReady });
           }
            if (completion.status === "confirmed") {
              if (!options.existingConversationUrl) {
@@ -1362,7 +1380,12 @@ export async function runReviewTransaction(context, options) {
                result.dispatch_state = "acknowledged";
              }
              recoveredCompletionSettled = true;
-             if (hasRevisionEvidence(completionSnapshot?.response, options)) {
+             if (!responseContentReady) {
+               result.status = "incomplete";
+               result.failure_scope = "review";
+               result.failure_stage = "completion";
+               result.failure_reason = "Review lifecycle settled before a final response was observed";
+             } else if (hasRevisionEvidence(completionSnapshot?.response, options)) {
                result.status = "completed";
                result.failure_scope = null;
                result.failure_stage = null;
@@ -1493,8 +1516,9 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         && result.failure_scope === "review"
         && result.failure_stage === "completion"
         && result.completion === "confirmed"
+        && result.response_capture === "final"
         && result.content_evidence_unconfirmed === true
-        && result.dispatch_state === "acknowledged"
+        && result.dispatch_state !== "ambiguous"
         && result.cleanup_status === "completed"
         && result.cleanup_warning == null;
       if (result.status !== "completed" && !mayContinueBeforeDispatch && !mayContinueAfterEvidenceGap) {

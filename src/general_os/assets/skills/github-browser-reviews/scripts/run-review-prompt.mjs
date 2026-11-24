@@ -842,8 +842,12 @@ export async function waitForReviewCompletion(page, {
       allowStableTextFallback: true,
     });
     if (completionReady) {
-      // Lifecycle settlement is independent from review-content classification.
-      contentEvidenceUnconfirmed = !(await acceptSnapshot(snapshot));
+      // Do not settle on a stable planning checkpoint; keep observing the same turn.
+      if (!(await acceptSnapshot(snapshot))) {
+        await page.waitForTimeout(backoffMs);
+        backoffMs = Math.min(backoffMs * 2, COMPLETION_MAX_BACKOFF_MS);
+        continue;
+      }
       return {
         ...snapshot,
         assistantTurnIndex: snapshot.assistantTurnCount - 1,
@@ -851,10 +855,7 @@ export async function waitForReviewCompletion(page, {
         status: "confirmed",
         checkpointAccepted: true,
         responseTurnObserved: true,
-        contentEvidenceUnconfirmed,
-        failureReason: contentEvidenceUnconfirmed
-          ? "content_evidence_unconfirmed: stable response did not satisfy revision evidence"
-          : undefined,
+        contentEvidenceUnconfirmed: false,
       };
     }
 
@@ -984,7 +985,7 @@ export async function waitForExistingReviewCompletion(page, {
       responseTurnObserved,
     };
     if (onSnapshot) await onSnapshot(observedSnapshot);
-    if (responseTurnObserved && evaluateReviewCompletion({
+    if (responseTurnObserved && isResponseContentReady(snapshot.assistantText) && evaluateReviewCompletion({
       ...observedSnapshot,
       assistantTurnCount: 1,
       baselineAssistantTurnCount: 0,
