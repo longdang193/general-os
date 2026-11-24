@@ -39,6 +39,35 @@ assert.equal(await findModelOption(menu, "GPT-6.2"), option);
     )
 
 
+def test_model_selection_distinguishes_missing_from_visible_unavailable_option():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ findModelOption }} from {(ROOT / "src/general_os/assets/skills/github-browser-reviews/scripts/select-review-model.mjs").as_uri()!r};
+
+const missingMenu = {{
+  locator: () => ({{ count: async () => 0, nth: () => null }}),
+}};
+await assert.rejects(
+  findModelOption(missingMenu, "GPT-6.2"),
+  (error) => error.code === "MODEL_MENU_TRANSIENT",
+);
+
+const unavailableOption = {{
+  innerText: async () => "GPT-6.2 Locked",
+  getAttribute: async (name) => name === "aria-disabled" ? "true" : null,
+}};
+const unavailableMenu = {{
+  locator: () => ({{ count: async () => 1, nth: () => unavailableOption }}),
+}};
+await assert.rejects(
+  findModelOption(unavailableMenu, "GPT-6.2"),
+  (error) => error.code === "MODEL_UNAVAILABLE",
+);
+''',
+    )
+
+
 def test_stable_new_assistant_turn_confirms_without_transient_ui_signal():
     run_node_assertion(
         f'''
@@ -1971,6 +2000,17 @@ assert.equal(reloadCount, 0);
     )
 
 
+def test_invalid_html_content_type_is_challenge_evidence():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ isChallengeEvidence }} from {RUNNER.as_uri()!r};
+
+assert.equal(isChallengeEvidence({{ visibleText: "Invalid content type: text/html" }}), true);
+''',
+    )
+
+
 def test_challenge_failure_code_is_persisted_without_marking_dispatch():
     run_node_assertion(
         f'''
@@ -3807,6 +3847,81 @@ assert.equal(results[1].status, "skipped");
 '''
     )
 
+def test_batch_does_not_reuse_bootstrap_page_for_review_transactions():
+    run_node_assertion(
+        f'''import assert from "node:assert/strict";
+import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const reviewUrl = `https://github.com/owner/repo/blob/${{sha}}/file.md`;
+const bootstrapPage = {{ name: "bootstrap" }};
+const reviews = ["GPT-5.6-Sol", "GPT-6.2"].map((model) => ({{
+  model,
+  effort: "High",
+  prompt: `Review ${{reviewUrl}} at ${{sha}}`,
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [reviewUrl],
+  runOutputDir: `review-output/run-${{model}}`,
+}}));
+const receivedPages = [];
+await runReviewBatch({{
+  attached: {{ context: {{}}, projectKey: "owner-repo", repository: "owner/repo", reviewPage: bootstrapPage }},
+  reviews,
+  runTransaction: async (_context, options) => {{
+    receivedPages.push(options.reviewPage);
+    return {{ status: "completed", completion: "confirmed", cleanup_status: "completed" }};
+  }},
+  closeContextFn: async () => {{}},
+}});
+
+assert.deepEqual(receivedPages, [undefined, undefined]);
+''',
+    )
+
+
+def test_model_unavailable_continues_only_after_clean_transaction_cleanup():
+    run_node_assertion(
+        f'''import assert from "node:assert/strict";
+import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const reviewUrl = `https://github.com/owner/repo/blob/${{sha}}/file.md`;
+const reviews = ["GPT-5.6-Sol", "GPT-6.2"].map((model) => ({{
+  model,
+  effort: "High",
+  prompt: `Review ${{reviewUrl}} at ${{sha}}`,
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [reviewUrl],
+  runOutputDir: `review-output/run-${{model}}`,
+}}));
+let calls = 0;
+const results = await runReviewBatch({{
+  attached: {{ context: {{}}, projectKey: "owner-repo", repository: "owner/repo" }},
+  reviews,
+  runTransaction: async () => {{
+    calls += 1;
+    return calls === 1
+      ? {{
+          status: "blocked",
+          failure_code: "MODEL_UNAVAILABLE",
+          failure_scope: "review",
+          dispatch_state: "not_dispatched",
+          cleanup_status: "completed",
+          cleanup_warning: null,
+        }}
+      : {{ status: "completed", completion: "confirmed", cleanup_status: "completed" }};
+  }},
+  closeContextFn: async () => {{}},
+}});
+
+assert.equal(calls, 2);
+assert.equal(results[1].status, "completed");
+''',
+    )
+
+
 def test_closed_shared_review_page_stops_batch_and_skips_following_review():
     run_node_assertion(
         f'''
@@ -3841,7 +3956,7 @@ const result = await runReviewBatch({{
 }});
 
 assert.equal(result.length, 2);
-assert.equal(result[0].failure_scope, "shared_context");
+assert.equal(result[0].failure_scope, "review");
 assert.equal(result[1].status, "skipped");
 assert.equal(result[1].failure_scope, "shared_context");
 '''

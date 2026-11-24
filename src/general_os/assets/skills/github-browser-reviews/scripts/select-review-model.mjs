@@ -87,12 +87,22 @@ export async function findModelOption(menu, model) {
   const expectedLabel = MODEL_LABELS[model];
   for (let index = 0; index < await options.count(); index += 1) {
     const option = options.nth(index);
-    if (normalizeText(await option.innerText()) === expectedLabel) {
+    const optionText = normalizeText(await option.innerText());
+    if (optionText === expectedLabel) {
       return option;
+    }
+    const unavailable = /(?:locked|unavailable|usage limit|limit reached|not available)/i.test(optionText)
+      || (await option.getAttribute("aria-disabled")) === "true"
+      || (await option.getAttribute("data-disabled")) === "true";
+    if (unavailable && optionText.startsWith(expectedLabel)) {
+      throw createModelSelectionError(
+        `Visible model option is unavailable: ${expectedLabel}`,
+        "MODEL_UNAVAILABLE",
+      );
     }
   }
 
-  throw createModelSelectionError(`Visible model option was not found: ${expectedLabel}`, "MODEL_UNAVAILABLE");
+  throw createModelSelectionError(`Visible model option was not found: ${expectedLabel}`, "MODEL_MENU_TRANSIENT");
 }
 
 async function selectModel(menu, model) {

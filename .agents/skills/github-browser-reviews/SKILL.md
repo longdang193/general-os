@@ -362,8 +362,10 @@ The runner validates every entry before opening the browser, reuses one
   release removes only the current lease token. Normal SIGINT/SIGTERM cleanup
  makes a best-effort release when ownership remains provable. Selection failures
  carry an explicit scope: a model-specific `MODEL_UNAVAILABLE` failure is
- review-scoped and may let the batch continue only when no prompt was dispatched
- and cleanup is clean. Missing or unknown dispatch evidence is treated as
+ review-scoped and may let the batch continue only when the visible model item
+ is explicitly locked/unavailable, no prompt was dispatched, and cleanup is
+ clean. A missing or transient model option is not proof of unavailability and
+ stops the batch. Missing or unknown dispatch evidence is treated as
  possibly dispatched. Any other non-`completed` result stops the shared batch,
  including a confirmed response that fails revision-evidence validation; the
  next model must not start after a review has been submitted but not accepted.

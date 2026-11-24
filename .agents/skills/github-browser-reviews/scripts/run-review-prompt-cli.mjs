@@ -1468,7 +1468,6 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         ...review,
         reviewIndex: review.reviewIndex ?? index,
         outputDir,
-        reviewPage: attached.reviewPage,
         abortSignal,
       });
       results.push(result);
@@ -1478,6 +1477,7 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         && result.failure_scope === "review"
         && result.failure_code === "MODEL_UNAVAILABLE"
         && !dispatchMayHaveStarted
+        && result.cleanup_status === "completed"
         && result.cleanup_warning == null;
       if (result.status !== "completed" && !mayContinueBeforeDispatch) {
         for (let skippedIndex = index + 1; skippedIndex < validatedReviews.length; skippedIndex += 1) {

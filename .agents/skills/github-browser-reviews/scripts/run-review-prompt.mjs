@@ -61,7 +61,7 @@ function throwIfAborted(signal) {
 export function isChallengeEvidence(evidence) {
   const frameSources = Array.isArray(evidence?.frameSources) ? evidence.frameSources.join(" ") : "";
   const content = `${evidence?.currentUrl || ""} ${evidence?.pageTitle || ""} ${evidence?.visibleText || ""} ${frameSources}`;
-  return /(?:cloudflare|challenge-platform|verify you are human|checking your browser|just a moment|human verification)/i.test(content);
+  return /(?:cloudflare|challenge-platform|verify you are human|checking your browser|just a moment|human verification|invalid content type:\s*text\/html)/i.test(content);
 }
 
 function assertPrompt(prompt) {
@@ -553,16 +553,19 @@ export async function submitPrompt(page, composer, prompt, { beforeSubmit, signa
   }
 
   const sendButton = page.getByRole("button", { name: /^(Send|Send message|Submit)$/i }).first();
-  if (beforeSubmit) await beforeSubmit();
   throwIfAborted(signal);
   let dispatchState = "not_dispatched";
   try {
     const sendButtonVisible = await sendButton.isVisible();
     throwIfAborted(signal);
     if (sendButtonVisible) {
+      if (beforeSubmit) await beforeSubmit();
+      throwIfAborted(signal);
       dispatchState = "possibly_dispatched";
       await sendButton.click({ timeout: UI_ACTION_TIMEOUT_MS });
     } else {
+      if (beforeSubmit) await beforeSubmit();
+      throwIfAborted(signal);
       dispatchState = "possibly_dispatched";
       await composer.press("Enter", { timeout: UI_ACTION_TIMEOUT_MS });
     }
@@ -992,7 +995,8 @@ export async function waitForExistingReviewCompletion(page, {
       baselineAssistantTurnCount: 0,
       expectedConversationId,
       stableSampleCount,
-    }) && snapshot.responseActionsReady) {
+      allowStableTextFallback: true,
+    })) {
       return {
         ...observedSnapshot,
         assistantTurnIndex: Math.max(0, snapshot.assistantTurnCount - 1),
