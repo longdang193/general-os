@@ -10,12 +10,15 @@ import { pathToFileURL } from "node:url";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
 import {
+  captureReviewResponse,
   captureVisibleEvidence,
   extractConversationIdentity,
   runReviewPromptInNewTab,
   preflightAuthenticatedContext,
   AMBIGUOUS_DISPATCH_TIMEOUT_MS,
+  COMPOSER_READINESS_TIMEOUT_MS,
   COMPLETION_TIMEOUT_MS,
+  PROFILE_REOPEN_INTERVAL_MS,
   normalizeExistingConversationUrl,
   waitForReviewCompletion,
   isResponseContentReady,
@@ -43,6 +46,7 @@ const VALUE_ARGUMENTS = new Set([
   "--model",
   "--output-dir",
   "--prompt-file",
+  "--reopen-interval",
   "--project-key",
   "--repository",
   "--review-url",
@@ -50,7 +54,7 @@ const VALUE_ARGUMENTS = new Set([
   "--batch-file",
   "--user-data-dir",
 ]);
-const USAGE = "Usage: node run-review-prompt-cli.mjs (--launch-cdp --user-data-dir <path> --project-key <owner-repository> | --user-data-dir <path> --project-key <owner-repository> | --cdp-endpoint <url>) (--model <GPT-5.6-Sol|GPT-6|GPT-6.2> --effort <Instant|Medium|High> --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... [--existing-conversation-url <url>]) | --batch-file <path>) [--cdp-port <port>] [--output-dir <path>] [--context-index <number>]";
+const USAGE = "Usage: node run-review-prompt-cli.mjs (--launch-cdp --user-data-dir <path> --project-key <owner-repository> | --user-data-dir <path> --project-key <owner-repository> | --cdp-endpoint <url>) (--model <GPT-5.6-Sol|GPT-6|GPT-6.2> --effort <Instant|Medium|High> --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... [--existing-conversation-url <url>]) | --batch-file <path>) [--cdp-port <port>] [--output-dir <path>] [--context-index <number>] [--reopen-interval <seconds>]";
 const FLAG_ARGUMENTS = new Set(["--launch-cdp"]);
 const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/i;
 const GITHUB_BLOB_URL_PATTERN = /https:\/\/github\.com\/[^\s<>"']+/gi;
@@ -96,6 +100,7 @@ export function parseArguments(argv) {
   const existingConversationUrl = argumentsByName.get("--existing-conversation-url");
   const batchFile = argumentsByName.get("--batch-file");
   const contextIndexValue = argumentsByName.get("--context-index");
+  const reopenIntervalValue = argumentsByName.get("--reopen-interval");
   const launchCdp = argumentsByName.has("--launch-cdp");
   const outputDir = argumentsByName.get("--output-dir") || DEFAULT_OUTPUT_DIR;
 
@@ -126,11 +131,16 @@ export function parseArguments(argv) {
   const contextIndex = contextIndexValue === undefined ? DEFAULT_CONTEXT_INDEX : Number(contextIndexValue);
   if (!Number.isInteger(contextIndex) || contextIndex < 0) usageError(`Invalid context index: ${contextIndexValue}`);
   const cdpPort = cdpPortValue === undefined ? 0 : Number(cdpPortValue);
+  const reopenIntervalSeconds = reopenIntervalValue === undefined
+    ? PROFILE_REOPEN_INTERVAL_MS / 1000
+    : Number(reopenIntervalValue);
   if (cdpPortValue !== undefined && (!Number.isInteger(cdpPort) || cdpPort < 1 || cdpPort > 65535)) usageError(`Invalid CDP port: ${cdpPortValue}`);
+  if (!Number.isInteger(reopenIntervalSeconds) || reopenIntervalSeconds < 0) usageError(`Invalid reopen interval: ${reopenIntervalValue}`);
 
   return {
     cdpEndpoint,
     cdpPort,
+    reopenIntervalMs: reopenIntervalSeconds * 1000,
     cdpPortProvided: cdpPortValue !== undefined,
     contextIndex,
     contextIndexProvided: contextIndexValue !== undefined,
@@ -368,6 +378,7 @@ export function createResult(options) {
     response_cleanup_warning: null,
     stale_response_cleanup_error: null,
     content_evidence_unconfirmed: false,
+    capture_interval_ms: options.reopenIntervalMs ?? null,
     failure_code: null,
     failure_scope: null,
     failure_stage: null,
@@ -1106,6 +1117,7 @@ export async function runReviewTransaction(context, options) {
   let lastAcceptedSnapshot = null;
   let completionDeadlineAt = null;
   let recoveredCompletionSettled = false;
+  const captureMode = Number.isFinite(options.reopenIntervalMs);
 
   const persist = async () => {
     if (!outputDir) throw new Error("Review output directory was not allocated");
@@ -1224,6 +1236,10 @@ export async function runReviewTransaction(context, options) {
     if (options.existingConversationUrl) {
       runPromptOptions.existingConversationUrl = options.existingConversationUrl;
       runPromptOptions.onSnapshot = persistSnapshot;
+      if (captureMode) {
+        runPromptOptions.captureIntervalMs = options.reopenIntervalMs;
+        runPromptOptions.reopenPage = options.reopenPage;
+      }
     } else {
       runPromptOptions.beforeSubmit = async () => {
         stage = "submission";
@@ -1267,13 +1283,22 @@ export async function runReviewTransaction(context, options) {
 
     stage = "completion";
     completionDeadlineAt ||= Date.now() + COMPLETION_TIMEOUT_MS;
-    const completion = review.completion || await waitForCompletion(page, {
-      baseline: review,
-      deadlineAt: completionDeadlineAt,
-      onSnapshot: persistSnapshot,
-      acceptSnapshot: (snapshot) => isResponseContentReady(snapshot.assistantText),
-      signal: options.abortSignal,
-    });
+    const completion = review.completion || (captureMode
+      ? await captureReviewResponse(page, {
+        intervalMs: options.reopenIntervalMs,
+        conversationUrl: review.currentUrl || result.conversation_url || page.url(),
+        reopenPage: options.reopenPage,
+        onSnapshot: persistSnapshot,
+        signal: options.abortSignal,
+      })
+      : await waitForCompletion(page, {
+        baseline: review,
+        deadlineAt: completionDeadlineAt,
+        onSnapshot: persistSnapshot,
+        acceptSnapshot: (snapshot) => isResponseContentReady(snapshot.assistantText),
+        signal: options.abortSignal,
+      }));
+    page = completion.page || page;
     const rejectedCompletion = completion.checkpointAccepted === false
       || (lastAcceptedSnapshot && completion.conversationId && completion.conversationId !== lastAcceptedSnapshot.conversationId);
     const completionSnapshot = rejectedCompletion
@@ -1299,9 +1324,17 @@ export async function runReviewTransaction(context, options) {
       && isResponseContentReady(completionSnapshot?.response);
     if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false) {
       stage = "artifacts";
-      await persistResponse(completionSnapshot.response, { authoritative: responseStructurallyFinal, snapshot: completionSnapshot });
+      await persistResponse(completionSnapshot.response, {
+        authoritative: captureMode || responseStructurallyFinal,
+        snapshot: completionSnapshot,
+      });
     }
-    if (completion.status !== "confirmed") {
+    if (captureMode) {
+      result.status = "completed";
+      result.failure_scope = null;
+      result.failure_stage = null;
+      result.failure_reason = null;
+    } else if (completion.status !== "confirmed") {
       result.status = "incomplete";
       result.failure_scope = "review";
       result.failure_stage = "completion";
@@ -1367,7 +1400,8 @@ export async function runReviewTransaction(context, options) {
         result.conversation_url ||= baseline?.conversationUrl || null;
         result.conversation_id ||= baseline?.conversationId || null;
       }
-      if (error.code !== "REVIEW_INTERRUPTED"
+      if (!captureMode
+        && error.code !== "REVIEW_INTERRUPTED"
         && dispatchState !== "not_dispatched"
         && baseline
         && result.completion !== "confirmed") {
@@ -1473,7 +1507,7 @@ export async function runReviewTransaction(context, options) {
       try {
         stage = "artifacts";
         result.cleanup_status = page ? "pending" : "not_needed";
-        if (page && result.status === "completed") result.status = "incomplete";
+        if (page && result.status === "completed" && result.completion !== "captured") result.status = "incomplete";
         await persist();
       } catch (error) {
         const artifactReason = errorMessage(error);
@@ -1489,7 +1523,7 @@ export async function runReviewTransaction(context, options) {
       if (page) {
         if (!options.reviewPage) await closePage(page);
         result.cleanup_status = "completed";
-        if (result.completion === "confirmed" && !result.failure_stage) result.status = "completed";
+        if (["confirmed", "captured"].includes(result.completion) && !result.failure_stage) result.status = "completed";
       }
     } catch (error) {
       markCleanupFailure(result, errorMessage(error));
@@ -1521,7 +1555,7 @@ function hasClosedContextEvidence(result) {
   return /(?:browser|context|target|page).*(?:closed|close|disconnect)|(?:closed|close|disconnect).*(?:browser|context|target|page)/i.test(evidence);
 }
 
-export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, abortSignal, runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
+export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, abortSignal, reopenPage, reopenIntervalMs, runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
   const results = [];
   let cleanupError;
   let requestedCount = reviews?.length || 0;
@@ -1540,6 +1574,8 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         reviewIndex: review.reviewIndex ?? index,
         outputDir,
         abortSignal,
+        reopenPage,
+        reopenIntervalMs,
       });
       results.push(result);
       // Missing dispatch evidence is unsafe: do not risk a duplicate submission.
@@ -1738,6 +1774,18 @@ export async function main(argv, dependencies = {}) {
     }
     attached = await openContextForReview(contextOptions);
     removeTerminationCleanup = installCleanup(attached, closeAttachedContext, () => reviewAbortController.abort());
+    const reopenPage = async ({ conversationUrl } = {}) => {
+      if (!options.userDataDir) return attached.reviewPage;
+      await closeAttachedContext(attached);
+      const reopened = await openContextForReview(contextOptions);
+      Object.assign(attached, reopened);
+      attached.closed = false;
+      const page = attached.reviewPage || attached.context.pages()[0];
+      if (conversationUrl && page.url() !== conversationUrl) {
+        await page.goto(conversationUrl, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
+      }
+      return page;
+    };
     if (options.batchFile) {
       result = summarizeBatchResults(await runBatch({
         attached,
@@ -1747,6 +1795,8 @@ export async function main(argv, dependencies = {}) {
         repository: contextOptions.repository,
         abortSignal: reviewAbortController.signal,
         closeContextFn: removeTerminationCleanup.closeOnce,
+        reopenPage,
+        reopenIntervalMs: options.reopenIntervalMs,
       }));
       try {
         await persistBatchSummary(options.outputDir, result);
@@ -1772,6 +1822,8 @@ export async function main(argv, dependencies = {}) {
         reviewUrls: reviews[0].reviewUrls,
         existingConversationUrl: reviews[0].existingConversationUrl,
         reviewPage: attached.reviewPage,
+        reopenPage,
+        reopenIntervalMs: options.reopenIntervalMs,
         runId: reviews[0].runId,
         runOutputDir: reviews[0].runOutputDir,
         abortSignal: reviewAbortController.signal,

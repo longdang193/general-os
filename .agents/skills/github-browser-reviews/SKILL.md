@@ -56,8 +56,8 @@ that the review inspected local state.
    and preserve that choice in the review request.
 7. **Scope invariant:** Keep the request read-only and identify the stable
    context, repository, revision, file path, and review question.
-8. **Evidence invariant:** Require the reviewer to cite a known heading, hash,
-   or other file marker from the requested revision.
+8. **Prompt invariant:** Include the exact revision and file URL in the prompt;
+   do not require or validate a matching marker in the copied response.
 9. **Privacy invariant:** Do not include credentials, environment values,
    private instructions, or unrelated repository contents in the request.
 10. **Rerun-authorization invariant:** Do not rerun, retry, resubmit, or open a
@@ -209,7 +209,8 @@ provenance, and invalid/default profile paths before browser setup.
 
 For read-only verification of an already completed review, add
 `--existing-conversation-url https://chatgpt.com/c/<id>`. The runner navigates
-only to that conversation, observes the stable visible response, and never
+only to that conversation, waits for the capture interval, and copies the latest
+visible response. It never
 selects a model, fills a prompt, or submits a message. Its result records
 `submission: "not_attempted"` and keeps the supplied conversation URL in
 request provenance. Batch entries may use the equivalent
@@ -240,78 +241,25 @@ do not delete contents, clear cookies, copy credentials, or adopt the profile
 implicitly.
 
 The runner performs one non-submitting visible authentication preflight for the
-owned context. It reuses the bootstrap ChatGPT tab instead of opening a
-temporary second tab. An explicit login wall blocks the
-batch before review pages are opened. It selects and visibly verifies the requested model and effort,
-submits at most once, waits for a new stable visible assistant turn, checkpoints
-interim text to `response.partial.md`, writes the complete final answer to
-`response.md`, and writes a small `result.json` before it closes the owned browser
-context. While the response is visibly generating, completion observation polls
-cheap visible state and defers full assistant-text extraction until generation
-stops and stability can be checked.
+owned context, selects and visibly verifies the requested model and effort, and
+submits each authorized prompt at most once. After the configured profile-reopen
+interval (five minutes by default), it reopens the owned profile, returns to the
+review conversation, copies the latest visible assistant response, and writes
+`response.md` plus `result.json`.
 
-After dispatch, the runner checkpoints the current conversation URL, ID,
-assistant message, and response text while the page is still available. Only
-identity-accepted snapshots become checkpoints; rejected route/conversation
-snapshots remain diagnostic-only. A shorter checkpoint replaces an earlier one
-only when it belongs to a different conversation or assistant message; for the same response
-identity, length only protects against a truncated extraction. Finalization
-always persists and validates the exact same selected snapshot, never the
-longest response. If the page or context closes during cleanup, the final
-result uses that last durable checkpoint instead of querying the
-closed page. `response.partial.md` is checkpoint evidence only; `response.md` is
-written from the selected structurally final response, even when semantic review
-or revision evidence is insufficient. Structural completion requires a new
-response turn, continuous conversation identity, stable visible completion
-signals, and non-empty response text; the content classifier is advisory and
-must not block capture. A complete `response.md` does not prove that revision
-evidence was accepted; `result.json` remains the lifecycle authority. Current
-visible completion markers include `Response complete` and `Feedback`.
-Composer visibility and repeated stable assistant text are not sufficient by
-themselves. This compatibility fallback avoids depending on one volatile
-terminal marker. If structural completion is observed but content or revision
-evidence is rejected, the runner preserves the exact captured answer in
-`response.md`, carries `content_evidence_unconfirmed: true` into the terminal
-`result.json`, and settles the transaction as `incomplete` with a specific
-reason. If the bounded observer times out before structural completion, it
-preserves the latest checkpoint as `response.partial.md` instead of treating an
-intermediate response as final.
+This capture path intentionally does not verify response completeness, terminal
+markers, revision evidence, review outcome, or semantic quality. It also does
+not compare revision markers or wait for a stable final turn. The result is
+marked `completed` when the capture transaction and artifacts settle, even if
+the copied response is partial or planning-only. `capture_interval_ms` records
+the configured delay, and `completion: "captured"` identifies this mode.
 
-Submitted-review completion evidence stays bound to the same review page,
-requires a new stable assistant turn, and must remain continuous with the
-submitted user turn. Read-only existing-conversation
-verification instead requires a stable current assistant turn. Conversation
-identity is a continuity signal rather
-than an immutable SPA invariant: the runner tolerates route transitions before
-response evidence appears, then binds the conversation identity when the new
-response is first observed. A later transition, missing new turn, interruption,
-or unstable response returns `incomplete`. If the baseline conversation is
-unknown, the first post-dispatch conversation identity is bound. An ambiguous send
-acknowledgement uses a short bounded observation window, preserves
-`possibly_dispatched`, and never resubmits; confirmed or visibly active
-generations retain the normal completion window.
-
-Terminal runner results are `completed`, `incomplete`, or `blocked`; a failed
-owned-context cleanup preserves the review artifacts but makes the invocation
-nonzero and records the cleanup failure. Internal dispatch states distinguish
-`not_dispatched`, `possibly_dispatched`, and `acknowledged`: once the send
-action begins, an uncertain click or Enter failure is never retried and is
-treated as possibly dispatched until visible acknowledgement proves otherwise.
-Only a definitely pre-dispatch failure skips the long completion observer. A
-visible terminal interruption returns immediately with partial evidence. If the
-final result artifact cannot be persisted, the runner reports `incomplete` and
-returns nonzero even when the response itself completed. A technically complete
-  response must cite the requested full SHA or a pinned file marker and contain
-  a review outcome (for example, a no-findings conclusion or structured
-  findings). Missing revision evidence records `incomplete` but does not discard
-  a structurally final response from `response.md`; planning-only text may still
-  be captured there when the browser shows structural completion, but the
-  lifecycle remains `incomplete` until semantic and revision evidence pass. The controller still owns
-  the final `verified` classification. The runner never retries or silently recovers a failed
-submission. In a sequential batch, a confirmed response that only lacks
-revision text evidence may proceed to the next model when dispatch was
-acknowledged and cleanup completed without warning; that review remains
-`incomplete` and is not treated as `verified`.
+The interval is configurable with `--reopen-interval <seconds>`; use `0` for
+tests or an immediate capture. Owned-profile mode reopens the dedicated profile
+between submission and capture. An externally attached `--cdp-endpoint` context
+is not closed and reopened by the runner, so the interval only delays the
+visible capture there. Browser authentication, profile ownership, provenance,
+artifact persistence, and cleanup failures remain enforced.
 
 For a multi-model review driven by a Node controller, validate the complete
 review list against one repository-derived project key before opening the
@@ -353,12 +301,12 @@ Pass it as `--batch-file <reviews.json>` instead of the single-review flags.
 For the two-model batch described here, process the manifest in this exact order:
 
 1. Open one fresh tab in the already authenticated context, select
-   `GPT-5.6-Sol` at `High`, submit once, wait for its terminal result, and close
-   that tab.
+   `GPT-5.6-Sol` at `High`, submit once, wait for the capture interval, reopen
+   the owned profile, copy the visible response, and close that tab/context.
 2. Only after step 1 settles, open one different fresh tab in the same
    authenticated context, select the requested second model (`GPT-6` or
-   `GPT-6.2`) at `High`, submit once, wait for its terminal result, and close
-   that tab.
+   `GPT-6.2`) at `High`, submit once, wait for the capture interval, reopen the
+   owned profile, copy the visible response, and settle that transaction.
 
 Do not open both review tabs in advance, run the reviews concurrently, reuse the
 first review tab, or switch profiles or browser contexts between models.
@@ -384,10 +332,7 @@ The runner validates every entry before opening the browser, reuses one
  missing or unknown dispatch evidence, or any cleanup warning stops the shared
  batch. A missing or transient model option is not proof of unavailability,
  and the failed review is never silently switched to another model.
- A confirmed response that only lacks revision-evidence validation may proceed
- to the next already-authorized model when dispatch is acknowledged and cleanup
- is clean; it remains `incomplete` and is never resubmitted. The failed review
- is never silently switched to another model. Do not add a keep-open flag
+ Do not add a keep-open flag
  or a second browser lifecycle owner. A newly created tab that does not reach the
 composer readiness state is page-local and review-scoped; failure to create a
  page or loss of the shared browser context remains shared-context scoped. If a
@@ -395,9 +340,7 @@ composer readiness state is page-local and review-scoped; failure to create a
  conversation/completion evidence before cleanup. A read-only existing-conversation
  verification that remains incomplete stops the batch: `not_dispatched` means
  that invocation sent nothing, not that the existing conversation is settled.
- If that evidence confirms a new stable response, promote the transaction to the normal acknowledged,
- completed state; otherwise mark `submission` as `ambiguous`. Never send the
- prompt again. Batch summaries include requested,
+ Never send the prompt again. Batch summaries include requested,
 transaction-started, submission-attempted, acknowledged, completed, failed, and
 skipped entries. `attempted_count` means a review transaction allocated its run
 and started; it does not count a partially allocated review that never reached
@@ -418,14 +361,8 @@ SHA, and pinned review URL provenance.
   second review tab.
 
 Model-menu interaction uses a five-second UI action/transition timeout. Initial
-model-menu opening remains ten seconds, completion observation remains bounded
-by its separate long timeout, and polling backoff values are not changed to
-compensate for slow clicks.
-
-An ambiguous dispatch starts with the short acknowledgement/evidence window.
-Once generation, a new assistant turn, or equivalent response controls are
-visible, completion observation promotes to the normal long deadline without
-resubmitting. A review is not durably marked `completed` until its owned page
+model-menu opening remains ten seconds. The capture interval is independent of
+those UI timeouts. A review is not durably marked `completed` until its owned page
 cleanup and final result persistence succeed; if final persistence fails, the
 last durable checkpoint remains non-terminal and the returned result is
 `incomplete`.
@@ -592,16 +529,12 @@ outer execution context, not review input. If the request is too large, rebuild 
 with the exact GitHub URL and the smallest sufficient scope; do not blindly
 retry a bloated request.
 
-### 5. Verify review evidence
+### 5. Capture the visible response
 
-The reviewer should confirm that it read the requested revision by citing a
-known heading, hash, file marker, or equivalent evidence before the review is
-accepted. The runner records the completed response and conversation identity;
-the caller remains responsible for judging file-specific review evidence.
-The runner only treats provisional language as a failure when it describes
-review state or an explicit future action; a finding about the reviewed subject
-(for example, that it is not yet suitable for production) does not invalidate
-revision evidence by itself.
+The runner waits for `--reopen-interval` seconds, reopens the owned profile,
+returns to the conversation, and copies whatever assistant response is visible.
+It does not verify completeness, terminal markers, revision evidence, review
+outcome, or semantic quality. Treat the captured text as raw model output.
 
 ### 6. Handle unavailable revisions
 
@@ -610,21 +543,15 @@ Report `incomplete` or `blocked` when:
 - the selected changes cannot be committed and pushed;
 - the repository or revision is inaccessible to the reviewer;
 - the review requires uncommitted local state;
-- the reviewer cannot confirm the requested revision.
+- the reviewer cannot access the requested revision.
 
 State the exact missing condition and do not substitute a local-only claim.
 
 ### 7. Rerun only on explicit order
 
-If the review is incomplete, interrupted, stale, inconclusive, or otherwise
-missing required evidence, stop and report the exact condition. Do not
-automatically rerun it, retry the same request, submit a replacement request,
-or open another browser review. A sequential batch may still start a different
-model that was already authorized when the prior transaction is safely settled
-and the batch policy allows continuation. Continue only after the user
-explicitly orders a rerun of the same review; a general request to continue,
-fix, review, or implement is not sufficient unless it explicitly authorizes the
-rerun.
+Do not automatically rerun, retry, resubmit, or open a replacement request.
+Capture mode intentionally accepts whatever is visible after the configured
+delay; a partial response is not a reason to submit again.
 
 ## Evidence Checklist
 
@@ -633,17 +560,13 @@ Before reporting success, record:
 - repository, intended branch, and exact commit;
 - successful push evidence and the reviewed file URL;
 - read-only scope, stable context identifier, and review question;
-- the heading, hash, or file marker cited by the reviewer;
-- findings ordered by severity;
-- any skipped checks or unavailable review evidence.
+- the copied response and capture interval;
+- any skipped checks or unavailable access.
 
 ## Completion Result
 
-Return one of:
-
-- **verified:** the intended GitHub revision was pushed, read, and evidenced;
-- **incomplete:** the review or evidence remains unfinished within scope;
-- **blocked:** access, publication, or revision evidence requires an external
-  action or user decision.
-
-State the exact failed claim and evidence for `incomplete` or `blocked`.
+Return `completed` when the requested prompt was submitted (or the existing
+conversation was opened), the delayed capture settled, and artifacts were
+persisted. Return `incomplete` or `blocked` only for browser, access,
+provenance, persistence, or cleanup failures. The capture result is not a
+quality or completeness judgment.

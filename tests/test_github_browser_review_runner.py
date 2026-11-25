@@ -4782,3 +4782,88 @@ const options = parseArguments([...common, "--project-key", "owner-repo"]);
 assert.equal(options.projectKey, "owner-repo");
 '''
     )
+
+def test_capture_mode_reopens_after_delay_and_accepts_partial_response():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+let reopenCalls = 0;
+let snapshot;
+const page = (url, text) => {{
+  const locator = {{
+    evaluateAll: async (callback, includeText) => callback([
+      {{
+        innerText: text,
+        getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+      }},
+    ], includeText),
+  }};
+  return {{
+    url: () => url,
+    locator: () => locator,
+  }};
+}};
+const initialPage = page("https://chatgpt.com/c/review", "I will inspect this later.");
+const reopenedPage = page("https://chatgpt.com/c/review", "I will inspect this later.");
+const result = await captureReviewResponse(initialPage, {{
+  intervalMs: 0,
+  reopenPage: async (options) => {{
+    reopenCalls += 1;
+    assert.equal(options.conversationUrl, "https://chatgpt.com/c/review");
+    assert.equal(options.page, initialPage);
+    return reopenedPage;
+  }},
+  onSnapshot: async (value) => {{ snapshot = value; }},
+}});
+
+assert.equal(reopenCalls, 1);
+assert.equal(result.status, "captured");
+assert.equal(result.response, "I will inspect this later.");
+assert.equal(snapshot.response, result.response);
+''',
+    )
+
+def test_capture_mode_persists_partial_response_as_the_captured_result():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, readFile }} from "node:fs/promises";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(tmpdir(), "github-review-capture-"));
+const url = "https://chatgpt.com/c/review";
+const page = {{ url: () => url }};
+const result = await runReviewTransaction({{}}, {{
+  existingConversationUrl: url,
+  runOutputDir: root,
+  reviewPage: page,
+  reopenIntervalMs: 0,
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      currentUrl: url,
+      conversationId: "review",
+      readOnlyVerification: true,
+      checkpointAccepted: true,
+      completion: {{
+        status: "captured",
+        conversationId: "review",
+        currentUrl: url,
+        response: "I will inspect this later.",
+        assistantMessageId: "assistant-1",
+        responseTurnObserved: true,
+        checkpointAccepted: true,
+      }},
+    }}),
+  }},
+}});
+
+assert.equal(result.status, "completed");
+assert.equal(result.completion, "captured");
+assert.equal(await readFile(join(root, "response.md"), "utf8"), "I will inspect this later.\\n");
+''',
+    )

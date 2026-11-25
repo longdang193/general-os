@@ -15,6 +15,7 @@ export const INTERRUPTION_PATTERN = /(?:something went wrong|network error|respo
 export const INTERRUPTION_UI_SELECTOR = '[data-testid="conversation-turn-error"]:visible, [data-testid="response-error"]:visible, [data-testid="error-message"]:visible';
 const GENERIC_ALERT_SELECTOR = '[role="alert"]:visible';
 export const COMPLETION_TIMEOUT_MS = 900000;
+export const PROFILE_REOPEN_INTERVAL_MS = 300000;
 const COMPLETION_INITIAL_BACKOFF_MS = 250;
 const COMPLETION_MAX_BACKOFF_MS = 1000;
 
@@ -505,6 +506,41 @@ async function readCompletionSnapshot(page, { includeText } = {}) {
     responseActionsReady: routeStable && responseActionsReady,
     routeStable,
   };
+}
+
+export async function captureReviewResponse(page, {
+  intervalMs = PROFILE_REOPEN_INTERVAL_MS,
+  conversationUrl = page?.url?.() || null,
+  reopenPage,
+  onSnapshot,
+  signal,
+} = {}) {
+  if (!page) throw new Error("page is required for response capture");
+  if (!Number.isFinite(intervalMs) || intervalMs < 0) throw new Error("intervalMs must be a non-negative number");
+
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, intervalMs));
+  throwIfAborted(signal);
+
+  let capturePage = page;
+  if (reopenPage) {
+    const reopened = await reopenPage({ conversationUrl, page });
+    capturePage = reopened?.page || reopened;
+  }
+
+  const assistant = await readVisibleAssistantMessage(capturePage, { includeText: true });
+  const currentUrl = capturePage.url();
+  const snapshot = {
+    assistantMessageId: assistant.assistantMessageId,
+    assistantText: assistant.assistantText,
+    assistantTurnCount: assistant.assistantTurnCount,
+    conversationId: extractConversationIdentity(currentUrl),
+    currentUrl,
+    response: assistant.assistantText,
+    responseTurnObserved: Boolean(assistant.assistantMessageId || assistant.assistantText),
+    checkpointAccepted: true,
+  };
+  if (onSnapshot) await onSnapshot(snapshot);
+  return { ...snapshot, status: "captured", page: capturePage };
 }
 
 export function evaluateReviewCompletion({
@@ -1065,11 +1101,19 @@ export async function runReviewPromptInNewTab(context, options = {}) {
     if (!ownsPage) await openChatGPT(page);
     if (existingConversationUrl) {
       await page.goto(existingConversationUrl, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
-      const completion = await waitForExistingReviewCompletion(page, {
-        conversationUrl: existingConversationUrl,
-        onSnapshot: options.onSnapshot,
-        signal: options.signal,
-      });
+      const completion = options.captureIntervalMs !== undefined
+        ? await captureReviewResponse(page, {
+          intervalMs: options.captureIntervalMs,
+          conversationUrl: existingConversationUrl,
+          reopenPage: options.reopenPage,
+          onSnapshot: options.onSnapshot,
+          signal: options.signal,
+        })
+        : await waitForExistingReviewCompletion(page, {
+          conversationUrl: existingConversationUrl,
+          onSnapshot: options.onSnapshot,
+          signal: options.signal,
+        });
       return {
         page,
         ...completion,
