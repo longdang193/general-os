@@ -4790,6 +4790,7 @@ import assert from "node:assert/strict";
 import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
 
 let reopenCalls = 0;
+let loadStateCalls = 0;
 let snapshot;
 const page = (url, text) => {{
   const locator = {{
@@ -4802,6 +4803,11 @@ const page = (url, text) => {{
   }};
   return {{
     url: () => url,
+    waitForLoadState: async (state, options) => {{
+      loadStateCalls += 1;
+      assert.equal(state, "domcontentloaded");
+      assert.equal(options.timeout, 15000);
+    }},
     locator: () => locator,
   }};
 }};
@@ -4819,11 +4825,56 @@ const result = await captureReviewResponse(initialPage, {{
 }});
 
 assert.equal(reopenCalls, 1);
+assert.equal(loadStateCalls, 1);
 assert.equal(result.status, "captured");
 assert.equal(result.response, "I will inspect this later.");
 assert.equal(snapshot.response, result.response);
 ''',
     )
+
+def test_capture_mode_marks_missing_output_incomplete():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp }} from "node:fs/promises";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(tmpdir(), "github-review-empty-capture-"));
+const url = "https://chatgpt.com/c/review";
+const page = {{ url: () => url }};
+const result = await runReviewTransaction({{}}, {{
+  existingConversationUrl: url,
+  runOutputDir: root,
+  reviewPage: page,
+  reopenIntervalMs: 0,
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      currentUrl: url,
+      conversationId: "review",
+      readOnlyVerification: true,
+      checkpointAccepted: true,
+      completion: {{
+        status: "captured",
+        conversationId: "review",
+        currentUrl: url,
+        response: "",
+        assistantMessageId: null,
+        responseTurnObserved: false,
+        checkpointAccepted: true,
+      }},
+    }}),
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.completion, "captured");
+assert.match(result.failure_reason, /No visible assistant output was captured/);
+''',
+    )
+
 
 def test_capture_mode_persists_partial_response_as_the_captured_result():
     run_node_assertion(

@@ -1329,7 +1329,12 @@ export async function runReviewTransaction(context, options) {
         snapshot: completionSnapshot,
       });
     }
-    if (captureMode) {
+    if (captureMode && !completionSnapshot?.response?.trim()) {
+      result.status = "incomplete";
+      result.failure_scope = "review";
+      result.failure_stage = "completion";
+      result.failure_reason = appendFailureReason(result.failure_reason, "No visible assistant output was captured");
+    } else if (captureMode) {
       result.status = "completed";
       result.failure_scope = null;
       result.failure_stage = null;

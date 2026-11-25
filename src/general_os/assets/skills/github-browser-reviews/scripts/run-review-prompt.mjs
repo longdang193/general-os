@@ -7,6 +7,8 @@ export const SUBMISSION_ACK_TIMEOUT_MS = 10000;
 export const SUBMISSION_ACK_POLL_MS = 50;
 export const SUBMITTED_TURN_ID_TIMEOUT_MS = 2000;
 export const AMBIGUOUS_DISPATCH_TIMEOUT_MS = 15000;
+export const CAPTURE_PAGE_READY_TIMEOUT_MS = 15000;
+const CAPTURE_PAGE_POLL_MS = 100;
 export const ASSISTANT_TURN_SELECTOR = '[data-message-author-role="assistant"]:visible:not([data-message-author-role="assistant"] [data-message-author-role="assistant"]), [data-response-body]:visible';
 const ASSISTANT_FALLBACK_SELECTOR = 'main [class*="MarkdownRoot-"]:visible:not(.rich-text-user-turn)';
 const ASSISTANT_TURN_SELECTORS = [ASSISTANT_TURN_SELECTOR, ASSISTANT_FALLBACK_SELECTOR];
@@ -347,6 +349,33 @@ async function readVisibleAssistantMessage(page, { includeText = true } = {}) {
   };
 }
 
+async function waitForCapturePageReady(page, conversationUrl, signal) {
+  const deadline = Date.now() + CAPTURE_PAGE_READY_TIMEOUT_MS;
+  if (typeof page.waitForLoadState === "function") {
+    try {
+      await page.waitForLoadState("domcontentloaded", {
+        timeout: CAPTURE_PAGE_READY_TIMEOUT_MS,
+      });
+    } catch {
+      // The bounded extraction below still provides the best available capture.
+    }
+  }
+
+  let assistant;
+  while (true) {
+    throwIfAborted(signal);
+    assistant = await readVisibleAssistantMessage(page, { includeText: true });
+    const currentUrl = page.url();
+    const sameConversation = !conversationUrl
+      || extractConversationIdentity(currentUrl) === extractConversationIdentity(conversationUrl);
+    if (sameConversation && assistant.assistantMessageId) return assistant;
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0 || typeof page.waitForTimeout !== "function") return assistant;
+    await page.waitForTimeout(Math.min(CAPTURE_PAGE_POLL_MS, remaining));
+  }
+}
+
 async function hasSubmittedUserTurn(page, prompt, submittedUserTurnId = null) {
   if (!prompt) return true;
   try {
@@ -527,7 +556,7 @@ export async function captureReviewResponse(page, {
     capturePage = reopened?.page || reopened;
   }
 
-  const assistant = await readVisibleAssistantMessage(capturePage, { includeText: true });
+  const assistant = await waitForCapturePageReady(capturePage, conversationUrl, signal);
   const currentUrl = capturePage.url();
   const snapshot = {
     assistantMessageId: assistant.assistantMessageId,
