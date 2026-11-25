@@ -213,8 +213,10 @@ only to that conversation, waits for the capture interval, and copies the latest
 visible response. It never
 selects a model, fills a prompt, or submits a message. Its result records
 `submission: "not_attempted"` and keeps the supplied conversation URL in
-request provenance. Batch entries may use the equivalent
-`existing_conversation_url` field.
+request provenance. `--model` and `--effort` are optional in this mode because
+they are not used. Batch entries may use the equivalent
+`existing_conversation_url` field and may omit `model` and `effort` for the same
+reason.
 
 The owned profile must end in the canonical, case-normalized project key
 derived from the repository (`owner-repository`), and `--project-key` must
@@ -242,24 +244,27 @@ implicitly.
 
 The runner performs one non-submitting visible authentication preflight for the
 owned context, selects and visibly verifies the requested model and effort, and
-submits each authorized prompt at most once. After the configured profile-reopen
-interval (five minutes by default), it reopens the owned profile, returns to the
-review conversation, copies the latest visible assistant response, and writes
-`response.md` plus `result.json`.
+submits each authorized prompt at most once. After the configured capture delay,
+it reopens the owned profile directly at the existing review conversation URL,
+waits up to 15 seconds for the page to load and stabilize, copies whatever
+assistant response is visible, and writes `response.md` plus `result.json`.
 
 This capture path intentionally does not verify response completeness, terminal
-markers, revision evidence, review outcome, or semantic quality. It also does
-not compare revision markers or wait for a stable final turn. The result is
-marked `completed` when the capture transaction and artifacts settle, even if
-the copied response is partial or planning-only. `capture_interval_ms` records
-the configured delay, and `completion: "captured"` identifies this mode.
+markers, revision evidence, review outcome, or semantic quality. It does not
+compare revision markers or require a stable final turn. Partial, planning-only,
+interrupted, and empty output are valid capture outcomes; if no assistant output
+is visible, record the transaction as incomplete rather than a successful
+capture. `capture_interval_ms` records the configured delay, and
+`completion: "captured"` identifies the capture attempt.
 
-The interval is configurable with `--reopen-interval <seconds>`; use `0` for
-tests or an immediate capture. Owned-profile mode reopens the dedicated profile
-between submission and capture. An externally attached `--cdp-endpoint` context
-is not closed and reopened by the runner, so the interval only delays the
-visible capture there. Browser authentication, profile ownership, provenance,
-artifact persistence, and cleanup failures remain enforced.
+The delay is configurable with `--reopen-interval <seconds>`; use `0` for an
+immediate capture. The delay applies before reopening and is not an additional
+wait after the profile opens. The profile must be reopened at the supplied
+conversation URL, not at ChatGPT home or an unrelated tab. An externally
+attached `--cdp-endpoint` context is not closed and reopened by the runner, so
+the delay only postpones the visible capture there. Browser authentication,
+profile ownership, provenance, artifact persistence, and cleanup failures remain
+enforced.
 
 For a multi-model review driven by a Node controller, validate the complete
 review list against one repository-derived project key before opening the
@@ -531,10 +536,12 @@ retry a bloated request.
 
 ### 5. Capture the visible response
 
-The runner waits for `--reopen-interval` seconds, reopens the owned profile,
-returns to the conversation, and copies whatever assistant response is visible.
-It does not verify completeness, terminal markers, revision evidence, review
-outcome, or semantic quality. Treat the captured text as raw model output.
+The runner waits for `--reopen-interval` seconds, then reopens the owned profile
+directly at the existing conversation URL containing the response. It waits up
+to 15 seconds for the page to load and stabilize, then copies whatever assistant
+output is visible. It does not verify completeness, terminal markers, revision
+evidence, review outcome, or semantic quality. Treat the captured text as raw
+model output. If no assistant output is visible, record an incomplete capture.
 
 ### 6. Handle unavailable revisions
 

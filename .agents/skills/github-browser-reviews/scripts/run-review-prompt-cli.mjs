@@ -54,7 +54,7 @@ const VALUE_ARGUMENTS = new Set([
   "--batch-file",
   "--user-data-dir",
 ]);
-const USAGE = "Usage: node run-review-prompt-cli.mjs (--launch-cdp --user-data-dir <path> --project-key <owner-repository> | --user-data-dir <path> --project-key <owner-repository> | --cdp-endpoint <url>) (--model <GPT-5.6-Sol|GPT-6|GPT-6.2> --effort <Instant|Medium|High> --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... [--existing-conversation-url <url>]) | --batch-file <path>) [--cdp-port <port>] [--output-dir <path>] [--context-index <number>] [--reopen-interval <seconds>]";
+const USAGE = "Usage: node run-review-prompt-cli.mjs (--launch-cdp --user-data-dir <path> --project-key <owner-repository> | --user-data-dir <path> --project-key <owner-repository> | --cdp-endpoint <url>) (--model <GPT-5.6-Sol|GPT-6|GPT-6.2> --effort <Instant|Medium|High> --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... [--existing-conversation-url <url>] | --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... --existing-conversation-url <url>) | --batch-file <path>) [--cdp-port <port>] [--output-dir <path>] [--context-index <number>] [--reopen-interval <seconds>]";
 const FLAG_ARGUMENTS = new Set(["--launch-cdp"]);
 const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/i;
 const GITHUB_BLOB_URL_PATTERN = /https:\/\/github\.com\/[^\s<>"']+/gi;
@@ -116,8 +116,8 @@ export function parseArguments(argv) {
   if (batchFile && (model || effort || promptFile || repository || commitSha || reviewUrls.length > 0 || existingConversationUrl)) {
     usageError("Single-review arguments cannot be combined with --batch-file");
   }
-  if (!batchFile && !model) usageError("Missing required argument: --model");
-  if (!batchFile && !effort) usageError("Missing required argument: --effort");
+  if (!batchFile && !existingConversationUrl && !model) usageError("Missing required argument: --model");
+  if (!batchFile && !existingConversationUrl && !effort) usageError("Missing required argument: --effort");
   if (!batchFile && !promptFile) usageError("Missing required argument: --prompt-file");
   if (model && !SUPPORTED_MODELS.has(model)) usageError(`Unsupported model: ${model}`);
   if (effort && !SUPPORTED_EFFORTS.has(effort)) usageError(`Unsupported effort: ${effort}`);
@@ -453,11 +453,18 @@ export async function readBatchReviews(batchFile) {
     if (!review || typeof review !== "object") {
       throw new Error(`Batch review ${index + 1} must be an object`);
     }
-    if (!SUPPORTED_MODELS.has(review.model)) {
+    const existingConversationUrl = resolveExistingConversationUrl(review, index);
+    if (review.model !== undefined && review.model !== null && !SUPPORTED_MODELS.has(review.model)) {
       throw new Error(`Batch review ${index + 1} has unsupported model: ${review.model}`);
     }
-    if (!SUPPORTED_EFFORTS.has(review.effort)) {
+    if (review.effort !== undefined && review.effort !== null && !SUPPORTED_EFFORTS.has(review.effort)) {
       throw new Error(`Batch review ${index + 1} has unsupported effort: ${review.effort}`);
+    }
+    if (!existingConversationUrl && !SUPPORTED_MODELS.has(review.model)) {
+      throw new Error(`Batch review ${index + 1} must provide a supported model`);
+    }
+    if (!existingConversationUrl && !SUPPORTED_EFFORTS.has(review.effort)) {
+      throw new Error(`Batch review ${index + 1} must provide a supported effort`);
     }
     if (typeof review.prompt_file !== "string" || !review.prompt_file.trim()) {
       throw new Error(`Batch review ${index + 1} must provide prompt_file`);
@@ -488,7 +495,7 @@ export async function readBatchReviews(batchFile) {
       commitSha: provenance.commitSha,
       reviewUrls: provenance.reviewUrls,
       projectKey: provenance.projectKey,
-      existingConversationUrl: resolveExistingConversationUrl(review, index),
+      existingConversationUrl,
       reviewIndex: index,
     };
   }));
@@ -525,8 +532,19 @@ export function validateReviewBatch(reviews, { projectKey, repository } = {}) {
 
   return reviews.map((review, index) => {
     if (!review || typeof review !== "object") throw new Error(`Review ${index + 1} must be an object`);
-    if (!SUPPORTED_MODELS.has(review.model)) throw new Error(`Review ${index + 1} has unsupported model: ${review.model}`);
-    if (!SUPPORTED_EFFORTS.has(review.effort)) throw new Error(`Review ${index + 1} has unsupported effort: ${review.effort}`);
+    const existingConversationUrl = resolveExistingConversationUrl(review, index);
+    if (review.model !== undefined && review.model !== null && !SUPPORTED_MODELS.has(review.model)) {
+      throw new Error(`Review ${index + 1} has unsupported model: ${review.model}`);
+    }
+    if (review.effort !== undefined && review.effort !== null && !SUPPORTED_EFFORTS.has(review.effort)) {
+      throw new Error(`Review ${index + 1} has unsupported effort: ${review.effort}`);
+    }
+    if (!existingConversationUrl && !SUPPORTED_MODELS.has(review.model)) {
+      throw new Error(`Review ${index + 1} must provide a supported model`);
+    }
+    if (!existingConversationUrl && !SUPPORTED_EFFORTS.has(review.effort)) {
+      throw new Error(`Review ${index + 1} must provide a supported effort`);
+    }
     const provenance = validateReviewProvenance({
       repository: review.repository,
       commitSha: review.commitSha || review.commit_sha,
@@ -542,7 +560,7 @@ export function validateReviewBatch(reviews, { projectKey, repository } = {}) {
     return {
       ...review,
       ...provenance,
-      existingConversationUrl: resolveExistingConversationUrl(review, index),
+      existingConversationUrl,
     };
   });
 }

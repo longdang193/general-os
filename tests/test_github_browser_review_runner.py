@@ -2601,6 +2601,27 @@ assert.equal(options.existingConversationUrl, "https://chatgpt.com/c/existing-re
     )
 
 
+def test_cli_allows_existing_conversation_capture_without_model_or_effort():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ parseArguments }} from {CLI_RUNNER.as_uri()!r};
+
+const options = parseArguments([
+  "--cdp-endpoint", "http://127.0.0.1:9222",
+  "--prompt-file", "review.txt",
+  "--repository", "owner/repo",
+  "--commit-sha", "0123456789abcdef0123456789abcdef01234567",
+  "--review-url", "https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md",
+  "--existing-conversation-url", "https://chatgpt.com/c/existing-review",
+]);
+assert.equal(options.model, undefined);
+assert.equal(options.effort, undefined);
+assert.equal(options.existingConversationUrl, "https://chatgpt.com/c/existing-review");
+''',
+    )
+
+
 def test_main_forwards_existing_conversation_url_to_single_review_transaction():
     run_node_assertion(
         f'''
@@ -2662,14 +2683,14 @@ import {{ validateReviewBatch }} from {CLI_RUNNER.as_uri()!r};
 
 const sha = "0123456789abcdef0123456789abcdef01234567";
 const [review] = validateReviewBatch([{{
-  model: "GPT-6",
-  effort: "High",
   prompt: `Review https://github.com/owner/repo/blob/${{sha}}/file.md at ${{sha}}`,
   repository: "owner/repo",
   commit_sha: sha,
   review_urls: [`https://github.com/owner/repo/blob/${{sha}}/file.md`],
   existing_conversation_url: "https://chatgpt.com/c/existing-review",
 }}], {{ projectKey: "owner-repo", repository: "owner/repo" }});
+assert.equal(review.model, undefined);
+assert.equal(review.effort, undefined);
 assert.equal(review.existingConversationUrl, "https://chatgpt.com/c/existing-review");
 '''
     )
