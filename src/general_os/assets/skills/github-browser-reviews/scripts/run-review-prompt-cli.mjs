@@ -1259,9 +1259,9 @@ export async function runReviewTransaction(context, options) {
     const responseText = snapshot.assistantText?.trim();
     if (snapshot.checkpointAccepted !== false
       && (responseTurnObserved || options.existingConversationUrl)
-      && (snapshot.assistantMessageId || responseText)) {
+      && (captureMode ? Boolean(responseText) : (snapshot.assistantMessageId || responseText))) {
       try {
-        const acceptedSnapshot = await persistResponse(responseText, { snapshot });
+        const acceptedSnapshot = await persistResponse(responseText, { authoritative: captureMode, snapshot });
         lastAcceptedSnapshot = acceptedSnapshot || snapshot;
       } catch (error) {
         result.failure_reason = appendFailureReason(result.failure_reason, `response checkpoint failed: ${errorMessage(error)}`);
@@ -1388,7 +1388,9 @@ export async function runReviewTransaction(context, options) {
     }
 
     const visibleAssistantCaptured = completionSnapshot?.checkpointAccepted !== false
-      && (Boolean(completionSnapshot?.assistantMessageId) || Boolean(completionSnapshot?.response?.trim()));
+      && (captureMode
+        ? Boolean(completionSnapshot?.response?.trim())
+        : Boolean(completionSnapshot?.assistantMessageId) || Boolean(completionSnapshot?.response?.trim()));
     const responseStructurallyFinal = completion.status === "confirmed"
       && completionSnapshot?.responseTurnObserved !== false
       && Boolean(completionSnapshot?.response?.trim());
@@ -1590,7 +1592,7 @@ export async function runReviewTransaction(context, options) {
       try {
         stage = "artifacts";
         result.cleanup_status = page ? "pending" : "not_needed";
-        if (page && result.status === "completed" && result.completion !== "captured") result.status = "incomplete";
+        if (page && result.status === "completed") result.status = "incomplete";
         await persist();
       } catch (error) {
         const artifactReason = errorMessage(error);

@@ -5402,7 +5402,7 @@ assert.match(result.failure_reason, /No visible assistant output was captured/);
     )
 
 
-def test_capture_mode_persists_visible_empty_assistant_output():
+def test_capture_mode_does_not_complete_for_empty_assistant_placeholder():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -5439,8 +5439,9 @@ const result = await runReviewTransaction({{}}, {{
   }},
 }});
 
-assert.equal(result.status, "completed");
-assert.equal(await readFile(join(root, "response.md"), "utf8"), "");
+assert.equal(result.status, "incomplete");
+assert.match(result.failure_reason, /No visible assistant output was captured/);
+await assert.rejects(readFile(join(root, "response.md"), "utf8"), {{ code: "ENOENT" }});
 ''',
     )
 
@@ -5541,7 +5542,7 @@ const canonicalUrl = "https://chatgpt.com/c/canonical-thread";
 const page = {{ url: () => canonicalUrl }};
 const reopenedPage = {{
   url: () => canonicalUrl,
-  waitForLoadState: async () => {{}} ,
+  waitForLoadState: async () => {{}},
   locator: () => ({{
     evaluateAll: async (callback, includeText) => callback([{{
       innerText: "Captured from the canonical thread.",
@@ -5711,6 +5712,177 @@ const result = await runReviewTransaction({{}}, {{
 assert.equal(result.status, "completed");
 assert.equal(result.completion, "captured");
 assert.equal(await readFile(join(root, "response.md"), "utf8"), "I will inspect this later.\\n");
+''',
+    )
+
+
+def test_capture_mode_preserves_last_route_verified_sample_after_later_read_failure():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const url = "https://chatgpt.com/c/review";
+let reads = 0;
+let now = 0;
+const originalNow = Date.now;
+Date.now = () => now;
+const page = {{
+  url: () => url,
+  waitForLoadState: async () => {{}},
+  waitForTimeout: async (ms) => {{ now += ms; }},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => {{
+      reads += 1;
+      if (reads > 1) throw new Error("SPA detached the response node");
+      return callback([{{
+        innerText: "Visible response before SPA replacement",
+        getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+      }}], includeText);
+    }},
+  }}),
+}};
+try {{
+  const result = await captureReviewResponse(page, {{ intervalMs: 0, conversationUrl: url }});
+  assert.equal(result.response, "Visible response before SPA replacement");
+  assert.equal(result.status, "captured");
+}} finally {{ Date.now = originalNow; }}
+''',
+    )
+
+
+
+def test_capture_mode_preserves_sample_when_spa_poll_wait_fails():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const url = "https://chatgpt.com/c/review";
+const page = {{
+  url: () => url,
+  waitForLoadState: async () => {{}} ,
+  waitForTimeout: async () => {{ throw new Error("SPA navigation interrupted poll"); }},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Visible response before navigation",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
+  }}),
+}};
+
+await assert.rejects(
+  captureReviewResponse(page, {{ intervalMs: 0, conversationUrl: url }}),
+  (error) => {{
+    assert.match(error.message, /SPA navigation interrupted poll/);
+    assert.equal(error.interruptionSnapshot.assistantText, "Visible response before navigation");
+    assert.equal(error.interruptionSnapshot.currentUrl, url);
+    return true;
+  }},
+);
+''',
+    )
+
+def test_capture_mode_persists_response_before_intermediate_result_write():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, readFile }} from "node:fs/promises";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(tmpdir(), "github-review-metadata-failure-"));
+const url = "https://chatgpt.com/c/review";
+const page = {{ url: () => url, close: async () => {{}} }};
+let resultWrites = 0;
+const response = "Captured before lifecycle write failed.";
+const snapshot = {{ assistantMessageId: "assistant-1", assistantText: response,
+  assistantTurnCount: 1, conversationId: "review", currentUrl: url, response,
+  responseTurnObserved: true, checkpointAccepted: true }};
+const result = await runReviewTransaction({{}}, {{
+  existingConversationUrl: url, runOutputDir: root, reviewPage: page, reopenIntervalMs: 0,
+  dependencies: {{
+    writeResult: async () => {{
+      resultWrites += 1;
+      if (resultWrites === 3) throw new Error("injected lifecycle write failure");
+    }},
+    runReviewPromptInNewTab: async (_context, options) => {{
+      await options.onSnapshot(snapshot);
+      return {{ page, currentUrl: url, conversationId: "review", readOnlyVerification: true,
+        checkpointAccepted: true, completion: {{ ...snapshot, status: "captured" }} }};
+    }},
+  }},
+}});
+assert.notEqual(result.status, "completed");
+assert.equal(await readFile(join(root, "response.md"), "utf8"), `${{response}}\\n`);
+''',
+    )
+
+
+def test_capture_mode_persists_visible_response_when_capture_is_interrupted():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, readFile }} from "node:fs/promises";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(tmpdir(), "github-review-interrupted-capture-"));
+const url = "https://chatgpt.com/c/review";
+const page = {{ url: () => url, close: async () => {{}} }};
+const response = "Visible response captured before interruption.";
+const snapshot = {{ assistantMessageId: "assistant-1", assistantText: response,
+  assistantTurnCount: 1, conversationId: "review", currentUrl: url, response,
+  responseTurnObserved: true, checkpointAccepted: true }};
+const result = await runReviewTransaction({{}}, {{
+  existingConversationUrl: url, runOutputDir: root, reopenIntervalMs: 0,
+  dependencies: {{
+    runReviewPromptInNewTab: async (_context, options) => {{
+      await options.onSnapshot(snapshot);
+      const error = new Error("capture interrupted");
+      error.code = "REVIEW_INTERRUPTED";
+      error.interruptionSnapshot = snapshot;
+      throw error;
+    }},
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(await readFile(join(root, "response.md"), "utf8"), `${{response}}\\n`);
+''',
+    )
+
+
+def test_capture_status_is_not_completed_while_cleanup_is_pending():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp }} from "node:fs/promises";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(tmpdir(), "github-review-pending-cleanup-"));
+const url = "https://chatgpt.com/c/review";
+const page = {{ url: () => url }};
+const persisted = [];
+await runReviewTransaction({{}}, {{
+  existingConversationUrl: url, runOutputDir: root, reviewPage: page, reopenIntervalMs: 0,
+  dependencies: {{
+    writeResult: async (_path, value) => persisted.push(JSON.parse(JSON.stringify(value))),
+    closePage: async () => {{ throw new Error("close failed"); }},
+    runReviewPromptInNewTab: async () => ({{ page, currentUrl: url, conversationId: "review",
+      readOnlyVerification: true, checkpointAccepted: true,
+      completion: {{ status: "captured", conversationId: "review", currentUrl: url,
+        response: "Captured response", assistantMessageId: "assistant-1",
+        responseTurnObserved: true, checkpointAccepted: true }} }}),
+  }},
+}});
+const pending = persisted.find((entry) => entry.cleanup_status === "pending");
+assert.ok(pending);
+assert.notEqual(pending.status, "completed");
 ''',
     )
 
