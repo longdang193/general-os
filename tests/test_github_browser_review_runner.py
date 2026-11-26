@@ -4974,6 +4974,43 @@ assert.equal(snapshot.response, result.response);
     )
 
 
+def test_capture_mode_retries_when_reopened_page_is_still_navigating():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+let attempts = 0;
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForLoadState: async () => {{}},
+  waitForTimeout: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => {{
+      attempts += 1;
+      if (attempts === 1) throw new Error("Execution context was destroyed, most likely because of a navigation");
+      return callback([{{
+        innerText: "Captured after navigation stabilized",
+        getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+      }}], includeText);
+    }},
+  }}),
+}};
+
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/c/review",
+}});
+
+assert.equal(attempts, 2);
+assert.equal(result.status, "captured");
+assert.equal(result.response, "Captured after navigation stabilized");
+''',
+    )
+
+
+
+
 def test_capture_mode_uses_current_thread_url_before_reopen():
     run_node_assertion(
         f'''

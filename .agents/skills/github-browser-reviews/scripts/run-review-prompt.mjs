@@ -379,7 +379,17 @@ async function waitForCapturePageReady(page, conversationUrl, signal) {
   let assistant;
   while (true) {
     throwIfAborted(signal);
-    assistant = await readVisibleAssistantMessage(page, { includeText: true });
+    try {
+      assistant = await readVisibleAssistantMessage(page, { includeText: true });
+    } catch {
+      // The SPA can navigate after DOMContentLoaded; keep the bounded capture alive.
+      const remaining = deadline - Date.now();
+      if (remaining <= 0 || typeof page.waitForTimeout !== "function") {
+        return { assistantMessageId: null, assistantText: "", assistantTurnCount: 0, conversationMatches: false };
+      }
+      await page.waitForTimeout(Math.min(CAPTURE_PAGE_POLL_MS, remaining));
+      continue;
+    }
     const currentUrl = readPageUrl(page, conversationUrl);
     const sameConversation = matchesConversationUrl(currentUrl, conversationUrl);
     if (sameConversation && assistant.assistantMessageId) {
