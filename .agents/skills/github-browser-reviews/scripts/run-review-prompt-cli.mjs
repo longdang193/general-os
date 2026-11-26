@@ -883,7 +883,7 @@ export async function openContext(chromium, options, dependencies = {}) {
         initialUrl: options.initialUrl,
       });
       const { browser, context } = await connectToCdpContext(chromium, launched.endpoint, options);
-      const reviewPage = await findBootstrapReviewPage(context);
+      const reviewPage = await findBootstrapReviewPage(context, { preferredUrl: options.initialUrl });
       if (options.initialUrl && reviewPage.url() !== options.initialUrl) {
         await reviewPage.goto(options.initialUrl, { timeout: CAPTURE_PAGE_READY_TIMEOUT_MS });
       }
@@ -928,7 +928,7 @@ export async function openContext(chromium, options, dependencies = {}) {
       headless: false,
       executablePath: resolveChromeExecutable(),
     });
-    const reviewPage = await findBootstrapReviewPage(context);
+    const reviewPage = await findBootstrapReviewPage(context, { preferredUrl: options.initialUrl });
     if (options.initialUrl && reviewPage.url() !== options.initialUrl) {
       await reviewPage.goto(options.initialUrl, { timeout: CAPTURE_PAGE_READY_TIMEOUT_MS });
     }
@@ -966,12 +966,28 @@ export async function openContext(chromium, options, dependencies = {}) {
   }
 }
 
-export async function findBootstrapReviewPage(context, { timeoutMs = 5000, pollIntervalMs = 50 } = {}) {
+export async function findBootstrapReviewPage(context, { timeoutMs = 5000, pollIntervalMs = 50, preferredUrl = null } = {}) {
   const deadline = Date.now() + timeoutMs;
   while (true) {
     const pages = context.pages();
-    if (pages.length === 1) return pages[0];
-    if (pages.length > 1) throw new Error(`Ambiguous bootstrap page selection: expected one ChatGPT page, found ${pages.length}`);
+    if (pages.length > 0) {
+      const preferredPage = preferredUrl && pages.find((page) => {
+        try {
+          return page.url() === preferredUrl;
+        } catch {
+          return false;
+        }
+      });
+      if (preferredPage) return preferredPage;
+      const chatPage = pages.find((page) => {
+        try {
+          return page.url().startsWith("https://chatgpt.com/");
+        } catch {
+          return false;
+        }
+      });
+      return chatPage || pages[0];
+    }
     if (Date.now() >= deadline) throw new Error("ChatGPT bootstrap page was not available");
     await new Promise((resolveDelay) => setTimeout(resolveDelay, pollIntervalMs));
   }
@@ -1156,7 +1172,7 @@ export async function runReviewTransaction(context, options) {
   let lastAcceptedSnapshot = null;
   let completionDeadlineAt = null;
   let recoveredCompletionSettled = false;
-  const captureMode = Number.isFinite(options.reopenIntervalMs);
+  const captureMode = Number.isFinite(options.reopenIntervalMs) || Boolean(options.existingConversationUrl);
 
   const persist = async () => {
     if (!outputDir) throw new Error("Review output directory was not allocated");
@@ -1233,7 +1249,9 @@ export async function runReviewTransaction(context, options) {
     if (snapshot.conversationId) result.conversation_id = snapshot.conversationId;
     const responseTurnObserved = snapshot.responseTurnObserved !== false;
     const responseText = snapshot.assistantText?.trim();
-    if (responseTurnObserved && responseText) {
+    if (snapshot.checkpointAccepted !== false
+      && (responseTurnObserved || options.existingConversationUrl)
+      && responseText) {
       try {
         const acceptedSnapshot = await persistResponse(responseText, { snapshot });
         lastAcceptedSnapshot = acceptedSnapshot || snapshot;
@@ -1244,8 +1262,8 @@ export async function runReviewTransaction(context, options) {
     } else {
       lastAcceptedSnapshot = snapshot;
     }
-    if (responseTurnObserved && snapshot.assistantMessageId) result.assistant_message_id = snapshot.assistantMessageId;
-    if (responseTurnObserved && snapshot.assistantTurnCount !== undefined && snapshot.assistantTurnCount !== null) {
+    if (snapshot.responseTurnObserved !== false && snapshot.assistantMessageId) result.assistant_message_id = snapshot.assistantMessageId;
+    if (snapshot.responseTurnObserved !== false && snapshot.assistantTurnCount !== undefined && snapshot.assistantTurnCount !== null) {
       result.assistant_turn_index = Math.max(0, snapshot.assistantTurnCount - 1);
     }
     await persist().catch((error) => {
@@ -1366,7 +1384,8 @@ export async function runReviewTransaction(context, options) {
       && Boolean(completionSnapshot?.response?.trim());
     const responseContentReady = responseStructurallyFinal
       && isResponseContentReady(completionSnapshot?.response);
-    if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false) {
+    if (completionSnapshot?.response
+      && (captureMode || completionSnapshot.responseTurnObserved !== false)) {
       stage = "artifacts";
       await persistResponse(completionSnapshot.response, {
         authoritative: captureMode || responseStructurallyFinal,
@@ -1377,6 +1396,7 @@ export async function runReviewTransaction(context, options) {
       result.status = "incomplete";
       result.failure_scope = "review";
       result.failure_stage = "completion";
+      result.failure_reason = appendFailureReason(result.failure_reason, completion.failureReason);
       result.failure_reason = appendFailureReason(result.failure_reason, "No visible assistant output was captured");
     } else if (captureMode) {
       result.status = "completed";
@@ -1486,12 +1506,14 @@ export async function runReviewTransaction(context, options) {
                 result.assistant_turn_index = completionSnapshot.assistantTurnIndex ?? null;
               }
             }
-              const responseStructurallyFinal = completion.status === "confirmed"
-              && completionSnapshot?.responseTurnObserved !== false
+            const responseStructurallyFinal = completion.status === "confirmed"
               && Boolean(completionSnapshot?.response?.trim());
             const responseContentReady = responseStructurallyFinal
               && isResponseContentReady(completionSnapshot?.response);
-            if (completionSnapshot?.response && completionSnapshot.responseTurnObserved !== false && outputDir) {
+            if (completionSnapshot?.checkpointAccepted !== false
+              && (captureMode || completionSnapshot.responseTurnObserved !== false)
+              && completionSnapshot?.response
+              && outputDir) {
               await persistResponse(completionSnapshot.response, { authoritative: responseStructurallyFinal, snapshot: completionSnapshot });
             }
             if (completion.status === "confirmed") {
@@ -1886,29 +1908,15 @@ export async function main(argv, dependencies = {}) {
     }
     attached = await openContextForReview(contextOptions);
     removeTerminationCleanup = installCleanup(attached, closeAttachedContext, () => reviewAbortController.abort());
-    let reopenPromise = Promise.resolve();
     const reopenPage = async ({ conversationUrl, page } = {}) => {
-      if (!options.userDataDir) {
-        const attachedPage = page || attached.reviewPage || attached.context?.pages?.()[0];
-        if (!attachedPage) throw new Error("Attached browser context has no page to reopen");
-        if (conversationUrl && attachedPage.url() !== conversationUrl) {
-          await attachedPage.goto(conversationUrl, { timeout: CAPTURE_PAGE_READY_TIMEOUT_MS });
-        }
-        return attachedPage;
+      const preferredPage = page || attached.reviewPage || attached.context?.pages?.()[0];
+      const capturePage = preferredPage && !isPageClosed(preferredPage)
+        ? preferredPage
+        : await attached.context.newPage();
+      if (conversationUrl && capturePage.url() !== conversationUrl) {
+        await capturePage.goto(conversationUrl, { timeout: CAPTURE_PAGE_READY_TIMEOUT_MS });
       }
-      const currentReopen = reopenPromise.then(async () => {
-        await closeAttachedContext(attached);
-        const reopened = await openContextForReview({
-          ...contextOptions,
-          initialUrl: conversationUrl,
-          skipPreflight: true,
-        });
-        Object.assign(attached, reopened);
-        attached.closed = false;
-        return attached.reviewPage || attached.context.pages()[0];
-      });
-      reopenPromise = currentReopen.catch(() => {});
-      return currentReopen;
+      return capturePage;
     };
     if (options.batchFile) {
       result = summarizeBatchResults(await runBatch({

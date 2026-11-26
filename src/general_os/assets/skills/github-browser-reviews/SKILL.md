@@ -244,7 +244,7 @@ implicitly.
 
 The runner performs one non-submitting visible authentication preflight for the
 owned context, selects and visibly verifies the requested model and effort, and
-submits each authorized prompt at most once. After the configured capture delay, it reopens the owned profile directly at
+submits each authorized prompt at most once. After the configured capture delay, it opens the owned profile page directly at
 the existing review conversation URL, waits up to 15 seconds for that thread
 and a visible assistant turn to become readable and stable, copies whatever
 assistant response is visible, and writes `response.md` plus `result.json`.
@@ -314,8 +314,9 @@ follow after a short pacing gap (currently three seconds). For the two-model
 case, `GPT-5.6-Sol` at `High` is dispatched first, followed by `GPT-6` or
 `GPT-6.2` at `High`. Parallel mode does not create replacement conversations,
 resubmit requests, or switch profiles or browser contexts. Capture operations
-remain serialized because reopening replaces the shared browser context; the
-configured capture delay is applied only once before each capture.
+remain serialized, but each capture navigates its own page directly to the
+recorded conversation URL so one capture cannot close another model's page.
+The configured capture delay is applied only once before each capture.
 
 The runner validates every entry before opening the browser and uses one
 authenticated context for the selected batch mode. Each model gets one fresh
@@ -537,17 +538,16 @@ retry a bloated request.
 
 The runner waits for `--reopen-interval` seconds, then reopens the owned profile
 directly at the existing conversation URL containing the response. It waits up
-to 15 seconds for that thread and a visible assistant turn to become readable
-and stable, then copies whatever assistant output is visible. A valid thread URL is required;
-if none is available, record an incomplete capture without reopening ChatGPT home.
+to 15 seconds for the page to load and stabilize, then copies whatever assistant
+output is visible. A valid thread URL is required; if none is available, record
+an incomplete capture without reopening ChatGPT home.
 Treat `local-chatgpt:` route IDs as provisional; promote a later canonical
 `/c/<id>` route before reopening, and never reopen a provisional route as the
 capture destination.
-It does not verify
-completeness, terminal markers, revision evidence, review outcome, or semantic
-quality. Treat the captured text as raw model output. If no assistant output is
-visible, record an incomplete capture. If the reopened page is a different
-conversation, do not persist its visible output.
+It does not verify completeness, terminal markers, revision evidence, review
+outcome, or semantic quality. Treat the captured text as raw model output. If no
+assistant output is visible, record an incomplete capture. If the reopened page
+is a different conversation, do not persist its visible output.
 
 ### 6. Handle unavailable revisions
 

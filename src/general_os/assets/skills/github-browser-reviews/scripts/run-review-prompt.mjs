@@ -211,7 +211,7 @@ export async function preflightAuthenticatedContext(context, existingPage = null
  * Open a new ChatGPT tab from an existing authenticated Playwright context.
  * The context must already own the user's authenticated session.
  */
-export async function openReviewTab(context) {
+export async function openReviewTab(context, { conversationUrl = null } = {}) {
   let page;
   try {
     page = await context.newPage();
@@ -219,7 +219,11 @@ export async function openReviewTab(context) {
     throw withFailureScope(error, "shared_context");
   }
   try {
-    await openChatGPT(page);
+    if (conversationUrl) {
+      await page.goto(conversationUrl, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
+    } else {
+      await openChatGPT(page);
+    }
     return page;
   } catch (error) {
     const visibleEvidence = await captureVisibleEvidence(page).catch(() => null);
@@ -299,6 +303,9 @@ export function normalizeExistingConversationUrl(value) {
   }
   if (!conversationId || !pathConversationId || pathConversationId.includes("/") || decodedPathConversationId !== conversationId) {
     throw new Error(`Existing conversation URL must use https://chatgpt.com/c/<id>: ${value}`);
+  }
+  if (isSyntheticConversationId(conversationId)) {
+    throw new Error(`Existing conversation URL must use a canonical ChatGPT conversation URL: ${value}`);
   }
   return `https://chatgpt.com/c/${encodeURIComponent(conversationId)}`;
 }
@@ -612,7 +619,22 @@ export async function captureReviewResponse(page, {
   if (!Number.isFinite(intervalMs) || intervalMs < 0) throw new Error("intervalMs must be a non-negative number");
 
   await new Promise((resolveDelay) => setTimeout(resolveDelay, intervalMs));
-  throwIfAborted(signal);
+  if (signal?.aborted) {
+    const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
+    const expectedConversationId = extractConversationIdentity(conversationUrl || readPageUrl(page));
+    const responseTurnObserved = interruptedSnapshot.latestAssistantFollowsLatestUser === true;
+    const snapshot = {
+      ...interruptedSnapshot,
+      checkpointAccepted: interruptedSnapshot.routeStable !== false
+        && interruptedSnapshot.conversationId === expectedConversationId,
+      responseTurnObserved,
+    };
+    if (onSnapshot) await onSnapshot(snapshot);
+    const error = new Error("Response capture interrupted by termination signal");
+    error.code = "REVIEW_INTERRUPTED";
+    error.interruptionSnapshot = snapshot;
+    throw error;
+  }
 
   const capture = async () => {
     let captureConversationUrl = conversationUrl || readPageUrl(page);
@@ -640,10 +662,11 @@ export async function captureReviewResponse(page, {
     const currentUrl = readPageUrl(capturePage, captureConversationUrl);
     const conversationMatches = assistant.conversationMatches !== false
       && matchesConversationUrl(currentUrl, captureConversationUrl);
+    const visibleAssistant = Boolean(assistant.assistantMessageId || assistant.assistantText?.trim());
     const responseTurnObserved = conversationMatches
       && assistant.responseTurnObserved !== false
-      && Boolean(assistant.assistantMessageId || assistant.assistantText);
-    const response = responseTurnObserved ? assistant.assistantText : "";
+      && visibleAssistant;
+    const response = conversationMatches && visibleAssistant ? assistant.assistantText : "";
     const snapshot = {
       assistantMessageId: conversationMatches ? assistant.assistantMessageId : null,
       assistantText: response,
@@ -1218,28 +1241,24 @@ export async function runReviewPromptInNewTab(context, options = {}) {
     ? normalizeExistingConversationUrl(options.existingConversationUrl)
     : null;
   const ownsPage = !options.reviewPage;
-  const page = options.reviewPage || await openReviewTab(context);
+  const page = options.reviewPage || await openReviewTab(context, { conversationUrl: existingConversationUrl });
   try {
     if (!ownsPage && !options.existingConversationUrl) {
       await page.goto(CHATGPT_URL, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
     }
-    if (!ownsPage) await openChatGPT(page);
+    if (!ownsPage && !options.existingConversationUrl) await openChatGPT(page);
     if (existingConversationUrl) {
-      await page.goto(existingConversationUrl, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
-      const completion = options.captureIntervalMs !== undefined
-        ? await captureReviewResponse(page, {
-          intervalMs: options.captureIntervalMs,
-          conversationUrl: existingConversationUrl,
-          reopenPage: options.reopenPage,
-          captureLock: options.captureLock,
-          onSnapshot: options.onSnapshot,
-          signal: options.signal,
-        })
-        : await waitForExistingReviewCompletion(page, {
-          conversationUrl: existingConversationUrl,
-          onSnapshot: options.onSnapshot,
-          signal: options.signal,
-        });
+      if (!matchesConversationUrl(readPageUrl(page), existingConversationUrl)) {
+        await page.goto(existingConversationUrl, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
+      }
+      const completion = await captureReviewResponse(page, {
+        intervalMs: options.captureIntervalMs ?? 0,
+        conversationUrl: existingConversationUrl,
+        reopenPage: options.reopenPage,
+        captureLock: options.captureLock,
+        onSnapshot: options.onSnapshot,
+        signal: options.signal,
+      });
       return {
         page,
         ...completion,

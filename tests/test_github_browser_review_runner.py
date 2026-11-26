@@ -1039,36 +1039,90 @@ def test_conversation_identity_normalizes_encoded_route_segments():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
-import {{ normalizeExistingConversationUrl, waitForExistingReviewCompletion }} from {RUNNER.as_uri()!r};
+import {{ normalizeExistingConversationUrl }} from {RUNNER.as_uri()!r};
 
-assert.equal(
-  normalizeExistingConversationUrl("https://chatgpt.com/c/local-chatgpt%3Aabc"),
-  "https://chatgpt.com/c/local-chatgpt%3Aabc",
+assert.throws(
+  () => normalizeExistingConversationUrl("https://chatgpt.com/c/local-chatgpt%3Aabc"),
+  /canonical.*conversation URL/i,
 );
+assert.equal(
+  normalizeExistingConversationUrl("https://chatgpt.com/c/abc%2Ddef"),
+  "https://chatgpt.com/c/abc-def",
+);
+'''
+    )
 
+
+def test_existing_capture_opens_the_thread_directly_and_uses_bounded_capture_by_default():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewPromptInNewTab }} from {RUNNER.as_uri()!r};
+
+const threadUrl = "https://chatgpt.com/c/canonical-thread";
+let currentUrl = "about:blank";
+const navigations = [];
 const page = {{
-  url: () => "https://chatgpt.com/c/local-chatgpt:abc",
-  evaluate: async () => ({{ userTurnCount: 1, assistantTurnCount: 1, latestAssistantFollowsLatestUser: true }}),
+  url: () => currentUrl,
+  goto: async (url) => {{ currentUrl = url; navigations.push(url); }},
+  close: async () => {{}},
+  waitForLoadState: async () => {{}},
   waitForTimeout: async () => {{}},
   locator: () => ({{
-    first() {{ return this; }},
-    last() {{ return this; }},
-    count: async () => 1,
-    isVisible: async () => false,
-    evaluateAll: async (callback, includeText) => callback([
-      {{ innerText: "Reviewed 0123456789abcdef0123456789abcdef01234567; no findings.", getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null }},
-    ], includeText),
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Visible response",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
   }}),
-  getByRole: (role) => ({{ first() {{ return this; }}, last() {{ return this; }}, isVisible: async () => role === "textbox" }}),
-  getByText: () => ({{ first() {{ return this; }}, isVisible: async () => true }}),
 }};
-const result = await waitForExistingReviewCompletion(page, {{
-  conversationUrl: "https://chatgpt.com/c/local-chatgpt%3Aabc",
-  timeoutMs: 1000,
+const result = await runReviewPromptInNewTab({{ newPage: async () => page }}, {{
+  existingConversationUrl: threadUrl,
 }});
-assert.equal(result.status, "confirmed");
-assert.equal(result.conversationId, "local-chatgpt:abc");
-'''
+
+assert.deepEqual(navigations, [threadUrl]);
+assert.equal(result.completion.status, "captured");
+assert.equal(result.completion.response, "Visible response");
+''',
+    )
+
+
+def test_capture_keeps_visible_text_when_submitted_turn_association_is_missing():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const originalNow = Date.now;
+let now = 1000;
+Date.now = () => now;
+try {{
+  const page = {{
+    url: () => "https://chatgpt.com/c/review",
+    waitForLoadState: async () => {{}},
+    waitForTimeout: async (milliseconds) => {{ now += milliseconds; }},
+    evaluate: async () => ({{ latestAssistantFollowsLatestUser: false }}),
+    locator: (selector) => ({{
+      evaluateAll: async (callback, includeText) => callback(
+        selector.includes('data-message-author-role="user"') ? [] : [{{
+          innerText: "Visible despite missing user-turn metadata",
+          getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+        }}],
+        includeText,
+      ),
+    }}),
+  }};
+  const result = await captureReviewResponse(page, {{
+    intervalMs: 0,
+    conversationUrl: "https://chatgpt.com/c/review",
+    submittedPrompt: "submitted prompt",
+    submittedUserTurnId: "missing-user-turn",
+  }});
+  assert.equal(result.response, "Visible despite missing user-turn metadata");
+  assert.equal(result.responseTurnObserved, false);
+}} finally {{
+  Date.now = originalNow;
+}}
+''',
     )
 
 
@@ -2321,16 +2375,21 @@ assert.equal(responses.length, 0);
     )
 
 
-def test_bootstrap_page_selection_fails_closed_on_zero_or_multiple_pages():
+def test_bootstrap_page_selection_uses_a_chatgpt_page_when_multiple_tabs_exist():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
 import {{ findBootstrapReviewPage }} from {CLI_RUNNER.as_uri()!r};
 
-const page = {{}};
+const page = {{ url: () => "https://chatgpt.com/" }};
+const otherPage = {{ url: () => "about:blank" }};
 assert.equal(await findBootstrapReviewPage({{ pages: () => [page] }}), page);
 await assert.rejects(findBootstrapReviewPage({{ pages: () => [] }}, {{ timeoutMs: 0 }}), /bootstrap page/);
-await assert.rejects(findBootstrapReviewPage({{ pages: () => [page, {{}}] }}), /Ambiguous/);
+assert.equal(await findBootstrapReviewPage({{ pages: () => [otherPage, page] }}), page);
+assert.equal(
+  await findBootstrapReviewPage({{ pages: () => [otherPage, page] }}, {{ preferredUrl: "https://chatgpt.com/" }}),
+  page,
+);
 '''
     )
 
@@ -2421,7 +2480,7 @@ await rm(outputDir, {{ recursive: true, force: true }});
 '''
     )
 
-def test_owned_profile_context_closes_before_releasing_lease_on_bootstrap_failure():
+def test_owned_profile_context_selects_a_bootstrap_tab_before_releasing_lease():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -2429,15 +2488,19 @@ import {{ mkdtemp }} from "node:fs/promises";
 import {{ tmpdir }} from "node:os";
 import {{ join }} from "node:path";
 import {{ existsSync }} from "node:fs";
-import {{ openContext }} from {CLI_RUNNER.as_uri()!r};
+import {{ openContext, closeContext }} from {CLI_RUNNER.as_uri()!r};
 
 const root = await mkdtemp(join(tmpdir(), "github-review-profile-"));
 const profile = join(root, "github-review", "owner-repo");
 const lockPath = `${{profile}}.codex-review-profile.lock`;
 let closeCount = 0;
-const context = {{ pages: () => [{{}}, {{}}], close: async () => {{ closeCount += 1; assert.equal(existsSync(lockPath), true); }} }};
+const firstPage = {{}};
+const secondPage = {{}};
+const context = {{ pages: () => [firstPage, secondPage], close: async () => {{ closeCount += 1; assert.equal(existsSync(lockPath), true); }} }};
 const chromium = {{ launchPersistentContext: async () => context }};
-await assert.rejects(openContext(chromium, {{ userDataDir: profile, projectKey: "owner-repo", repository: "owner/repo" }}), /Could not launch/);
+const attached = await openContext(chromium, {{ userDataDir: profile, projectKey: "owner-repo", repository: "owner/repo" }});
+assert.equal(attached.reviewPage, firstPage);
+await closeContext(attached);
 assert.equal(closeCount, 1);
 assert.equal(existsSync(lockPath), false);
 '''
@@ -2716,7 +2779,7 @@ assert.equal(captured.existingConversationUrl, "https://chatgpt.com/c/existing-r
     )
 
 
-def test_main_reopens_owned_profile_at_conversation_url_without_post_open_navigation():
+def test_main_reopens_owned_profile_page_at_conversation_url_without_replacing_context():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -2728,10 +2791,12 @@ const profileDir = `${{outputDir}}/github-review/owner-repo`;
 const promptFile = `${{outputDir}}/review.txt`;
 const conversationUrl = "https://chatgpt.com/c/existing-review";
 const opened = [];
-const initialPage = {{ url: () => "https://chatgpt.com/" }};
-const reopenedPage = {{
-  url: () => conversationUrl,
-  goto: async () => {{ throw new Error("post-open navigation should not run"); }},
+let navigatedTo = null;
+let closeCount = 0;
+const initialPage = {{
+  url: () => navigatedTo || "https://chatgpt.com/",
+  goto: async (url, options) => {{ navigatedTo = url; assert.equal(options.timeout, 15000); }},
+  isClosed: () => false,
 }};
 await mkdir(outputDir, {{ recursive: true }});
 await writeFile(promptFile, "Review https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md");
@@ -2757,9 +2822,7 @@ const exitCode = await main([
   writeResult: async () => {{}},
   openReviewContext: async (options) => {{
     opened.push(options);
-    return opened.length === 1
-      ? {{ context: {{ pages: () => [initialPage] }}, reviewPage: initialPage }}
-      : {{ context: {{ pages: () => [reopenedPage] }}, reviewPage: reopenedPage }};
+    return {{ context: {{ pages: () => [initialPage] }}, reviewPage: initialPage }};
   }},
   installTerminationCleanup: () => {{
     const cleanup = () => {{}};
@@ -2767,19 +2830,19 @@ const exitCode = await main([
     cleanup.closeOnce = async () => {{}};
     return cleanup;
   }},
-  closeContext: async () => {{}},
+  closeContext: async () => {{ closeCount += 1; }},
   runReviewTransaction: async (_context, options) => {{
-    const page = await options.reopenPage({{ conversationUrl }});
-    assert.equal(page, reopenedPage);
+    const page = await options.reopenPage({{ conversationUrl, page: initialPage }});
+    assert.equal(page, initialPage);
     return {{ status: "completed", output_dir: "review-output/run-main-reopen" }};
   }},
 }});
 
 assert.equal(exitCode, 0);
-assert.equal(opened.length, 2);
+assert.equal(opened.length, 1);
 assert.equal(opened[0].initialUrl, undefined);
-assert.equal(opened[1].initialUrl, conversationUrl);
-assert.equal(opened[1].skipPreflight, true);
+assert.equal(navigatedTo, conversationUrl);
+assert.equal(closeCount, 0);
 ''',
     )
 
@@ -2880,6 +2943,7 @@ const result = await runReviewTransaction({{}}, {{
   commitSha: "0123456789abcdef0123456789abcdef01234567",
   reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
   existingConversationUrl: "https://chatgpt.com/c/existing-review",
+  reopenIntervalMs: 0,
   dependencies: {{
     runReviewPromptInNewTab: async (_context, options) => {{
       sawBeforeSubmit = Boolean(options.beforeSubmit);
@@ -2894,6 +2958,14 @@ const result = await runReviewTransaction({{}}, {{
         dispatchState: "not_dispatched",
         currentUrl: "https://chatgpt.com/c/existing-review",
         conversationId: "existing-review",
+        completion: {{
+          status: "captured",
+          currentUrl: "https://chatgpt.com/c/existing-review",
+          conversationId: "existing-review",
+          response: "Existing review of 0123456789abcdef0123456789abcdef01234567; no findings.",
+          responseTurnObserved: true,
+          checkpointAccepted: true,
+        }},
       }};
     }},
     waitForReviewCompletion: async () => ({{
@@ -5378,6 +5450,49 @@ const result = await runReviewTransaction({{}}, {{
 assert.equal(result.status, "completed");
 assert.equal(result.completion, "captured");
 assert.equal(await readFile(join(root, "response.md"), "utf8"), "I will inspect this later.\\n");
+''',
+    )
+
+
+def test_capture_mode_persists_visible_response_without_turn_association():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, readFile }} from "node:fs/promises";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(tmpdir(), "github-review-capture-visible-"));
+const url = "https://chatgpt.com/c/review";
+const page = {{ url: () => url }};
+const result = await runReviewTransaction({{}}, {{
+  existingConversationUrl: url,
+  runOutputDir: root,
+  reviewPage: page,
+  reopenIntervalMs: 0,
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      currentUrl: url,
+      conversationId: "review",
+      readOnlyVerification: true,
+      checkpointAccepted: true,
+      completion: {{
+        status: "captured",
+        conversationId: "review",
+        currentUrl: url,
+        response: "Visible raw response",
+        assistantMessageId: "assistant-1",
+        responseTurnObserved: false,
+        checkpointAccepted: true,
+      }},
+    }}),
+  }},
+}});
+
+assert.equal(result.status, "completed");
+assert.equal(await readFile(join(root, "response.md"), "utf8"), "Visible raw response\\n");
 ''',
     )
 
