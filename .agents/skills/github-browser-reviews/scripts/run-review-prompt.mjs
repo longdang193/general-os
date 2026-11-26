@@ -589,7 +589,7 @@ export async function captureReviewResponse(page, {
     }
 
     let capturePage = page;
-    if (reopenPage) {
+    if (reopenPage && extractConversationIdentity(captureConversationUrl)) {
       const reopened = await reopenPage({ conversationUrl: captureConversationUrl, page });
       capturePage = reopened?.page || reopened;
     }

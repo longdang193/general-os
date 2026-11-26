@@ -5327,6 +5327,37 @@ assert.equal(result.responseTurnObserved, false);
 ''',
     )
 
+def test_capture_mode_does_not_reopen_homepage_when_thread_url_is_unavailable():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+let reopenCalls = 0;
+const page = {{
+  url: () => "https://chatgpt.com/",
+  waitForLoadState: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([], includeText),
+  }}),
+}};
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/",
+  reopenPage: async () => {{
+    reopenCalls += 1;
+    throw new Error("homepage must not be reopened as a capture destination");
+  }},
+}});
+
+assert.equal(reopenCalls, 0);
+assert.equal(result.response, "");
+assert.equal(result.checkpointAccepted, false);
+assert.equal(result.responseTurnObserved, false);
+''',
+    )
+
+
 def test_parallel_capture_lock_serializes_capture_operations():
     run_node_assertion(
         f'''
