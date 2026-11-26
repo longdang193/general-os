@@ -1199,7 +1199,7 @@ export async function runReviewTransaction(context, options) {
 
   const persistResponse = async (response, { authoritative = false, snapshot = null } = {}) => {
     const responseText = typeof response === "string" ? response.trim() : "";
-    if (!outputDir || !responseText) return;
+    if (!outputDir) return;
     const preserveCheckpoint = !authoritative
       && checkpointResponse
       && sameResponseIdentity(checkpointSnapshot, snapshot)
@@ -1207,7 +1207,7 @@ export async function runReviewTransaction(context, options) {
     const acceptedResponse = preserveCheckpoint ? checkpointResponse : responseText;
     const acceptedSnapshot = preserveCheckpoint ? checkpointSnapshot : snapshot;
     const responsePath = join(outputDir, authoritative ? "response.md" : "response.partial.md");
-    await writeResponse(responsePath, `${acceptedResponse}\n`);
+    await writeResponse(responsePath, acceptedResponse ? `${acceptedResponse}\n` : "");
     checkpointResponse = acceptedResponse;
     checkpointSnapshot = acceptedSnapshot || checkpointSnapshot;
     result.response_capture = authoritative ? "final" : "partial";
@@ -1259,7 +1259,7 @@ export async function runReviewTransaction(context, options) {
     const responseText = snapshot.assistantText?.trim();
     if (snapshot.checkpointAccepted !== false
       && (responseTurnObserved || options.existingConversationUrl)
-      && responseText) {
+      && (snapshot.assistantMessageId || responseText)) {
       try {
         const acceptedSnapshot = await persistResponse(responseText, { snapshot });
         lastAcceptedSnapshot = acceptedSnapshot || snapshot;
@@ -1387,12 +1387,14 @@ export async function runReviewTransaction(context, options) {
       }
     }
 
+    const visibleAssistantCaptured = completionSnapshot?.checkpointAccepted !== false
+      && (Boolean(completionSnapshot?.assistantMessageId) || Boolean(completionSnapshot?.response?.trim()));
     const responseStructurallyFinal = completion.status === "confirmed"
       && completionSnapshot?.responseTurnObserved !== false
       && Boolean(completionSnapshot?.response?.trim());
     const responseContentReady = responseStructurallyFinal
       && isResponseContentReady(completionSnapshot?.response);
-    if (completionSnapshot?.response
+    if (visibleAssistantCaptured
       && (captureMode || completionSnapshot.responseTurnObserved !== false)) {
       stage = "artifacts";
       await persistResponse(completionSnapshot.response, {
@@ -1400,7 +1402,7 @@ export async function runReviewTransaction(context, options) {
         snapshot: completionSnapshot,
       });
     }
-    if (captureMode && !completionSnapshot?.response?.trim()) {
+    if (captureMode && !visibleAssistantCaptured) {
       result.status = "incomplete";
       result.failure_scope = "review";
       result.failure_stage = "completion";

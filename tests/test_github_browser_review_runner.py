@@ -5234,6 +5234,7 @@ const initialPage = page("https://chatgpt.com/c/review", "I will inspect this la
 const reopenedPage = page("https://chatgpt.com/c/review", "I will inspect this later.");
 const result = await captureReviewResponse(initialPage, {{
   intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/c/review",
   reopenPage: async (options) => {{
     reopenCalls += 1;
     assert.equal(options.conversationUrl, "https://chatgpt.com/c/review");
@@ -5290,6 +5291,44 @@ assert.equal(result.response, "Captured after navigation stabilized");
 
 
 
+def test_capture_mode_resets_stability_after_route_mismatch():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+let attempts = 0;
+let currentUrl = "https://chatgpt.com/c/review";
+const page = {{
+  url: () => currentUrl,
+  waitForLoadState: async () => {{}},
+  waitForTimeout: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => {{
+      attempts += 1;
+      currentUrl = attempts === 2
+        ? "https://chatgpt.com/"
+        : "https://chatgpt.com/c/review";
+      return callback([{{
+        innerText: "Captured after route stabilization",
+        getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+      }}], includeText);
+    }},
+  }}),
+}};
+
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/c/review",
+}});
+
+assert.equal(attempts, 4);
+assert.equal(result.status, "captured");
+assert.equal(result.response, "Captured after route stabilization");
+''',
+    )
+
+
 def test_capture_mode_waits_for_empty_assistant_container_to_get_text():
     run_node_assertion(
         f'''
@@ -5319,7 +5358,7 @@ assert.equal(result.response, "Captured after hydration");
 ''',
     )
 
-def test_capture_mode_uses_current_thread_url_before_reopen():
+def test_capture_mode_rejects_homepage_capture_url():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -5342,15 +5381,19 @@ const page = (url, text) => {{
 }};
 
 const initialPage = page("https://chatgpt.com/c/created-review", "Captured response");
-const reopenedPage = page("https://chatgpt.com/c/created-review", "Captured response");
-await captureReviewResponse(initialPage, {{
+let reopenCalls = 0;
+const result = await captureReviewResponse(initialPage, {{
   intervalMs: 0,
   conversationUrl: "https://chatgpt.com/",
   reopenPage: async (options) => {{
-    assert.equal(options.conversationUrl, "https://chatgpt.com/c/created-review");
-    return reopenedPage;
+    reopenCalls += 1;
+    return initialPage;
   }},
 }});
+
+assert.equal(reopenCalls, 0);
+assert.equal(result.status, "incomplete");
+assert.match(result.failureReason, /Canonical conversation URL required/);
 ''',
     )
 
@@ -5395,6 +5438,49 @@ const result = await runReviewTransaction({{}}, {{
 assert.equal(result.status, "incomplete");
 assert.equal(result.completion, "captured");
 assert.match(result.failure_reason, /No visible assistant output was captured/);
+''',
+    )
+
+
+def test_capture_mode_persists_visible_empty_assistant_output():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, readFile }} from "node:fs/promises";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(tmpdir(), "github-review-visible-empty-capture-"));
+const url = "https://chatgpt.com/c/review";
+const page = {{ url: () => url }};
+const result = await runReviewTransaction({{}}, {{
+  existingConversationUrl: url,
+  runOutputDir: root,
+  reviewPage: page,
+  reopenIntervalMs: 0,
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      currentUrl: url,
+      conversationId: "review",
+      readOnlyVerification: true,
+      checkpointAccepted: true,
+      completion: {{
+        status: "captured",
+        conversationId: "review",
+        currentUrl: url,
+        response: "",
+        assistantMessageId: "assistant-1",
+        responseTurnObserved: true,
+        checkpointAccepted: true,
+      }},
+    }}),
+  }},
+}});
+
+assert.equal(result.status, "completed");
+assert.equal(await readFile(join(root, "response.md"), "utf8"), "");
 ''',
     )
 
@@ -5448,7 +5534,7 @@ assert.equal(await readFile(join(root, "response.md"), "utf8"), "Captured from t
 ''',
     )
 
-def test_capture_mode_promotes_live_canonical_route_before_reopening():
+def test_capture_mode_rejects_synthetic_conversation_url():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -5479,8 +5565,9 @@ const result = await captureReviewResponse(page, {{
   }},
 }});
 
-assert.equal(reopenedUrl, canonicalUrl);
-assert.equal(result.response, "Captured from the canonical thread.");
+assert.equal(reopenedUrl, null);
+assert.equal(result.status, "incomplete");
+assert.match(result.failureReason, /Canonical conversation URL required/);
 ''',
     )
 

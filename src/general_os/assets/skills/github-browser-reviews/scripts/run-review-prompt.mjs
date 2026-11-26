@@ -10,8 +10,7 @@ export const AMBIGUOUS_DISPATCH_TIMEOUT_MS = 15000;
 export const CAPTURE_PAGE_READY_TIMEOUT_MS = 15000;
 const CAPTURE_PAGE_POLL_MS = 100;
 export const ASSISTANT_TURN_SELECTOR = '[data-message-author-role="assistant"]:visible:not([data-message-author-role="assistant"] [data-message-author-role="assistant"]), [data-response-body]:visible';
-const ASSISTANT_FALLBACK_SELECTOR = 'main [class*="MarkdownRoot-"]:visible:not(.rich-text-user-turn)';
-const ASSISTANT_TURN_SELECTORS = [ASSISTANT_TURN_SELECTOR, ASSISTANT_FALLBACK_SELECTOR];
+const ASSISTANT_TURN_SELECTORS = [ASSISTANT_TURN_SELECTOR];
 const USER_TURN_SELECTOR = '[data-message-author-role="user"]:visible:not([data-message-author-role="user"] [data-message-author-role="user"]), [data-user-message-bubble="true"]:visible';
 export const INTERRUPTION_PATTERN = /(?:something went wrong|network error|response interrupted|stopped responding)/i;
 export const INTERRUPTION_UI_SELECTOR = '[data-testid="conversation-turn-error"]:visible, [data-testid="response-error"]:visible, [data-testid="error-message"]:visible';
@@ -417,6 +416,19 @@ async function readVisibleAssistantMessage(page, { includeText = true } = {}) {
   };
 }
 
+function waitForCaptureDelay(delayMs, signal) {
+  return new Promise((resolveDelay) => {
+    let timer;
+    const finish = () => {
+      if (timer) clearTimeout(timer);
+      signal?.removeEventListener?.("abort", finish);
+      resolveDelay();
+    };
+    timer = setTimeout(finish, delayMs);
+    signal?.addEventListener?.("abort", finish, { once: true });
+  });
+}
+
 async function waitForCapturePageReady(page, conversationUrl, {
   submittedPrompt = null,
   submittedUserTurnId = null,
@@ -458,13 +470,18 @@ async function waitForCapturePageReady(page, conversationUrl, {
       : null;
     const responseTurnObserved = !(submittedPrompt || submittedUserTurnId)
       || submittedTurnObserved && conversationTurnState?.latestAssistantFollowsLatestUser === true;
-    const sameSample = previousSample
-      && previousSample.assistantMessageId === assistant.assistantMessageId
-      && previousSample.assistantText === assistant.assistantText;
-    stableSampleCount = sameSample ? stableSampleCount + 1 : 1;
-    previousSample = assistant;
+    if (!sameConversation) {
+      previousSample = null;
+      stableSampleCount = 0;
+    } else {
+      const sameSample = previousSample
+        && previousSample.assistantMessageId === assistant.assistantMessageId
+        && previousSample.assistantText === assistant.assistantText;
+      stableSampleCount = sameSample ? stableSampleCount + 1 : 1;
+      previousSample = assistant;
+    }
     if (sameConversation && responseTurnObserved && assistant.assistantMessageId
-      && assistant.assistantText?.trim() && stableSampleCount >= 2) {
+      && stableSampleCount >= 2) {
       return {
         ...assistant,
         conversationMatches: true,
@@ -661,7 +678,7 @@ export async function captureReviewResponse(page, {
   if (!page) throw new Error("page is required for response capture");
   if (!Number.isFinite(intervalMs) || intervalMs < 0) throw new Error("intervalMs must be a non-negative number");
 
-  await new Promise((resolveDelay) => setTimeout(resolveDelay, intervalMs));
+  await waitForCaptureDelay(intervalMs, signal);
   if (signal?.aborted) {
     const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
     const expectedConversationId = extractConversationIdentity(conversationUrl || readPageUrl(page));
@@ -680,18 +697,27 @@ export async function captureReviewResponse(page, {
   }
 
   const capture = async () => {
-    let captureConversationUrl = conversationUrl || readPageUrl(page);
-    const observedUrl = readPageUrl(page, captureConversationUrl);
-    const currentConversationId = extractConversationIdentity(observedUrl);
-    const expectedConversationId = extractConversationIdentity(captureConversationUrl);
-    if (currentConversationId && (!expectedConversationId
-      || currentConversationId === expectedConversationId
-      || isSyntheticConversationId(expectedConversationId) && !isSyntheticConversationId(currentConversationId))) {
-      captureConversationUrl = observedUrl;
+    const captureConversationUrl = conversationUrl;
+    const captureConversationId = extractConversationIdentity(captureConversationUrl);
+    if (!captureConversationId || isSyntheticConversationId(captureConversationId)) {
+      const currentUrl = readPageUrl(page, captureConversationUrl);
+      const snapshot = {
+        assistantMessageId: null,
+        assistantText: "",
+        assistantTurnCount: 0,
+        conversationId: extractConversationIdentity(currentUrl),
+        currentUrl,
+        response: "",
+        responseTurnObserved: false,
+        stableSampleCount: 0,
+        checkpointAccepted: false,
+        failureReason: "Canonical conversation URL required for capture",
+      };
+      if (onSnapshot) await onSnapshot(snapshot);
+      return { ...snapshot, status: "incomplete", page };
     }
 
     let capturePage = page;
-    const captureConversationId = extractConversationIdentity(captureConversationUrl);
     const captureDeadlineAt = Date.now() + CAPTURE_PAGE_READY_TIMEOUT_MS;
     if (reopenPage && captureConversationId && !isSyntheticConversationId(captureConversationId)) {
       try {
@@ -711,7 +737,7 @@ export async function captureReviewResponse(page, {
     const currentUrl = readPageUrl(capturePage, captureConversationUrl);
     const conversationMatches = assistant.conversationMatches !== false
       && matchesConversationUrl(currentUrl, captureConversationUrl);
-    const visibleAssistant = Boolean(assistant.assistantMessageId || assistant.assistantText?.trim());
+    const visibleAssistant = Boolean(assistant.assistantMessageId);
     const responseTurnObserved = conversationMatches
       && assistant.responseTurnObserved !== false
       && visibleAssistant;
@@ -1297,7 +1323,7 @@ export async function runReviewPromptInNewTab(context, options = {}) {
     }
     if (!ownsPage && !options.existingConversationUrl) await openChatGPT(page);
     if (existingConversationUrl) {
-      if (!matchesConversationUrl(readPageUrl(page), existingConversationUrl)) {
+      if (!options.reopenPage && !matchesConversationUrl(readPageUrl(page), existingConversationUrl)) {
         await navigateToConversation(page, existingConversationUrl);
       }
       const completion = await captureReviewResponse(page, {
