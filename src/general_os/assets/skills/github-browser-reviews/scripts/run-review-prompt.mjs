@@ -392,7 +392,7 @@ async function waitForCapturePageReady(page, conversationUrl, signal) {
     }
     const currentUrl = readPageUrl(page, conversationUrl);
     const sameConversation = matchesConversationUrl(currentUrl, conversationUrl);
-    if (sameConversation && assistant.assistantMessageId) {
+    if (sameConversation && assistant.assistantMessageId && assistant.assistantText?.trim()) {
       return { ...assistant, conversationMatches: true };
     }
 

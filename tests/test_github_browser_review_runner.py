@@ -5045,6 +5045,36 @@ assert.equal(result.response, "Captured after navigation stabilized");
 
 
 
+
+def test_capture_mode_waits_for_empty_assistant_container_to_get_text():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+let attempts = 0;
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForLoadState: async () => {{}},
+  waitForTimeout: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: attempts++ === 0 ? "" : "Captured after hydration",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
+  }}),
+}};
+
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/c/review",
+}});
+
+assert.equal(attempts, 2);
+assert.equal(result.response, "Captured after hydration");
+''',
+    )
+
 def test_capture_mode_uses_current_thread_url_before_reopen():
     run_node_assertion(
         f'''
