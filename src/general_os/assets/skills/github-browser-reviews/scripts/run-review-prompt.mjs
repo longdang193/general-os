@@ -737,31 +737,34 @@ export async function captureReviewResponse(page, {
   const capture = async () => {
     let captureConversationUrl = conversationUrl;
     let captureConversationId = extractConversationIdentity(captureConversationUrl);
-    if (!captureConversationId || isSyntheticConversationId(captureConversationId)) {
-      const currentUrl = readPageUrl(page);
-      const currentConversationId = extractConversationIdentity(currentUrl);
-      if ((!captureConversationId || isSyntheticConversationId(captureConversationId))
-        && (!submittedPrompt || submittedUserTurnId)
-        && currentConversationId
-        && !isSyntheticConversationId(currentConversationId)) {
-        captureConversationUrl = currentUrl;
-        captureConversationId = currentConversationId;
-      } else {
-        const snapshot = {
-          assistantMessageId: null,
-          assistantText: "",
-          assistantTurnCount: 0,
-          conversationId: extractConversationIdentity(currentUrl),
-          currentUrl,
-          response: "",
-          responseTurnObserved: false,
-          stableSampleCount: 0,
-          checkpointAccepted: false,
-          failureReason: "Canonical conversation URL required for capture",
-        };
-        if (onSnapshot) await onSnapshot(snapshot);
-        return { ...snapshot, status: "incomplete", page };
-      }
+    const visibleCurrentUrl = readPageUrl(page);
+    const currentConversationId = extractConversationIdentity(visibleCurrentUrl);
+    const unresolvedCaptureIdentity = !captureConversationId || isSyntheticConversationId(captureConversationId);
+    const canonicalCurrentRoute = currentConversationId && !isSyntheticConversationId(currentConversationId);
+    const changedCanonicalRoute = canonicalCurrentRoute
+      && !unresolvedCaptureIdentity
+      && currentConversationId !== captureConversationId;
+    const currentRouteMatchesSubmission = changedCanonicalRoute
+      && (submittedPrompt || submittedUserTurnId)
+      && await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId);
+    if (canonicalCurrentRoute && (unresolvedCaptureIdentity || currentRouteMatchesSubmission)) {
+      captureConversationUrl = visibleCurrentUrl;
+      captureConversationId = currentConversationId;
+    } else if (unresolvedCaptureIdentity) {
+      const snapshot = {
+        assistantMessageId: null,
+        assistantText: "",
+        assistantTurnCount: 0,
+        conversationId: currentConversationId,
+        currentUrl: visibleCurrentUrl,
+        response: "",
+        responseTurnObserved: false,
+        stableSampleCount: 0,
+        checkpointAccepted: false,
+        failureReason: "Canonical conversation URL required for capture",
+      };
+      if (onSnapshot) await onSnapshot(snapshot);
+      return { ...snapshot, status: "incomplete", page };
     }
 
     let capturePage = page;

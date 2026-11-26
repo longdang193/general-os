@@ -1353,7 +1353,7 @@ export async function runReviewTransaction(context, options) {
     const completion = review.completion || (captureMode
       ? await captureReviewResponse(page, {
         intervalMs: options.reopenIntervalMs,
-        conversationUrl: options.existingConversationUrl || review.currentUrl || result.conversation_url || page.url(),
+        conversationUrl: options.existingConversationUrl || result.last_visible_conversation_url || review.currentUrl || result.conversation_url || page.url(),
           submittedPrompt: review.submittedPrompt,
           submittedUserTurnId: review.submittedUserTurnId,
         reopenPage: options.reopenPage,

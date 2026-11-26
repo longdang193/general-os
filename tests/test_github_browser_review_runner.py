@@ -5566,6 +5566,96 @@ assert.equal(result.response, "Captured from the canonical thread.");
 ''',
     )
 
+def test_capture_mode_promotes_canonical_route_when_submitted_turn_id_is_missing():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const provisionalUrl = "https://chatgpt.com/c/local-chatgpt%3Aabc";
+const canonicalUrl = "https://chatgpt.com/c/canonical-thread";
+const prompt = "Review this repository.";
+const page = {{ url: () => canonicalUrl }};
+const reopenedPage = {{
+  url: () => canonicalUrl,
+  waitForLoadState: async () => {{}},
+  waitForTimeout: async () => {{}},
+  evaluate: async () => ({{ latestAssistantFollowsLatestUser: true }}),
+  locator: (selector) => ({{
+    evaluateAll: async (callback, includeText) => callback(
+      selector.includes('data-message-author-role="user"')
+        ? [{{ innerText: prompt, getAttribute: () => null }}]
+        : [{{ innerText: "Captured canonical response.", getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null }}],
+      includeText,
+    ),
+  }}),
+}};
+let reopenedUrl = null;
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: provisionalUrl,
+  submittedPrompt: prompt,
+  reopenPage: async ({{ conversationUrl }}) => {{
+    reopenedUrl = conversationUrl;
+    return reopenedPage;
+  }},
+}});
+
+assert.equal(reopenedUrl, canonicalUrl);
+assert.equal(result.status, "captured");
+assert.equal(result.response, "Captured canonical response.");
+''',
+    )
+
+
+def test_capture_mode_promotes_changed_canonical_route_when_prompt_matches():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const earlierUrl = "https://chatgpt.com/c/earlier-id";
+const currentUrl = "https://chatgpt.com/c/current-id";
+const prompt = "Review this repository.";
+const page = {{
+  url: () => currentUrl,
+  locator: (selector) => ({{
+    evaluateAll: async (callback, includeText) => callback(
+      selector.includes('data-message-author-role="user"')
+        ? [{{ innerText: prompt, getAttribute: () => null }}]
+        : [],
+      includeText,
+    ),
+  }}),
+}};
+const reopenedPage = {{
+  url: () => currentUrl,
+  waitForLoadState: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Captured from the current thread.",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
+  }}),
+}};
+let reopenedUrl = null;
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: earlierUrl,
+  submittedPrompt: prompt,
+  reopenPage: async ({{ conversationUrl }}) => {{
+    reopenedUrl = conversationUrl;
+    return reopenedPage;
+  }},
+}});
+
+assert.equal(reopenedUrl, currentUrl);
+assert.equal(result.status, "captured");
+assert.equal(result.response, "Captured from the current thread.");
+''',
+    )
+
+
 def test_capture_mode_waits_past_an_empty_assistant_placeholder():
     run_node_assertion(
         f'''
