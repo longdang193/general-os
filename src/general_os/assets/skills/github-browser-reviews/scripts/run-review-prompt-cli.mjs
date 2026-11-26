@@ -1180,7 +1180,8 @@ export async function runReviewTransaction(context, options) {
   let lastAcceptedSnapshot = null;
   let completionDeadlineAt = null;
   let recoveredCompletionSettled = false;
-  const captureMode = Number.isFinite(options.reopenIntervalMs) || Boolean(options.existingConversationUrl);
+  const existingConversationCapture = Boolean(options.existingConversationUrl);
+  const captureMode = Number.isFinite(options.reopenIntervalMs) || existingConversationCapture;
 
   const persist = async () => {
     if (!outputDir) throw new Error("Review output directory was not allocated");
@@ -1388,16 +1389,17 @@ export async function runReviewTransaction(context, options) {
     }
 
     const visibleAssistantCaptured = completionSnapshot?.checkpointAccepted !== false
-      && (captureMode
+      && (existingConversationCapture
         ? Boolean(completionSnapshot?.response?.trim())
-        : Boolean(completionSnapshot?.assistantMessageId) || Boolean(completionSnapshot?.response?.trim()));
+        : completionSnapshot?.responseTurnObserved !== false
+          && (Boolean(completionSnapshot?.assistantMessageId) || Boolean(completionSnapshot?.response?.trim())));
     const responseStructurallyFinal = completion.status === "confirmed"
       && completionSnapshot?.responseTurnObserved !== false
       && Boolean(completionSnapshot?.response?.trim());
     const responseContentReady = responseStructurallyFinal
       && isResponseContentReady(completionSnapshot?.response);
     if (visibleAssistantCaptured
-      && (captureMode || completionSnapshot.responseTurnObserved !== false)) {
+      && (existingConversationCapture || completionSnapshot.responseTurnObserved !== false)) {
       stage = "artifacts";
       await persistResponse(completionSnapshot.response, {
         authoritative: captureMode || responseStructurallyFinal,
@@ -1523,7 +1525,7 @@ export async function runReviewTransaction(context, options) {
             const responseContentReady = responseStructurallyFinal
               && isResponseContentReady(completionSnapshot?.response);
             if (completionSnapshot?.checkpointAccepted !== false
-              && (captureMode || completionSnapshot.responseTurnObserved !== false)
+              && (existingConversationCapture || completionSnapshot.responseTurnObserved !== false)
               && completionSnapshot?.response
               && outputDir) {
               await persistResponse(completionSnapshot.response, { authoritative: responseStructurallyFinal, snapshot: completionSnapshot });

@@ -474,14 +474,14 @@ async function waitForCapturePageReady(page, conversationUrl, {
       preserveLastSample(error);
       throw error;
     }
-    const routeBeforeRead = readPageUrl(page, conversationUrl);
+    const routeBeforeRead = readPageUrl(page);
     try {
       assistant = await readVisibleAssistantMessage(page, { includeText: true });
     } catch {
       // The SPA can navigate after DOMContentLoaded; keep the bounded capture alive.
       const remaining = deadline - Date.now();
       if (remaining <= 0 || typeof page.waitForTimeout !== "function") {
-        const currentUrl = readPageUrl(page, conversationUrl);
+        const currentUrl = readPageUrl(page);
         if (lastRouteVerifiedSample && matchesConversationUrl(currentUrl, conversationUrl)) {
           return lastRouteVerifiedSample;
         }
@@ -490,7 +490,7 @@ async function waitForCapturePageReady(page, conversationUrl, {
       await waitForNextSample(remaining);
       continue;
     }
-    const currentUrl = readPageUrl(page, conversationUrl);
+    const currentUrl = readPageUrl(page);
     const sameConversation = matchesConversationUrl(routeBeforeRead, conversationUrl)
       && matchesConversationUrl(currentUrl, conversationUrl)
       && matchesConversationUrl(routeBeforeRead, currentUrl);
@@ -516,13 +516,15 @@ async function waitForCapturePageReady(page, conversationUrl, {
       && previousSample.assistantText === assistant.assistantText;
     stableSampleCount = sameSample ? stableSampleCount + 1 : 1;
     previousSample = assistant;
-    lastRouteVerifiedSample = {
-      ...assistant,
-      conversationMatches: true,
-      responseTurnObserved,
-      stableSampleCount,
-      currentUrl,
-    };
+    if (assistant.assistantText?.trim()) {
+      lastRouteVerifiedSample = {
+        ...assistant,
+        conversationMatches: true,
+        responseTurnObserved,
+        stableSampleCount,
+        currentUrl,
+      };
+    }
     if (responseTurnObserved && assistant.assistantMessageId
       && assistant.assistantText && stableSampleCount >= 2) {
       return {
@@ -535,7 +537,13 @@ async function waitForCapturePageReady(page, conversationUrl, {
 
     const remaining = deadline - Date.now();
     if (remaining <= 0 || typeof page.waitForTimeout !== "function") {
-      return lastRouteVerifiedSample;
+      return lastRouteVerifiedSample || {
+        ...assistant,
+        conversationMatches: true,
+        responseTurnObserved,
+        stableSampleCount,
+        currentUrl,
+      };
     }
     await waitForNextSample(remaining);
   }
@@ -744,11 +752,17 @@ export async function captureReviewResponse(page, {
     const changedCanonicalRoute = canonicalCurrentRoute
       && !unresolvedCaptureIdentity
       && currentConversationId !== captureConversationId;
-    const currentRouteMatchesSubmission = changedCanonicalRoute
-      && (submittedPrompt || submittedUserTurnId)
-      && await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId);
+    let verifiedCurrentUrl = visibleCurrentUrl;
+    let currentRouteMatchesSubmission = false;
+    if (changedCanonicalRoute && submittedUserTurnId) {
+      const submittedTurnMatches = await hasSubmittedUserTurn(page, null, submittedUserTurnId);
+      verifiedCurrentUrl = readPageUrl(page);
+      const verifiedConversationId = extractConversationIdentity(verifiedCurrentUrl);
+      currentRouteMatchesSubmission = submittedTurnMatches
+        && verifiedConversationId === currentConversationId;
+    }
     if (canonicalCurrentRoute && (unresolvedCaptureIdentity || currentRouteMatchesSubmission)) {
-      captureConversationUrl = visibleCurrentUrl;
+      captureConversationUrl = verifiedCurrentUrl;
       captureConversationId = currentConversationId;
     } else if (unresolvedCaptureIdentity) {
       const snapshot = {
@@ -784,7 +798,7 @@ export async function captureReviewResponse(page, {
       deadlineAt: captureDeadlineAt,
       signal,
     });
-    const currentUrl = readPageUrl(capturePage, captureConversationUrl);
+    const currentUrl = readPageUrl(capturePage);
     const conversationMatches = assistant.conversationMatches !== false
       && matchesConversationUrl(currentUrl, captureConversationUrl);
     const visibleAssistant = Boolean(assistant.assistantText?.trim());

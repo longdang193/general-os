@@ -5566,7 +5566,7 @@ assert.equal(result.response, "Captured from the canonical thread.");
 ''',
     )
 
-def test_capture_mode_promotes_canonical_route_when_submitted_turn_id_is_missing():
+def test_capture_mode_promotes_canonical_route_from_synthetic_identity_without_turn_id():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -5608,7 +5608,7 @@ assert.equal(result.response, "Captured canonical response.");
     )
 
 
-def test_capture_mode_promotes_changed_canonical_route_when_prompt_matches():
+def test_capture_mode_does_not_promote_changed_canonical_route_without_submitted_turn_id():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -5629,11 +5629,11 @@ const page = {{
   }}),
 }};
 const reopenedPage = {{
-  url: () => currentUrl,
+  url: () => earlierUrl,
   waitForLoadState: async () => {{}},
   locator: () => ({{
     evaluateAll: async (callback, includeText) => callback([{{
-      innerText: "Captured from the current thread.",
+        innerText: "Captured from the original thread.",
       getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
     }}], includeText),
   }}),
@@ -5649,9 +5649,9 @@ const result = await captureReviewResponse(page, {{
   }},
 }});
 
-assert.equal(reopenedUrl, currentUrl);
+assert.equal(reopenedUrl, earlierUrl);
 assert.equal(result.status, "captured");
-assert.equal(result.response, "Captured from the current thread.");
+assert.equal(result.response, "Captured from the original thread.");
 ''',
     )
 
@@ -6016,6 +6016,55 @@ const result = await runReviewTransaction({{}}, {{
 
 assert.equal(result.status, "completed");
 assert.equal(await readFile(join(root, "response.md"), "utf8"), "Visible raw response\\n");
+''',
+    )
+
+
+def test_submitted_capture_does_not_persist_unassociated_visible_response():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ access, mkdtemp }} from "node:fs/promises";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(tmpdir(), "github-review-submitted-unassociated-"));
+const url = "https://chatgpt.com/c/review";
+const page = {{ url: () => url }};
+const result = await runReviewTransaction({{}}, {{
+  model: "GPT-6.2",
+  effort: "High",
+  prompt: "Review this repository.",
+  runOutputDir: root,
+  reviewPage: page,
+  reopenIntervalMs: 0,
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      currentUrl: url,
+      conversationId: "review",
+      submittedPrompt: "Review this repository.",
+      submittedUserTurnId: "user-1",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      checkpointAccepted: true,
+      completion: {{
+        status: "captured",
+        conversationId: "review",
+        currentUrl: url,
+        response: "Older visible response",
+        assistantMessageId: "assistant-1",
+        responseTurnObserved: false,
+        checkpointAccepted: true,
+      }},
+    }}),
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+await assert.rejects(access(join(root, "response.md")));
 ''',
     )
 
