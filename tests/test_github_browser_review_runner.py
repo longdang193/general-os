@@ -4973,6 +4973,46 @@ assert.match(result.failure_reason, /No visible assistant output was captured/);
     )
 
 
+def test_capture_mode_preserves_reopen_failure_root_cause():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp }} from "node:fs/promises";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(tmpdir(), "github-review-reopen-failure-"));
+const url = "https://chatgpt.com/c/review";
+const page = {{ url: () => url, close: async () => {{}} }};
+const result = await runReviewTransaction({{}}, {{
+  model: "GPT-6.2",
+  effort: "High",
+  prompt: "Review the pinned change.",
+  runOutputDir: root,
+  reviewPage: page,
+  reopenIntervalMs: 0,
+  reopenPage: async () => {{ throw new Error("profile reopen failed: browser disconnected"); }},
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page,
+      currentUrl: url,
+      conversationId: "review",
+      promptSubmitted: true,
+      submission: "acknowledged",
+      dispatchState: "acknowledged",
+      model: "GPT-6.2",
+      effort: "High",
+    }}),
+    closePage: async () => {{}},
+  }},
+}});
+
+assert.equal(result.status, "incomplete");
+assert.match(result.failure_reason, /profile reopen failed: browser disconnected/);
+''',
+    )
+
 def test_capture_mode_persists_partial_response_as_the_captured_result():
     run_node_assertion(
         f'''

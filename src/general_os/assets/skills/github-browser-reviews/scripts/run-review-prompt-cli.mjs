@@ -1520,7 +1520,9 @@ export async function runReviewTransaction(context, options) {
       result.completion = "incomplete";
       result.failure_reason = appendFailureReason(
         result.failure_reason,
-        "Review completion could not be confirmed after recovery",
+        captureMode
+          ? `Response capture failed: ${transactionFailureReason}`
+          : "Review completion could not be confirmed after recovery",
       );
     }
     if (result.status !== "completed") {
