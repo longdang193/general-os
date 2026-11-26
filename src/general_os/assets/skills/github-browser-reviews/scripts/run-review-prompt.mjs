@@ -550,13 +550,21 @@ export async function captureReviewResponse(page, {
   await new Promise((resolveDelay) => setTimeout(resolveDelay, intervalMs));
   throwIfAborted(signal);
 
+  let captureConversationUrl = conversationUrl;
+  const observedUrl = page.url();
+  const currentConversationId = extractConversationIdentity(observedUrl);
+  const expectedConversationId = extractConversationIdentity(conversationUrl);
+  if (currentConversationId && (!expectedConversationId || currentConversationId === expectedConversationId)) {
+    captureConversationUrl = observedUrl;
+  }
+
   let capturePage = page;
   if (reopenPage) {
-    const reopened = await reopenPage({ conversationUrl, page });
+    const reopened = await reopenPage({ conversationUrl: captureConversationUrl, page });
     capturePage = reopened?.page || reopened;
   }
 
-  const assistant = await waitForCapturePageReady(capturePage, conversationUrl, signal);
+  const assistant = await waitForCapturePageReady(capturePage, captureConversationUrl, signal);
   const currentUrl = capturePage.url();
   const snapshot = {
     assistantMessageId: assistant.assistantMessageId,

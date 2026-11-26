@@ -4973,6 +4973,43 @@ assert.equal(snapshot.response, result.response);
 ''',
     )
 
+
+def test_capture_mode_uses_current_thread_url_before_reopen():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const page = (url, text) => {{
+  const locator = {{
+    evaluateAll: async (callback, includeText) => callback([
+      {{
+        innerText: text,
+        getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+      }},
+    ], includeText),
+  }};
+  return {{
+    url: () => url,
+    waitForLoadState: async () => {{}},
+    locator: () => locator,
+  }};
+}};
+
+const initialPage = page("https://chatgpt.com/c/created-review", "Captured response");
+const reopenedPage = page("https://chatgpt.com/c/created-review", "Captured response");
+await captureReviewResponse(initialPage, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/",
+  reopenPage: async (options) => {{
+    assert.equal(options.conversationUrl, "https://chatgpt.com/c/created-review");
+    return reopenedPage;
+  }},
+}});
+''',
+    )
+
+
 def test_capture_mode_marks_missing_output_incomplete():
     run_node_assertion(
         f'''
