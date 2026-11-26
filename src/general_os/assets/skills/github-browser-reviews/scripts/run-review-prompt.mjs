@@ -257,6 +257,21 @@ export function extractConversationIdentity(url) {
   }
 }
 
+function readPageUrl(page, fallback = null) {
+  try {
+    return typeof page?.url === "function" ? page.url() : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function matchesConversationUrl(currentUrl, expectedUrl) {
+  if (!expectedUrl) return true;
+  const currentId = extractConversationIdentity(currentUrl);
+  const expectedId = extractConversationIdentity(expectedUrl);
+  return Boolean(currentId && expectedId && currentId === expectedId);
+}
+
 export function normalizeExistingConversationUrl(value) {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error("existing conversation URL must be a non-empty ChatGPT conversation URL");
@@ -365,13 +380,16 @@ async function waitForCapturePageReady(page, conversationUrl, signal) {
   while (true) {
     throwIfAborted(signal);
     assistant = await readVisibleAssistantMessage(page, { includeText: true });
-    const currentUrl = page.url();
-    const sameConversation = !conversationUrl
-      || extractConversationIdentity(currentUrl) === extractConversationIdentity(conversationUrl);
-    if (sameConversation && assistant.assistantMessageId) return assistant;
+    const currentUrl = readPageUrl(page, conversationUrl);
+    const sameConversation = matchesConversationUrl(currentUrl, conversationUrl);
+    if (sameConversation && assistant.assistantMessageId) {
+      return { ...assistant, conversationMatches: true };
+    }
 
     const remaining = deadline - Date.now();
-    if (remaining <= 0 || typeof page.waitForTimeout !== "function") return assistant;
+    if (remaining <= 0 || typeof page.waitForTimeout !== "function") {
+      return { ...assistant, conversationMatches: sameConversation };
+    }
     await page.waitForTimeout(Math.min(CAPTURE_PAGE_POLL_MS, remaining));
   }
 }
@@ -539,8 +557,9 @@ async function readCompletionSnapshot(page, { includeText } = {}) {
 
 export async function captureReviewResponse(page, {
   intervalMs = PROFILE_REOPEN_INTERVAL_MS,
-  conversationUrl = page?.url?.() || null,
+  conversationUrl = null,
   reopenPage,
+  captureLock,
   onSnapshot,
   signal,
 } = {}) {
@@ -550,34 +569,42 @@ export async function captureReviewResponse(page, {
   await new Promise((resolveDelay) => setTimeout(resolveDelay, intervalMs));
   throwIfAborted(signal);
 
-  let captureConversationUrl = conversationUrl;
-  const observedUrl = page.url();
-  const currentConversationId = extractConversationIdentity(observedUrl);
-  const expectedConversationId = extractConversationIdentity(conversationUrl);
-  if (currentConversationId && (!expectedConversationId || currentConversationId === expectedConversationId)) {
-    captureConversationUrl = observedUrl;
-  }
+  const capture = async () => {
+    let captureConversationUrl = conversationUrl || readPageUrl(page);
+    const observedUrl = readPageUrl(page, captureConversationUrl);
+    const currentConversationId = extractConversationIdentity(observedUrl);
+    const expectedConversationId = extractConversationIdentity(captureConversationUrl);
+    if (currentConversationId && (!expectedConversationId || currentConversationId === expectedConversationId)) {
+      captureConversationUrl = observedUrl;
+    }
 
-  let capturePage = page;
-  if (reopenPage) {
-    const reopened = await reopenPage({ conversationUrl: captureConversationUrl, page });
-    capturePage = reopened?.page || reopened;
-  }
+    let capturePage = page;
+    if (reopenPage) {
+      const reopened = await reopenPage({ conversationUrl: captureConversationUrl, page });
+      capturePage = reopened?.page || reopened;
+    }
 
-  const assistant = await waitForCapturePageReady(capturePage, captureConversationUrl, signal);
-  const currentUrl = capturePage.url();
-  const snapshot = {
-    assistantMessageId: assistant.assistantMessageId,
-    assistantText: assistant.assistantText,
-    assistantTurnCount: assistant.assistantTurnCount,
-    conversationId: extractConversationIdentity(currentUrl),
-    currentUrl,
-    response: assistant.assistantText,
-    responseTurnObserved: Boolean(assistant.assistantMessageId || assistant.assistantText),
-    checkpointAccepted: true,
+    const assistant = await waitForCapturePageReady(capturePage, captureConversationUrl, signal);
+    const currentUrl = readPageUrl(capturePage, captureConversationUrl);
+    const conversationMatches = assistant.conversationMatches !== false
+      && matchesConversationUrl(currentUrl, captureConversationUrl);
+    const response = conversationMatches ? assistant.assistantText : "";
+    const responseTurnObserved = conversationMatches && Boolean(assistant.assistantMessageId || response);
+    const snapshot = {
+      assistantMessageId: conversationMatches ? assistant.assistantMessageId : null,
+      assistantText: response,
+      assistantTurnCount: conversationMatches ? assistant.assistantTurnCount : 0,
+      conversationId: extractConversationIdentity(currentUrl),
+      currentUrl,
+      response,
+      responseTurnObserved,
+      checkpointAccepted: conversationMatches,
+    };
+    if (onSnapshot) await onSnapshot(snapshot);
+    return { ...snapshot, status: "captured", page: capturePage };
   };
-  if (onSnapshot) await onSnapshot(snapshot);
-  return { ...snapshot, status: "captured", page: capturePage };
+
+  return captureLock ? captureLock(capture) : capture();
 }
 
 export function evaluateReviewCompletion({
@@ -668,7 +695,13 @@ export async function submitPrompt(page, composer, prompt, { beforeSubmit, signa
     throw error;
   }
 
-  const currentUrl = page.url();
+  let currentUrl = readPageUrl(page);
+  const routeDeadline = Date.now() + SUBMITTED_TURN_ID_TIMEOUT_MS;
+  while (!extractConversationIdentity(currentUrl) && Date.now() <= routeDeadline) {
+    if (typeof page.waitForTimeout !== "function") break;
+    await page.waitForTimeout(Math.min(SUBMISSION_ACK_POLL_MS, routeDeadline - Date.now()));
+    currentUrl = readPageUrl(page, currentUrl);
+  }
   return {
     currentUrl,
     conversationId: extractConversationIdentity(currentUrl),
@@ -1143,6 +1176,7 @@ export async function runReviewPromptInNewTab(context, options = {}) {
           intervalMs: options.captureIntervalMs,
           conversationUrl: existingConversationUrl,
           reopenPage: options.reopenPage,
+          captureLock: options.captureLock,
           onSnapshot: options.onSnapshot,
           signal: options.signal,
         })

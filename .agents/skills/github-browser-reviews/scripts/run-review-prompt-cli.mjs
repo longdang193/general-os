@@ -1275,10 +1275,12 @@ export async function runReviewTransaction(context, options) {
       if (captureMode) {
         runPromptOptions.captureIntervalMs = options.reopenIntervalMs;
         runPromptOptions.reopenPage = options.reopenPage;
+        runPromptOptions.captureLock = options.captureLock;
       }
     } else {
       runPromptOptions.beforeSubmit = async () => {
         stage = "submission";
+        if (options.dispatchGate?.beforeDispatch) await options.dispatchGate.beforeDispatch();
         result.submission_attempted = true;
         result.submission = "attempted";
         result.dispatch_state = "possibly_dispatched";
@@ -1324,6 +1326,7 @@ export async function runReviewTransaction(context, options) {
         intervalMs: options.reopenIntervalMs,
         conversationUrl: review.currentUrl || result.conversation_url || page.url(),
         reopenPage: options.reopenPage,
+        captureLock: options.captureLock,
         onSnapshot: persistSnapshot,
         signal: options.abortSignal,
       })
@@ -1593,6 +1596,50 @@ export async function runReviewTransaction(context, options) {
   };
 }
 
+function createCaptureLock() {
+  let tail = Promise.resolve();
+  return async (operation) => {
+    const previous = tail;
+    let release;
+    tail = new Promise((resolve) => { release = resolve; });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  };
+}
+
+function createParallelDispatchGate(staggerMs = 3000) {
+  let firstDispatchedAt = null;
+  let resolveFirstDispatched;
+  let resolveFirstSettled;
+  const firstDispatched = new Promise((resolve) => { resolveFirstDispatched = resolve; });
+  const firstSettled = new Promise((resolve) => { resolveFirstSettled = resolve; });
+
+  return {
+    for(index) {
+      return {
+        beforeDispatch: async () => {
+          if (index === 0) {
+            firstDispatchedAt = Date.now();
+            resolveFirstDispatched();
+            return;
+          }
+          await Promise.race([firstDispatched, firstSettled]);
+          const anchor = firstDispatchedAt || Date.now();
+          const remaining = anchor + staggerMs - Date.now();
+          if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+        },
+        settled: () => {
+          if (index === 0) resolveFirstSettled();
+        },
+      };
+    },
+  };
+}
+
 function hasClosedContextEvidence(result) {
   const evidence = `${result.failure_code || ""} ${result.failure_reason || ""}`;
   return /(?:browser|context|target|page).*(?:closed|close|disconnect)|(?:closed|close|disconnect).*(?:browser|context|target|page)/i.test(evidence);
@@ -1610,14 +1657,21 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
       repository: repository || attached.repository,
     });
     requestedCount = validatedReviews.length;
-    const runOne = (review, index) => runTransaction(attached.context, {
-      ...review,
-      reviewIndex: review.reviewIndex ?? index,
-      outputDir,
-      abortSignal,
-      reopenPage,
-      reopenIntervalMs,
-    });
+    const captureLock = mode === "parallel" ? createCaptureLock() : null;
+    const dispatchGate = mode === "parallel" ? createParallelDispatchGate() : null;
+    const runOne = (review, index) => {
+      const transactionGate = dispatchGate?.for(index);
+      return runTransaction(attached.context, {
+        ...review,
+        reviewIndex: review.reviewIndex ?? index,
+        outputDir,
+        abortSignal,
+        reopenPage,
+        reopenIntervalMs,
+        captureLock,
+        dispatchGate: transactionGate,
+      }).finally(() => transactionGate?.settled());
+    };
 
     if (mode === "parallel") {
       const transactions = [];

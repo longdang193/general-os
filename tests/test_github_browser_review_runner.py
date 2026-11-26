@@ -5136,3 +5136,242 @@ assert.equal(result.completion, "captured");
 assert.equal(await readFile(join(root, "response.md"), "utf8"), "I will inspect this later.\\n");
 ''',
     )
+
+
+def test_submit_prompt_waits_for_conversation_route_after_acknowledgement():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ submitPrompt }} from {RUNNER.as_uri()!r};
+
+const prompt = "Review the pinned change.";
+let currentUrl = "https://chatgpt.com/";
+let composerText = prompt;
+const composer = {{
+  fill: async (value) => {{ composerText = value; }},
+  inputValue: async () => composerText,
+  innerText: async () => composerText,
+  press: async () => {{}},
+}};
+const sendButton = {{
+  isVisible: async () => true,
+  click: async () => {{ composerText = ""; }},
+}};
+const page = {{
+  url: () => currentUrl,
+  getByRole: (role, options) => ({{
+    first: () => role === "button" ? sendButton : composer,
+  }}),
+  waitForTimeout: async () => {{ currentUrl = "https://chatgpt.com/c/created-review"; }},
+}};
+
+const result = await submitPrompt(page, composer, prompt);
+assert.equal(result.currentUrl, "https://chatgpt.com/c/created-review");
+assert.equal(result.conversationId, "created-review");
+''',
+    )
+
+
+def test_capture_mode_retains_conversation_url_when_submission_page_is_closed():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const closedPage = {{ url: () => {{ throw new Error("Target page, context or browser has been closed"); }} }};
+const reopenedPage = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForLoadState: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Captured response",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
+  }}),
+}};
+
+const result = await captureReviewResponse(closedPage, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/c/review",
+  reopenPage: async (options) => {{
+    assert.equal(options.conversationUrl, "https://chatgpt.com/c/review");
+    return reopenedPage;
+  }},
+}});
+assert.equal(result.response, "Captured response");
+''',
+    )
+
+
+def test_capture_mode_rejects_visible_output_from_wrong_conversation():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/other",
+  waitForLoadState: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Wrong conversation output",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
+  }}),
+}};
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/c/review",
+}});
+assert.equal(result.response, "");
+assert.equal(result.checkpointAccepted, false);
+assert.equal(result.responseTurnObserved, false);
+''',
+    )
+
+
+def test_capture_mode_rejects_homepage_as_conversation_url():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/",
+  waitForLoadState: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Homepage output",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
+  }}),
+}};
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/",
+}});
+assert.equal(result.response, "");
+assert.equal(result.checkpointAccepted, false);
+assert.equal(result.responseTurnObserved, false);
+''',
+    )
+
+def test_parallel_capture_lock_serializes_capture_operations():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+let active = 0;
+let maximumActive = 0;
+let tail = Promise.resolve();
+const captureLock = async (operation) => {{
+  const previous = tail;
+  let release;
+  tail = new Promise((resolve) => {{ release = resolve; }});
+  await previous;
+  active += 1;
+  maximumActive = Math.max(maximumActive, active);
+  try {{ return await operation(); }} finally {{ active -= 1; release(); }}
+}};
+const page = (id) => ({{
+  url: () => `https://chatgpt.com/c/${{id}}`,
+  waitForLoadState: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: `Response ${{id}}`,
+      getAttribute: (name) => name === "data-message-id" ? `assistant-${{id}}` : null,
+    }}], includeText),
+  }}),
+}});
+
+await Promise.all(["one", "two"].map((id) => captureReviewResponse(page(id), {{
+  intervalMs: 0,
+  conversationUrl: `https://chatgpt.com/c/${{id}}`,
+  captureLock,
+}})));
+assert.equal(maximumActive, 1);
+''',
+    )
+
+
+def test_existing_conversation_capture_uses_parallel_capture_lock():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewPromptInNewTab }} from {RUNNER.as_uri()!r};
+
+let active = 0;
+let maximumActive = 0;
+let tail = Promise.resolve();
+const captureLock = async (operation) => {{
+  const previous = tail;
+  let release;
+  tail = new Promise((resolve) => {{ release = resolve; }});
+  await previous;
+  active += 1;
+  maximumActive = Math.max(maximumActive, active);
+  try {{ return await operation(); }} finally {{ active -= 1; release(); }}
+}};
+let nextPageId = 0;
+const context = {{}};
+const page = (id) => ({{
+  goto: async () => {{}},
+  close: async () => {{}},
+  getByRole: () => ({{ first: () => ({{ waitFor: async () => {{}}, isVisible: async () => true }}) }}),
+  url: () => `https://chatgpt.com/c/${{id}}`,
+  waitForLoadState: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: `Response ${{id}}`,
+      getAttribute: (name) => name === "data-message-id" ? `assistant-${{id}}` : null,
+    }}], includeText),
+  }}),
+}});
+
+await Promise.all(["one", "two"].map((id) => runReviewPromptInNewTab(context, {{
+  existingConversationUrl: `https://chatgpt.com/c/${{id}}`,
+  captureIntervalMs: 0,
+  captureLock,
+  reviewPage: page(id),
+}})));
+assert.equal(maximumActive, 1);
+''',
+    )
+
+def test_parallel_dispatch_gate_staggers_second_dispatch_without_waiting_for_generation():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const reviewUrl = `https://github.com/owner/repo/blob/${{sha}}/file.md`;
+const reviews = ["GPT-5.6-Sol", "GPT-6.2"].map((model) => ({{
+  model,
+  effort: "High",
+  prompt: `Review ${{reviewUrl}} at ${{sha}}`,
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [reviewUrl],
+}}));
+const events = [];
+const startedAt = Date.now();
+const resultPromise = runReviewBatch({{
+  mode: "parallel",
+  attached: {{ context: {{}}, projectKey: "owner-repo", repository: "owner/repo" }},
+  reviews,
+  runTransaction: async (_context, options) => {{
+    await options.dispatchGate.beforeDispatch();
+    events.push([options.model, Date.now() - startedAt]);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    return {{ status: "completed", completion: "captured", cleanup_status: "completed" }};
+  }},
+  closeContextFn: async () => {{}},
+}});
+const results = await resultPromise;
+assert.deepEqual(results.map((result) => result.status), ["completed", "completed"]);
+assert.deepEqual(events.map(([model]) => model), ["GPT-5.6-Sol", "GPT-6.2"]);
+assert.ok(events[1][1] - events[0][1] >= 2500);
+''',
+    )

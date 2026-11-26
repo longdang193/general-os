@@ -244,10 +244,10 @@ implicitly.
 
 The runner performs one non-submitting visible authentication preflight for the
 owned context, selects and visibly verifies the requested model and effort, and
-submits each authorized prompt at most once. After the configured capture delay,
-it reopens the owned profile directly at the existing review conversation URL,
-waits up to 15 seconds for the page to load and stabilize, copies whatever
-assistant response is visible, and writes `response.md` plus `result.json`.
+submits each authorized prompt at most once. After the configured capture delay, it reopens the owned profile directly at
+the existing review conversation URL, waits up to 15 seconds for that thread
+and a visible assistant turn to become readable, copies whatever assistant
+response is visible, and writes `response.md` plus `result.json`.
 
 This capture path intentionally does not verify response completeness, terminal
 markers, revision evidence, review outcome, or semantic quality. It does not
@@ -255,7 +255,8 @@ compare revision markers or require a stable final turn. Partial, planning-only,
 interrupted, and empty output are valid capture outcomes; if no assistant output
 is visible, record the transaction as incomplete rather than a successful
 capture. `capture_interval_ms` records the configured delay, and
-`completion: "captured"` identifies the capture attempt.
+`completion: "captured"` identifies a persisted capture transaction, not a
+complete or semantically validated response.
 
 The delay is configurable with `--reopen-interval <seconds>`; use `0` for an
 immediate capture. The delay applies before reopening and is not an additional
@@ -304,14 +305,14 @@ accepts a manifest:
 
 Pass it as `--batch-file <reviews.json>` instead of the single-review flags.
 Use `--mode sequential` (the default) to settle each manifest entry before
-starting the next. Use `--mode parallel` to invoke entries in manifest order
-without waiting for the first model's response before dispatching the second;
-for the two-model case, `GPT-5.6-Sol` at `High` is dispatched first, followed by
-`GPT-6` or `GPT-6.2` at `High`. Parallel mode does not create replacement
-conversations, resubmit requests, or switch profiles or browser contexts. The
-owned-profile reopen operation remains serialized because it replaces the shared
-browser context; the configured capture delay is still applied only once before
-reopening.
+starting the next. Use `--mode parallel` to dispatch entries in manifest order without waiting
+for generation: the first entry is dispatched immediately and later entries
+follow after a short pacing gap (currently three seconds). For the two-model
+case, `GPT-5.6-Sol` at `High` is dispatched first, followed by `GPT-6` or
+`GPT-6.2` at `High`. Parallel mode does not create replacement conversations,
+resubmit requests, or switch profiles or browser contexts. Capture operations
+remain serialized because reopening replaces the shared browser context; the
+configured capture delay is applied only once before each capture.
 
 The runner validates every entry before opening the browser and uses one
 authenticated context for the selected batch mode. Each model gets one fresh
@@ -533,10 +534,12 @@ retry a bloated request.
 
 The runner waits for `--reopen-interval` seconds, then reopens the owned profile
 directly at the existing conversation URL containing the response. It waits up
-to 15 seconds for the page to load and stabilize, then copies whatever assistant
-output is visible. It does not verify completeness, terminal markers, revision
-evidence, review outcome, or semantic quality. Treat the captured text as raw
-model output. If no assistant output is visible, record an incomplete capture.
+to 15 seconds for that thread and a visible assistant turn to become readable,
+then copies whatever assistant output is visible. It does not verify
+completeness, terminal markers, revision evidence, review outcome, or semantic
+quality. Treat the captured text as raw model output. If no assistant output is
+visible, record an incomplete capture. If the reopened page is a different
+conversation, do not persist its visible output.
 
 ### 6. Handle unavailable revisions
 
@@ -568,7 +571,8 @@ Before reporting success, record:
 ## Completion Result
 
 Return `completed` when the requested prompt was submitted (or the existing
-conversation was opened), the delayed capture settled, and artifacts were
-persisted. Return `incomplete` or `blocked` only for browser, access,
-provenance, persistence, or cleanup failures. The capture result is not a
-quality or completeness judgment.
+conversation was opened), the delayed capture settled, and artifacts and
+cleanup succeeded. Return `incomplete` or `blocked` for browser, access,
+provenance, persistence, or cleanup failures, including a capture that found no
+assistant output or the wrong conversation. This status is an operational
+result, not a quality or completeness judgment.
