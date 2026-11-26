@@ -16,7 +16,7 @@ import {
   runReviewPromptInNewTab,
   preflightAuthenticatedContext,
   AMBIGUOUS_DISPATCH_TIMEOUT_MS,
-  COMPOSER_READINESS_TIMEOUT_MS,
+  CAPTURE_PAGE_READY_TIMEOUT_MS,
   COMPLETION_TIMEOUT_MS,
   PROFILE_REOPEN_INTERVAL_MS,
   normalizeExistingConversationUrl,
@@ -791,6 +791,7 @@ export async function launchDedicatedChrome(
   {
     cdpPort = 0,
     executablePath,
+    initialUrl,
     spawnProcess = spawn,
     waitForEndpoint = waitForCdpEndpoint,
   } = {},
@@ -806,6 +807,7 @@ export async function launchDedicatedChrome(
       "--remote-debugging-address=127.0.0.1",
       "--no-first-run",
       "--no-default-browser-check",
+      ...(initialUrl ? [initialUrl] : []),
     ],
     { detached: false, stdio: "ignore", windowsHide: true },
   );
@@ -869,13 +871,17 @@ export async function openContext(chromium, options, dependencies = {}) {
     let launched;
     try {
       const launch = dependencies.launchDedicatedChrome || launchDedicatedChrome;
-      launched = await launch(profilePath, { cdpPort: options.cdpPortProvided ? options.cdpPort : 0 });
+      launched = await launch(profilePath, {
+        cdpPort: options.cdpPortProvided ? options.cdpPort : 0,
+        initialUrl: options.initialUrl,
+      });
       const { browser, context } = await connectToCdpContext(chromium, launched.endpoint, options);
+      const reviewPage = await findBootstrapReviewPage(context);
       return {
         browser,
         context,
         ownsContext: false,
-        reviewPage: await findBootstrapReviewPage(context),
+        reviewPage,
         chromeProcess: launched.process,
         cdpEndpoint: launched.endpoint,
         profileLease,
@@ -913,6 +919,9 @@ export async function openContext(chromium, options, dependencies = {}) {
       executablePath: resolveChromeExecutable(),
     });
     const reviewPage = await findBootstrapReviewPage(context);
+    if (options.initialUrl && reviewPage.url() !== options.initialUrl) {
+      await reviewPage.goto(options.initialUrl, { timeout: CAPTURE_PAGE_READY_TIMEOUT_MS });
+    }
     return {
       browser: null,
       context,
@@ -962,7 +971,9 @@ export async function openReviewContext(options) {
   const chromium = await loadPlaywright();
   const attached = await openContext(chromium, options);
   try {
-    await preflightAuthenticatedContext(attached.context, attached.reviewPage);
+    if (!options.skipPreflight) {
+      await preflightAuthenticatedContext(attached.context, attached.reviewPage);
+    }
     return attached;
   } catch (error) {
     try {
@@ -1800,14 +1811,14 @@ export async function main(argv, dependencies = {}) {
     const reopenPage = async ({ conversationUrl } = {}) => {
       if (!options.userDataDir) return attached.reviewPage;
       await closeAttachedContext(attached);
-      const reopened = await openContextForReview(contextOptions);
+      const reopened = await openContextForReview({
+        ...contextOptions,
+        initialUrl: conversationUrl,
+        skipPreflight: true,
+      });
       Object.assign(attached, reopened);
       attached.closed = false;
-      const page = attached.reviewPage || attached.context.pages()[0];
-      if (conversationUrl && page.url() !== conversationUrl) {
-        await page.goto(conversationUrl, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
-      }
-      return page;
+      return attached.reviewPage || attached.context.pages()[0];
     };
     if (options.batchFile) {
       result = summarizeBatchResults(await runBatch({

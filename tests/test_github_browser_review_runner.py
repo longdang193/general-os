@@ -933,7 +933,12 @@ import {{ openContext, closeContext }} from {CLI_RUNNER.as_uri()!r};
 
 const root = await mkdtemp(join(tmpdir(), "github-review-profile-"));
 const profile = join(root, "github-review", "owner-repo");
-const page = {{}};
+const conversationUrl = "https://chatgpt.com/c/existing-review";
+let navigatedTo = null;
+const page = {{
+  url: () => "https://chatgpt.com/",
+  goto: async (url, options) => {{ navigatedTo = {{ url, options }}; }},
+}};
 const context = {{ pages: () => [page], close: async () => {{}} }};
 let launchOptions;
 process.env.CHROME_PATH = "C:/test/chrome.exe";
@@ -947,9 +952,11 @@ const attached = await openContext(chromium, {{
   userDataDir: profile,
   projectKey: "owner-repo",
   repository: "owner/repo",
+  initialUrl: conversationUrl,
 }});
 assert.equal(attached.reviewPage, page);
 assert.deepEqual(launchOptions, {{ headless: false, executablePath: "C:/test/chrome.exe" }});
+assert.deepEqual(navigatedTo, {{ url: conversationUrl, options: {{ timeout: 15000 }} }});
 await closeContext(attached);
 '''
     )
@@ -2675,6 +2682,73 @@ assert.equal(captured.existingConversationUrl, "https://chatgpt.com/c/existing-r
     )
 
 
+def test_main_reopens_owned_profile_at_conversation_url_without_post_open_navigation():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdir, writeFile }} from "node:fs/promises";
+import {{ main }} from {CLI_RUNNER.as_uri()!r};
+
+const outputDir = `${{process.env.TEMP}}/github-browser-review-main-reopen-${{Date.now()}}`;
+const profileDir = `${{outputDir}}/github-review/owner-repo`;
+const promptFile = `${{outputDir}}/review.txt`;
+const conversationUrl = "https://chatgpt.com/c/existing-review";
+const opened = [];
+const initialPage = {{ url: () => "https://chatgpt.com/" }};
+const reopenedPage = {{
+  url: () => conversationUrl,
+  goto: async () => {{ throw new Error("post-open navigation should not run"); }},
+}};
+await mkdir(outputDir, {{ recursive: true }});
+await writeFile(promptFile, "Review https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md");
+
+const exitCode = await main([
+  "--launch-cdp",
+  "--user-data-dir", profileDir,
+  "--project-key", "owner-repo",
+  "--model", "GPT-6",
+  "--effort", "High",
+  "--prompt-file", promptFile,
+  "--repository", "owner/repo",
+  "--commit-sha", "0123456789abcdef0123456789abcdef01234567",
+  "--review-url", "https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md",
+  "--existing-conversation-url", conversationUrl,
+  "--output-dir", outputDir,
+], {{
+  createRunOutputDirectory: async (parentDir) => {{
+    const runOutputDir = `${{parentDir}}/run-main-reopen`;
+    await mkdir(runOutputDir, {{ recursive: true }});
+    return {{ outputDir: runOutputDir, runId: "run-main-reopen" }};
+  }},
+  writeResult: async () => {{}},
+  openReviewContext: async (options) => {{
+    opened.push(options);
+    return opened.length === 1
+      ? {{ context: {{ pages: () => [initialPage] }}, reviewPage: initialPage }}
+      : {{ context: {{ pages: () => [reopenedPage] }}, reviewPage: reopenedPage }};
+  }},
+  installTerminationCleanup: () => {{
+    const cleanup = () => {{}};
+    cleanup.getSignalCode = () => null;
+    cleanup.closeOnce = async () => {{}};
+    return cleanup;
+  }},
+  closeContext: async () => {{}},
+  runReviewTransaction: async (_context, options) => {{
+    const page = await options.reopenPage({{ conversationUrl }});
+    assert.equal(page, reopenedPage);
+    return {{ status: "completed", output_dir: "review-output/run-main-reopen" }};
+  }},
+}});
+
+assert.equal(exitCode, 0);
+assert.equal(opened.length, 2);
+assert.equal(opened[0].initialUrl, undefined);
+assert.equal(opened[1].initialUrl, conversationUrl);
+assert.equal(opened[1].skipPreflight, true);
+''',
+    )
+
 def test_batch_reviews_preserve_existing_conversation_verification_mode():
     run_node_assertion(
         f'''
@@ -3884,10 +3958,12 @@ import {{ launchDedicatedChrome }} from {CLI_RUNNER.as_uri()!r};
 const profile = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "github-review-cdp-"));
 const chromeProcess = {{ exitCode: 0, signalCode: null }};
 let endpointSeen = null;
+const conversationUrl = "https://chatgpt.com/c/existing-review";
 const launched = await launchDedicatedChrome(profile, {{
+  initialUrl: conversationUrl,
   spawnProcess: (_executable, args) => {{
     assert.equal(args.includes("--remote-debugging-port=0"), true);
-    assert.equal(args.includes("https://chatgpt.com/"), false);
+    assert.equal(args.at(-1), conversationUrl);
     void writeFile(join(profile, "DevToolsActivePort"), "45678\\nprofile-owned-browser\\n");
     return chromeProcess;
   }},
