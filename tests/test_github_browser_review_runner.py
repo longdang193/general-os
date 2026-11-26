@@ -5125,6 +5125,55 @@ assert.match(result.failure_reason, /No visible assistant output was captured/);
     )
 
 
+def test_capture_mode_prefers_supplied_existing_thread_over_redirected_page_url():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp, readFile }} from "node:fs/promises";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
+import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(tmpdir(), "github-review-existing-thread-"));
+const threadUrl = "https://chatgpt.com/c/6b0816f9-ef38-83eb-a3ce-15fd11bd2e21";
+const homePage = {{ url: () => "https://chatgpt.com/", close: async () => {{}} }};
+const reopenedPage = {{
+  url: () => threadUrl,
+  waitForLoadState: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Captured from the supplied thread.",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
+  }}),
+}};
+let reopenedUrl = null;
+const result = await runReviewTransaction({{}}, {{
+  existingConversationUrl: threadUrl,
+  runOutputDir: root,
+  reviewPage: homePage,
+  reopenIntervalMs: 0,
+  reopenPage: async ({{ conversationUrl }}) => {{
+    reopenedUrl = conversationUrl;
+    return reopenedPage;
+  }},
+  dependencies: {{
+    runReviewPromptInNewTab: async () => ({{
+      page: homePage,
+      currentUrl: "https://chatgpt.com/",
+      conversationId: null,
+      readOnlyVerification: true,
+      checkpointAccepted: true,
+    }}),
+  }},
+}});
+
+assert.equal(reopenedUrl, threadUrl);
+assert.equal(result.status, "completed");
+assert.equal(await readFile(join(root, "response.md"), "utf8"), "Captured from the supplied thread.\\n");
+''',
+    )
+
 def test_capture_mode_preserves_reopen_failure_root_cause():
     run_node_assertion(
         f'''

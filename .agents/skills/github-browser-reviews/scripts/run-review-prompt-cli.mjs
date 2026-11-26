@@ -1327,7 +1327,7 @@ export async function runReviewTransaction(context, options) {
     const completion = review.completion || (captureMode
       ? await captureReviewResponse(page, {
         intervalMs: options.reopenIntervalMs,
-        conversationUrl: review.currentUrl || result.conversation_url || page.url(),
+        conversationUrl: options.existingConversationUrl || review.currentUrl || result.conversation_url || page.url(),
         reopenPage: options.reopenPage,
         captureLock: options.captureLock,
         onSnapshot: persistSnapshot,
