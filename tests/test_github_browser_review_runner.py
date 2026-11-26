@@ -5322,7 +5322,7 @@ const result = await captureReviewResponse(page, {{
   conversationUrl: "https://chatgpt.com/c/review",
 }});
 
-assert.equal(attempts, 4);
+assert.equal(attempts, 5);
 assert.equal(result.status, "captured");
 assert.equal(result.response, "Captured after route stabilization");
 ''',
@@ -5357,46 +5357,6 @@ assert.equal(attempts, 3);
 assert.equal(result.response, "Captured after hydration");
 ''',
     )
-
-def test_capture_mode_rejects_homepage_capture_url():
-    run_node_assertion(
-        f'''
-import assert from "node:assert/strict";
-import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
-
-const page = (url, text) => {{
-  const locator = {{
-    evaluateAll: async (callback, includeText) => callback([
-      {{
-        innerText: text,
-        getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
-      }},
-    ], includeText),
-  }};
-  return {{
-    url: () => url,
-    waitForLoadState: async () => {{}},
-    locator: () => locator,
-  }};
-}};
-
-const initialPage = page("https://chatgpt.com/c/created-review", "Captured response");
-let reopenCalls = 0;
-const result = await captureReviewResponse(initialPage, {{
-  intervalMs: 0,
-  conversationUrl: "https://chatgpt.com/",
-  reopenPage: async (options) => {{
-    reopenCalls += 1;
-    return initialPage;
-  }},
-}});
-
-assert.equal(reopenCalls, 0);
-assert.equal(result.status, "incomplete");
-assert.match(result.failureReason, /Canonical conversation URL required/);
-''',
-    )
-
 
 def test_capture_mode_marks_missing_output_incomplete():
     run_node_assertion(
@@ -5534,7 +5494,7 @@ assert.equal(await readFile(join(root, "response.md"), "utf8"), "Captured from t
 ''',
     )
 
-def test_capture_mode_rejects_synthetic_conversation_url():
+def test_capture_mode_uses_visible_canonical_url_when_supplied_url_is_synthetic():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -5565,9 +5525,109 @@ const result = await captureReviewResponse(page, {{
   }},
 }});
 
-assert.equal(reopenedUrl, null);
-assert.equal(result.status, "incomplete");
-assert.match(result.failureReason, /Canonical conversation URL required/);
+assert.equal(reopenedUrl, canonicalUrl);
+assert.equal(result.status, "captured");
+assert.equal(result.response, "Captured from the canonical thread.");
+''',
+    )
+
+def test_capture_mode_promotes_homepage_to_live_canonical_conversation_url():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const canonicalUrl = "https://chatgpt.com/c/canonical-thread";
+const page = {{ url: () => canonicalUrl }};
+const reopenedPage = {{
+  url: () => canonicalUrl,
+  waitForLoadState: async () => {{}} ,
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Captured from the canonical thread.",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
+  }}),
+}};
+let reopenedUrl = null;
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/",
+  reopenPage: async ({{ conversationUrl }}) => {{
+    reopenedUrl = conversationUrl;
+    return reopenedPage;
+  }},
+}});
+
+assert.equal(reopenedUrl, canonicalUrl);
+assert.equal(result.status, "captured");
+assert.equal(result.response, "Captured from the canonical thread.");
+''',
+    )
+
+def test_capture_mode_waits_past_an_empty_assistant_placeholder():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+let samples = 0;
+const page = {{
+  url: () => "https://chatgpt.com/c/canonical-thread",
+  waitForLoadState: async () => {{}} ,
+  waitForTimeout: async () => {{}} ,
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => {{
+      samples += 1;
+      return callback([{{
+        innerText: samples < 3 ? "" : "Hydrated response text.",
+        getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+      }}], includeText);
+    }},
+  }}),
+}};
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/c/canonical-thread",
+}});
+
+assert.ok(samples >= 3);
+assert.equal(result.response, "Hydrated response text.");
+''',
+    )
+
+def test_capture_mode_discards_assistant_sample_across_spa_route_change():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+let urlReads = 0;
+let contentReads = 0;
+const page = {{
+  url: () => ++urlReads === 1
+    ? "https://chatgpt.com/c/old-thread"
+    : "https://chatgpt.com/c/new-thread",
+  waitForLoadState: async () => {{}} ,
+  waitForTimeout: async () => {{}} ,
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => {{
+      contentReads += 1;
+      return callback([{{
+        innerText: contentReads === 1 ? "Stale old response." : "New thread response.",
+        getAttribute: (name) => name === "data-message-id" ? `assistant-${{contentReads}}` : null,
+      }}], includeText);
+    }},
+  }}),
+}};
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/c/new-thread",
+}});
+
+assert.equal(result.status, "captured");
+assert.equal(result.response, "New thread response.");
+assert.ok(contentReads >= 3);
 ''',
     )
 
@@ -6010,7 +6070,36 @@ assert.equal(maximumActive, 1);
 ''',
     )
 
-def test_parallel_dispatch_gate_staggers_second_dispatch_without_waiting_for_generation():
+def test_run_review_batch_defaults_to_configured_capture_interval():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const reviewUrl = `https://github.com/owner/repo/blob/${{sha}}/file.md`;
+let receivedInterval;
+await runReviewBatch({{
+  attached: {{ context: {{}}, projectKey: "owner-repo", repository: "owner/repo" }},
+  reviews: [{{
+    model: "GPT-6.2",
+    effort: "High",
+    prompt: `Review ${{reviewUrl}} at ${{sha}}`,
+    repository: "owner/repo",
+    commitSha: sha,
+    reviewUrls: [reviewUrl],
+  }}],
+  runTransaction: async (_context, options) => {{
+    receivedInterval = options.reopenIntervalMs;
+    return {{ status: "completed", completion: "captured", cleanup_status: "completed" }};
+  }},
+  closeContextFn: async () => {{}},
+}});
+assert.equal(receivedInterval, 300000);
+''',
+    )
+
+def test_parallel_dispatch_gate_staggers_second_dispatch_while_first_is_pending():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -6028,6 +6117,11 @@ const reviews = ["GPT-5.6-Sol", "GPT-6.2"].map((model) => ({{
 }}));
 const events = [];
 const startedAt = Date.now();
+let firstSettled = false;
+let releaseFirst;
+const firstPending = new Promise((resolve) => {{ releaseFirst = resolve; }});
+let secondDispatched;
+const secondDispatch = new Promise((resolve) => {{ secondDispatched = resolve; }});
 const resultPromise = runReviewBatch({{
   mode: "parallel",
   attached: {{ context: {{}}, projectKey: "owner-repo", repository: "owner/repo" }},
@@ -6035,11 +6129,19 @@ const resultPromise = runReviewBatch({{
   runTransaction: async (_context, options) => {{
     await options.dispatchGate.beforeDispatch();
     events.push([options.model, Date.now() - startedAt]);
-    await new Promise((resolve) => setTimeout(resolve, 40));
+    if (options.model === "GPT-5.6-Sol") {{
+      await firstPending;
+      firstSettled = true;
+    }} else {{
+      secondDispatched();
+    }}
     return {{ status: "completed", completion: "captured", cleanup_status: "completed" }};
   }},
   closeContextFn: async () => {{}},
 }});
+await secondDispatch;
+assert.equal(firstSettled, false);
+releaseFirst();
 const results = await resultPromise;
 assert.deepEqual(results.map((result) => result.status), ["completed", "completed"]);
 assert.deepEqual(events.map(([model]) => model), ["GPT-5.6-Sol", "GPT-6.2"]);

@@ -279,7 +279,9 @@ review list against one repository-derived project key before opening the
 browser. Then keep the same transaction boundary: call the CLI module's
 `openReviewContext(options)` once, and call
 `runReviewBatch({ attached, reviews, outputDir, projectKey, repository })` from
-the Node controller. The Node controller must supply validated `projectKey` and
+the Node controller. The batch API defaults to the standard 300-second capture
+delay and sequential mode; pass `reopenIntervalMs` and `mode: "parallel"` to
+override those defaults. The Node controller must supply validated `projectKey` and
 `repository`; the attached browser context cannot establish repository identity
 safely. The standalone CLI validates each review's repository, full commit SHA,
 and pinned URLs. The standalone CLI derives the project key from each validated

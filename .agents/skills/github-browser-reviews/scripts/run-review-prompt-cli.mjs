@@ -1682,7 +1682,7 @@ function hasClosedContextEvidence(result) {
   return /(?:browser|context|target|page).*(?:closed|close|disconnect)|(?:closed|close|disconnect).*(?:browser|context|target|page)/i.test(evidence);
 }
 
-export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, abortSignal, reopenPage, reopenIntervalMs, mode = "sequential", runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
+export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, abortSignal, reopenPage, reopenIntervalMs = 300_000, mode = "sequential", runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
   const results = [];
   let cleanupError;
   let requestedCount = reviews?.length || 0;

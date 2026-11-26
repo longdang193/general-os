@@ -451,6 +451,7 @@ async function waitForCapturePageReady(page, conversationUrl, {
   let assistant;
   while (true) {
     throwIfAborted(signal);
+    const routeBeforeRead = readPageUrl(page, conversationUrl);
     try {
       assistant = await readVisibleAssistantMessage(page, { includeText: true });
     } catch {
@@ -463,25 +464,32 @@ async function waitForCapturePageReady(page, conversationUrl, {
       continue;
     }
     const currentUrl = readPageUrl(page, conversationUrl);
-    const sameConversation = matchesConversationUrl(currentUrl, conversationUrl);
+    const sameConversation = matchesConversationUrl(routeBeforeRead, conversationUrl)
+      && matchesConversationUrl(currentUrl, conversationUrl)
+      && matchesConversationUrl(routeBeforeRead, currentUrl);
+    if (!sameConversation) {
+      previousSample = null;
+      stableSampleCount = 0;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0 || typeof page.waitForTimeout !== "function") {
+        return { ...assistant, conversationMatches: false, responseTurnObserved: false, stableSampleCount };
+      }
+      await page.waitForTimeout(Math.min(CAPTURE_PAGE_POLL_MS, remaining));
+      continue;
+    }
     const submittedTurnObserved = await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId);
     const conversationTurnState = submittedPrompt || submittedUserTurnId
       ? await readVisibleConversationTurnState(page)
       : null;
     const responseTurnObserved = !(submittedPrompt || submittedUserTurnId)
       || submittedTurnObserved && conversationTurnState?.latestAssistantFollowsLatestUser === true;
-    if (!sameConversation) {
-      previousSample = null;
-      stableSampleCount = 0;
-    } else {
-      const sameSample = previousSample
-        && previousSample.assistantMessageId === assistant.assistantMessageId
-        && previousSample.assistantText === assistant.assistantText;
-      stableSampleCount = sameSample ? stableSampleCount + 1 : 1;
-      previousSample = assistant;
-    }
-    if (sameConversation && responseTurnObserved && assistant.assistantMessageId
-      && stableSampleCount >= 2) {
+    const sameSample = previousSample
+      && previousSample.assistantMessageId === assistant.assistantMessageId
+      && previousSample.assistantText === assistant.assistantText;
+    stableSampleCount = sameSample ? stableSampleCount + 1 : 1;
+    previousSample = assistant;
+    if (responseTurnObserved && assistant.assistantMessageId
+      && assistant.assistantText && stableSampleCount >= 2) {
       return {
         ...assistant,
         conversationMatches: true,
@@ -697,24 +705,32 @@ export async function captureReviewResponse(page, {
   }
 
   const capture = async () => {
-    const captureConversationUrl = conversationUrl;
-    const captureConversationId = extractConversationIdentity(captureConversationUrl);
+    let captureConversationUrl = conversationUrl;
+    let captureConversationId = extractConversationIdentity(captureConversationUrl);
     if (!captureConversationId || isSyntheticConversationId(captureConversationId)) {
-      const currentUrl = readPageUrl(page, captureConversationUrl);
-      const snapshot = {
-        assistantMessageId: null,
-        assistantText: "",
-        assistantTurnCount: 0,
-        conversationId: extractConversationIdentity(currentUrl),
-        currentUrl,
-        response: "",
-        responseTurnObserved: false,
-        stableSampleCount: 0,
-        checkpointAccepted: false,
-        failureReason: "Canonical conversation URL required for capture",
-      };
-      if (onSnapshot) await onSnapshot(snapshot);
-      return { ...snapshot, status: "incomplete", page };
+      const currentUrl = readPageUrl(page);
+      const currentConversationId = extractConversationIdentity(currentUrl);
+      if ((!captureConversationId || isSyntheticConversationId(captureConversationId))
+        && currentConversationId
+        && !isSyntheticConversationId(currentConversationId)) {
+        captureConversationUrl = currentUrl;
+        captureConversationId = currentConversationId;
+      } else {
+        const snapshot = {
+          assistantMessageId: null,
+          assistantText: "",
+          assistantTurnCount: 0,
+          conversationId: extractConversationIdentity(currentUrl),
+          currentUrl,
+          response: "",
+          responseTurnObserved: false,
+          stableSampleCount: 0,
+          checkpointAccepted: false,
+          failureReason: "Canonical conversation URL required for capture",
+        };
+        if (onSnapshot) await onSnapshot(snapshot);
+        return { ...snapshot, status: "incomplete", page };
+      }
     }
 
     let capturePage = page;
