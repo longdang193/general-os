@@ -246,12 +246,14 @@ The runner performs one non-submitting visible authentication preflight for the
 owned context, selects and visibly verifies the requested model and effort, and
 submits each authorized prompt at most once. After the configured capture delay, it reopens the owned profile directly at
 the existing review conversation URL, waits up to 15 seconds for that thread
-and a visible assistant turn to become readable, copies whatever assistant
-response is visible, and writes `response.md` plus `result.json`.
+and a visible assistant turn to become readable and stable, copies whatever
+assistant response is visible, and writes `response.md` plus `result.json`.
 
 This capture path intentionally does not verify response completeness, terminal
 markers, revision evidence, review outcome, or semantic quality. It does not
-compare revision markers or require a stable final turn. Partial, planning-only,
+require a stable final turn: capture readiness only requires the same visible
+assistant id/text twice and, after a new submission, an assistant turn following
+that submitted user turn. Partial, planning-only,
 interrupted, and empty output are valid capture outcomes; if no assistant output
 is visible, record the transaction as incomplete rather than a successful
 capture. `capture_interval_ms` records the configured delay, and
@@ -262,8 +264,9 @@ The delay is configurable with `--reopen-interval <seconds>`; use `0` for an
 immediate capture. The delay applies before reopening and is not an additional
 wait after the profile opens. The profile must be reopened at the supplied
 conversation URL, not at ChatGPT home or an unrelated tab. An externally
-attached `--cdp-endpoint` context is not closed and reopened by the runner, so
-the delay only postpones the visible capture there. Browser authentication,
+attached `--cdp-endpoint` context is not closed and reopened by the runner; it
+navigates the capture page to the supplied conversation URL after the delay.
+Browser authentication,
 profile ownership, provenance, artifact persistence, and cleanup failures remain
 enforced.
 
@@ -534,8 +537,8 @@ retry a bloated request.
 
 The runner waits for `--reopen-interval` seconds, then reopens the owned profile
 directly at the existing conversation URL containing the response. It waits up
-to 15 seconds for that thread and a visible assistant turn to become readable,
-then copies whatever assistant output is visible. A valid thread URL is required;
+to 15 seconds for that thread and a visible assistant turn to become readable
+and stable, then copies whatever assistant output is visible. A valid thread URL is required;
 if none is available, record an incomplete capture without reopening ChatGPT home.
 Treat `local-chatgpt:` route IDs as provisional; promote a later canonical
 `/c/<id>` route before reopening, and never reopen a provisional route as the

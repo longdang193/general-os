@@ -368,8 +368,14 @@ async function readVisibleAssistantMessage(page, { includeText = true } = {}) {
   };
 }
 
-async function waitForCapturePageReady(page, conversationUrl, signal) {
+async function waitForCapturePageReady(page, conversationUrl, {
+  submittedPrompt = null,
+  submittedUserTurnId = null,
+  signal,
+} = {}) {
   const deadline = Date.now() + CAPTURE_PAGE_READY_TIMEOUT_MS;
+  let previousSample = null;
+  let stableSampleCount = 0;
   if (typeof page.waitForLoadState === "function") {
     try {
       await page.waitForLoadState("domcontentloaded", {
@@ -396,20 +402,42 @@ async function waitForCapturePageReady(page, conversationUrl, signal) {
     }
     const currentUrl = readPageUrl(page, conversationUrl);
     const sameConversation = matchesConversationUrl(currentUrl, conversationUrl);
-    if (sameConversation && assistant.assistantMessageId && assistant.assistantText?.trim()) {
-      return { ...assistant, conversationMatches: true };
+    const submittedTurnObserved = await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId);
+    const conversationTurnState = submittedPrompt || submittedUserTurnId
+      ? await readVisibleConversationTurnState(page)
+      : null;
+    const responseTurnObserved = !(submittedPrompt || submittedUserTurnId)
+      || submittedTurnObserved && conversationTurnState?.latestAssistantFollowsLatestUser === true;
+    const sameSample = previousSample
+      && previousSample.assistantMessageId === assistant.assistantMessageId
+      && previousSample.assistantText === assistant.assistantText;
+    stableSampleCount = sameSample ? stableSampleCount + 1 : 1;
+    previousSample = assistant;
+    if (sameConversation && responseTurnObserved && assistant.assistantMessageId
+      && assistant.assistantText?.trim() && stableSampleCount >= 2) {
+      return {
+        ...assistant,
+        conversationMatches: true,
+        responseTurnObserved: true,
+        stableSampleCount,
+      };
     }
 
     const remaining = deadline - Date.now();
     if (remaining <= 0 || typeof page.waitForTimeout !== "function") {
-      return { ...assistant, conversationMatches: sameConversation };
+      return {
+        ...assistant,
+        conversationMatches: sameConversation,
+        responseTurnObserved,
+        stableSampleCount,
+      };
     }
     await page.waitForTimeout(Math.min(CAPTURE_PAGE_POLL_MS, remaining));
   }
 }
 
 async function hasSubmittedUserTurn(page, prompt, submittedUserTurnId = null) {
-  if (!prompt) return true;
+  if (!prompt && !submittedUserTurnId) return true;
   try {
     const turns = page.locator(USER_TURN_SELECTOR);
     const snapshots = await turns.evaluateAll((elements) => elements.map((element) => ({
@@ -420,8 +448,9 @@ async function hasSubmittedUserTurn(page, prompt, submittedUserTurnId = null) {
         || null,
       text: element.innerText || "",
     })));
-    const expectedPrompt = normalizePromptForTurnComparison(prompt);
     if (submittedUserTurnId) return snapshots.some((snapshot) => snapshot.id === submittedUserTurnId);
+    if (!prompt) return false;
+    const expectedPrompt = normalizePromptForTurnComparison(prompt);
     return snapshots.some((snapshot) => normalizePromptForTurnComparison(snapshot.text).includes(expectedPrompt));
   } catch {
     return false;
@@ -572,6 +601,8 @@ async function readCompletionSnapshot(page, { includeText } = {}) {
 export async function captureReviewResponse(page, {
   intervalMs = PROFILE_REOPEN_INTERVAL_MS,
   conversationUrl = null,
+  submittedPrompt = null,
+  submittedUserTurnId = null,
   reopenPage,
   captureLock,
   onSnapshot,
@@ -601,12 +632,18 @@ export async function captureReviewResponse(page, {
       capturePage = reopened?.page || reopened;
     }
 
-    const assistant = await waitForCapturePageReady(capturePage, captureConversationUrl, signal);
+    const assistant = await waitForCapturePageReady(capturePage, captureConversationUrl, {
+      submittedPrompt,
+      submittedUserTurnId,
+      signal,
+    });
     const currentUrl = readPageUrl(capturePage, captureConversationUrl);
     const conversationMatches = assistant.conversationMatches !== false
       && matchesConversationUrl(currentUrl, captureConversationUrl);
-    const response = conversationMatches ? assistant.assistantText : "";
-    const responseTurnObserved = conversationMatches && Boolean(assistant.assistantMessageId || response);
+    const responseTurnObserved = conversationMatches
+      && assistant.responseTurnObserved !== false
+      && Boolean(assistant.assistantMessageId || assistant.assistantText);
+    const response = responseTurnObserved ? assistant.assistantText : "";
     const snapshot = {
       assistantMessageId: conversationMatches ? assistant.assistantMessageId : null,
       assistantText: response,
@@ -615,6 +652,7 @@ export async function captureReviewResponse(page, {
       currentUrl,
       response,
       responseTurnObserved,
+      stableSampleCount: assistant.stableSampleCount || 0,
       checkpointAccepted: conversationMatches,
     };
     if (onSnapshot) await onSnapshot(snapshot);

@@ -2783,6 +2783,64 @@ assert.equal(opened[1].skipPreflight, true);
 ''',
     )
 
+
+def test_main_navigates_attached_cdp_page_to_capture_conversation_url():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdir, writeFile }} from "node:fs/promises";
+import {{ main }} from {CLI_RUNNER.as_uri()!r};
+
+const outputDir = `${{process.env.TEMP}}/github-browser-review-main-attached-cdp-${{Date.now()}}`;
+const promptFile = `${{outputDir}}/review.txt`;
+const conversationUrl = "https://chatgpt.com/c/existing-review";
+let navigatedTo = null;
+const page = {{
+  url: () => "https://chatgpt.com/",
+  goto: async (url, options) => {{ navigatedTo = {{ url, options }}; }},
+}};
+await mkdir(outputDir, {{ recursive: true }});
+await writeFile(promptFile, "Review https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md");
+
+const exitCode = await main([
+  "--cdp-endpoint", "http://127.0.0.1:9222",
+  "--model", "GPT-6",
+  "--effort", "High",
+  "--prompt-file", promptFile,
+  "--repository", "owner/repo",
+  "--commit-sha", "0123456789abcdef0123456789abcdef01234567",
+  "--review-url", "https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md",
+  "--existing-conversation-url", conversationUrl,
+  "--reopen-interval", "0",
+  "--output-dir", outputDir,
+], {{
+  createRunOutputDirectory: async (parentDir) => {{
+    const runOutputDir = `${{parentDir}}/run-main-attached-cdp`;
+    await mkdir(runOutputDir, {{ recursive: true }});
+    return {{ outputDir: runOutputDir, runId: "run-main-attached-cdp" }};
+  }},
+  writeResult: async () => {{}},
+  openReviewContext: async () => ({{ context: {{ pages: () => [page] }} }}),
+  installTerminationCleanup: () => {{
+    const cleanup = () => {{}};
+    cleanup.getSignalCode = () => null;
+    cleanup.closeOnce = async () => {{}};
+    return cleanup;
+  }},
+  closeContext: async () => {{}},
+  runReviewTransaction: async (_context, options) => {{
+    const reopened = await options.reopenPage({{ conversationUrl, page }});
+    assert.equal(reopened, page);
+    return {{ status: "completed", output_dir: "review-output/run-main-attached-cdp" }};
+  }},
+}});
+
+assert.equal(exitCode, 0);
+assert.deepEqual(navigatedTo, {{ url: conversationUrl, options: {{ timeout: 15000 }} }});
+''',
+    )
+
+
 def test_batch_reviews_preserve_existing_conversation_verification_mode():
     run_node_assertion(
         f'''
@@ -5036,7 +5094,7 @@ const result = await captureReviewResponse(page, {{
   conversationUrl: "https://chatgpt.com/c/review",
 }});
 
-assert.equal(attempts, 2);
+assert.equal(attempts, 3);
 assert.equal(result.status, "captured");
 assert.equal(result.response, "Captured after navigation stabilized");
 ''',
@@ -5070,7 +5128,7 @@ const result = await captureReviewResponse(page, {{
   conversationUrl: "https://chatgpt.com/c/review",
 }});
 
-assert.equal(attempts, 2);
+assert.equal(attempts, 3);
 assert.equal(result.response, "Captured after hydration");
 ''',
     )
@@ -5385,6 +5443,86 @@ const result = await captureReviewResponse(closedPage, {{
   }},
 }});
 assert.equal(result.response, "Captured response");
+''',
+    )
+
+
+def test_capture_mode_does_not_capture_stale_assistant_turn_before_submitted_turn():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+let assistantReads = 0;
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForLoadState: async () => {{}},
+  waitForTimeout: async () => {{}},
+  locator: (selector) => ({{
+    evaluateAll: async (callback, includeText) => {{
+      if (selector.includes("data-message-author-role=\\\"user\\\"")) {{
+        return callback([{{
+          innerText: "latest prompt",
+          getAttribute: (name) => name === "data-message-id" ? "user-2" : null,
+        }}], includeText);
+      }}
+      assistantReads += 1;
+      const stale = assistantReads < 3;
+      return callback([{{
+        innerText: stale ? "Older response" : "Latest response",
+        getAttribute: (name) => name === "data-message-id" ? (stale ? "assistant-1" : "assistant-2") : null,
+      }}], includeText);
+    }},
+  }}),
+  evaluate: async () => ({{
+    latestAssistantFollowsLatestUser: assistantReads >= 3,
+  }}),
+}};
+
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/c/review",
+  submittedPrompt: "latest prompt",
+  submittedUserTurnId: "user-2",
+}});
+
+assert.equal(result.status, "captured");
+assert.equal(result.response, "Latest response");
+assert.ok(assistantReads >= 4);
+''',
+    )
+
+
+def test_capture_mode_requires_a_repeated_visible_sample_before_capture():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+let reads = 0;
+const page = {{
+  url: () => "https://chatgpt.com/c/review",
+  waitForLoadState: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => {{
+      reads += 1;
+      return callback([{{
+        innerText: reads === 1 ? "Still streaming" : "Stable response",
+        getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+      }}], includeText);
+    }},
+  }}),
+  waitForTimeout: async () => {{}},
+}};
+
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: "https://chatgpt.com/c/review",
+}});
+
+assert.equal(result.status, "captured");
+assert.equal(result.response, "Stable response");
+assert.ok(reads >= 3);
 ''',
     )
 

@@ -1328,6 +1328,8 @@ export async function runReviewTransaction(context, options) {
       ? await captureReviewResponse(page, {
         intervalMs: options.reopenIntervalMs,
         conversationUrl: options.existingConversationUrl || review.currentUrl || result.conversation_url || page.url(),
+          submittedPrompt: review.submittedPrompt,
+          submittedUserTurnId: review.submittedUserTurnId,
         reopenPage: options.reopenPage,
         captureLock: options.captureLock,
         onSnapshot: persistSnapshot,
@@ -1885,8 +1887,15 @@ export async function main(argv, dependencies = {}) {
     attached = await openContextForReview(contextOptions);
     removeTerminationCleanup = installCleanup(attached, closeAttachedContext, () => reviewAbortController.abort());
     let reopenPromise = Promise.resolve();
-    const reopenPage = async ({ conversationUrl } = {}) => {
-      if (!options.userDataDir) return attached.reviewPage;
+    const reopenPage = async ({ conversationUrl, page } = {}) => {
+      if (!options.userDataDir) {
+        const attachedPage = page || attached.reviewPage || attached.context?.pages?.()[0];
+        if (!attachedPage) throw new Error("Attached browser context has no page to reopen");
+        if (conversationUrl && attachedPage.url() !== conversationUrl) {
+          await attachedPage.goto(conversationUrl, { timeout: CAPTURE_PAGE_READY_TIMEOUT_MS });
+        }
+        return attachedPage;
+      }
       const currentReopen = reopenPromise.then(async () => {
         await closeAttachedContext(attached);
         const reopened = await openContextForReview({
