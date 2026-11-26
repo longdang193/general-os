@@ -4549,6 +4549,50 @@ assert.deepEqual(receivedPages, [undefined, undefined]);
     )
 
 
+def test_parallel_batch_dispatches_all_reviews_before_either_resolves():
+    run_node_assertion(
+        f'''import assert from "node:assert/strict";
+import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
+
+const sha = "0123456789abcdef0123456789abcdef01234567";
+const reviewUrl = `https://github.com/owner/repo/blob/${{sha}}/file.md`;
+const reviews = ["GPT-5.6-Sol", "GPT-6.2"].map((model) => ({{
+  model,
+  effort: "High",
+  prompt: `Review ${{reviewUrl}} at ${{sha}}`,
+  repository: "owner/repo",
+  commitSha: sha,
+  reviewUrls: [reviewUrl],
+  runOutputDir: `review-output/run-${{model}}`,
+}}));
+const started = [];
+let release;
+const gate = new Promise((resolve) => {{ release = resolve; }});
+let resolveBothStarted;
+const bothStarted = new Promise((resolve) => {{ resolveBothStarted = resolve; }});
+
+const batch = runReviewBatch({{
+  mode: "parallel",
+  attached: {{ context: {{}}, projectKey: "owner-repo", repository: "owner/repo" }},
+  reviews,
+  runTransaction: async (_context, options) => {{
+    started.push(options.model);
+    if (started.length === reviews.length) resolveBothStarted();
+    await gate;
+    return {{ status: "completed", completion: "confirmed", cleanup_status: "completed" }};
+  }},
+  closeContextFn: async () => {{}},
+}});
+
+await bothStarted;
+assert.deepEqual(started, ["GPT-5.6-Sol", "GPT-6.2"]);
+release();
+const results = await batch;
+assert.deepEqual(results.map((result) => result.status), ["completed", "completed"]);
+''',
+    )
+
+
 def test_model_unavailable_continues_only_after_clean_transaction_cleanup():
     run_node_assertion(
         f'''import assert from "node:assert/strict";

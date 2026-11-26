@@ -303,29 +303,24 @@ accepts a manifest:
 ```
 
 Pass it as `--batch-file <reviews.json>` instead of the single-review flags.
-For the two-model batch described here, process the manifest in this exact order:
+Use `--mode sequential` (the default) to settle each manifest entry before
+starting the next. Use `--mode parallel` to invoke entries in manifest order
+without waiting for the first model's response before dispatching the second;
+for the two-model case, `GPT-5.6-Sol` at `High` is dispatched first, followed by
+`GPT-6` or `GPT-6.2` at `High`. Parallel mode does not create replacement
+conversations, resubmit requests, or switch profiles or browser contexts. The
+owned-profile reopen operation remains serialized because it replaces the shared
+browser context; the configured capture delay is still applied only once before
+reopening.
 
-1. Open one fresh tab in the already authenticated context, select
-   `GPT-5.6-Sol` at `High`, submit once, wait for the capture interval, reopen
-   the owned profile, copy the visible response, and close that tab/context.
-2. Only after step 1 settles, open one different fresh tab in the same
-   authenticated context, select the requested second model (`GPT-6` or
-   `GPT-6.2`) at `High`, submit once, wait for the capture interval, reopen the
-   owned profile, copy the visible response, and settle that transaction.
-
-Do not open both review tabs in advance, run the reviews concurrently, reuse the
-first review tab, or switch profiles or browser contexts between models.
-The runner validates every entry before opening the browser, reuses one
-  authenticated context for strictly sequential review-page transactions:
-  settle the first review before starting the next, open exactly one fresh tab
-  for each model, close that review tab before opening the next, and never run
-  the model reviews concurrently or reuse a prior review tab. The shared
-  authenticated browser context remains open across the sequence. Allocate a
-  separate `run-*` directory per review, persist response and result artifacts
-  before page cleanup, close the shared context once through the batch owner,
-  print a JSON summary, and return nonzero if any review is not `completed` or
-  the shared context cannot be closed. Repeated reviews with the same model use
-  the same authenticated context; persistent-profile mode holds an exclusive
+The runner validates every entry before opening the browser and uses one
+authenticated context for the selected batch mode. Each model gets one fresh
+review tab and a separate `run-*` directory. Response and result artifacts are
+persisted before page cleanup, the shared context is closed once through the
+batch owner, a JSON summary is printed, and the command returns nonzero if a
+review is not `completed` or the shared context cannot be closed. Repeated
+reviews with the same model use the same authenticated context; persistent-profile
+mode holds an exclusive
   profile lease for the lifetime of the owned context, so overlapping launches
   fail before opening a second browser. Malformed, live, stale, or ambiguous
  ownership stays blocked for operator-confirmed recovery; the runner never

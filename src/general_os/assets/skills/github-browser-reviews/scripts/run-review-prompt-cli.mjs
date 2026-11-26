@@ -34,6 +34,7 @@ const CDP_STARTUP_TIMEOUT_MS = 15000;
 const CDP_POLL_INTERVAL_MS = 100;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const DEFAULT_OUTPUT_DIR = "review-output";
+const SUPPORTED_BATCH_MODES = new Set(["sequential", "parallel"]);
 const PROFILE_LEASE_SUFFIX = ".codex-review-profile.lock";
 const PROFILE_BINDING_FILE = ".codex-review-profile.json";
 const PROJECT_PROFILE_MARKER = "github-review";
@@ -52,9 +53,10 @@ const VALUE_ARGUMENTS = new Set([
   "--review-url",
   "--existing-conversation-url",
   "--batch-file",
+  "--mode",
   "--user-data-dir",
 ]);
-const USAGE = "Usage: node run-review-prompt-cli.mjs (--launch-cdp --user-data-dir <path> --project-key <owner-repository> | --user-data-dir <path> --project-key <owner-repository> | --cdp-endpoint <url>) (--model <GPT-5.6-Sol|GPT-6|GPT-6.2> --effort <Instant|Medium|High> --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... [--existing-conversation-url <url>] | --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... --existing-conversation-url <url>) | --batch-file <path>) [--cdp-port <port>] [--output-dir <path>] [--context-index <number>] [--reopen-interval <seconds>]";
+const USAGE = "Usage: node run-review-prompt-cli.mjs (--launch-cdp --user-data-dir <path> --project-key <owner-repository> | --user-data-dir <path> --project-key <owner-repository> | --cdp-endpoint <url>) (--model <GPT-5.6-Sol|GPT-6|GPT-6.2> --effort <Instant|Medium|High> --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... [--existing-conversation-url <url>] | --prompt-file <path> --repository <owner/repository> --commit-sha <sha> --review-url <url>... --existing-conversation-url <url>) | --batch-file <path>) [--mode <sequential|parallel>] [--cdp-port <port>] [--output-dir <path>] [--context-index <number>] [--reopen-interval <seconds>]";
 const FLAG_ARGUMENTS = new Set(["--launch-cdp"]);
 const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/i;
 const GITHUB_BLOB_URL_PATTERN = /https:\/\/github\.com\/[^\s<>"']+/gi;
@@ -99,6 +101,7 @@ export function parseArguments(argv) {
   const reviewUrls = argumentsByName.get("--review-url") || [];
   const existingConversationUrl = argumentsByName.get("--existing-conversation-url");
   const batchFile = argumentsByName.get("--batch-file");
+  const modeValue = argumentsByName.get("--mode");
   const contextIndexValue = argumentsByName.get("--context-index");
   const reopenIntervalValue = argumentsByName.get("--reopen-interval");
   const launchCdp = argumentsByName.has("--launch-cdp");
@@ -116,6 +119,9 @@ export function parseArguments(argv) {
   if (batchFile && (model || effort || promptFile || repository || commitSha || reviewUrls.length > 0 || existingConversationUrl)) {
     usageError("Single-review arguments cannot be combined with --batch-file");
   }
+  const mode = (modeValue || "sequential").toLowerCase();
+  if (!SUPPORTED_BATCH_MODES.has(mode)) usageError(`Unsupported batch mode: ${modeValue}`);
+  if (!batchFile && modeValue !== undefined) usageError("--mode requires --batch-file");
   if (!batchFile && !existingConversationUrl && !model) usageError("Missing required argument: --model");
   if (!batchFile && !existingConversationUrl && !effort) usageError("Missing required argument: --effort");
   if (!batchFile && !promptFile) usageError("Missing required argument: --prompt-file");
@@ -147,6 +153,7 @@ export function parseArguments(argv) {
     commitSha,
     effort,
     model,
+    mode,
     batchFile,
     outputDir,
     promptFile,
@@ -1591,10 +1598,11 @@ function hasClosedContextEvidence(result) {
   return /(?:browser|context|target|page).*(?:closed|close|disconnect)|(?:closed|close|disconnect).*(?:browser|context|target|page)/i.test(evidence);
 }
 
-export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, abortSignal, reopenPage, reopenIntervalMs, runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
+export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, abortSignal, reopenPage, reopenIntervalMs, mode = "sequential", runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
   const results = [];
   let cleanupError;
   let requestedCount = reviews?.length || 0;
+  if (!SUPPORTED_BATCH_MODES.has(mode)) throw new Error(`Unsupported batch mode: ${mode}`);
   try {
     if (!attached?.context) throw new Error("attached authenticated context is required");
     const validatedReviews = validateReviewBatch(reviews, {
@@ -1602,54 +1610,63 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
       repository: repository || attached.repository,
     });
     requestedCount = validatedReviews.length;
+    const runOne = (review, index) => runTransaction(attached.context, {
+      ...review,
+      reviewIndex: review.reviewIndex ?? index,
+      outputDir,
+      abortSignal,
+      reopenPage,
+      reopenIntervalMs,
+    });
 
-    for (let index = 0; index < validatedReviews.length; index += 1) {
-      const review = validatedReviews[index];
-      const result = await runTransaction(attached.context, {
-        ...review,
-        reviewIndex: review.reviewIndex ?? index,
-        outputDir,
-        abortSignal,
-        reopenPage,
-        reopenIntervalMs,
-      });
-      results.push(result);
-      // Missing dispatch evidence is unsafe: do not risk a duplicate submission.
-      const dispatchMayHaveStarted = result.dispatch_state !== "not_dispatched";
-      const mayContinueBeforeDispatch = result.status !== "completed"
-        && result.failure_scope === "review"
-        && !review.existingConversationUrl
-        && !hasClosedContextEvidence(result)
-        && !dispatchMayHaveStarted
-        && result.cleanup_status === "completed"
-        && result.cleanup_warning == null;
-      const mayContinueAfterEvidenceGap = result.status !== "completed"
-        && result.failure_scope === "review"
-        && result.failure_stage === "completion"
-        && result.completion === "confirmed"
-        && result.response_capture === "final"
-        && result.content_evidence_unconfirmed === true
-        && !review.existingConversationUrl
-        && result.submission === "acknowledged"
-        && result.dispatch_state === "acknowledged"
-        && result.cleanup_status === "completed"
-        && result.cleanup_warning == null;
-      if (result.status !== "completed" && !mayContinueBeforeDispatch && !mayContinueAfterEvidenceGap) {
-        for (let skippedIndex = index + 1; skippedIndex < validatedReviews.length; skippedIndex += 1) {
-          const skippedReview = validatedReviews[skippedIndex];
-          results.push({
-            ...createResult({ ...skippedReview, reviewIndex: skippedReview.reviewIndex ?? skippedIndex }),
-            status: "skipped",
-            output_dir: skippedReview.runOutputDir ? relative(process.cwd(), skippedReview.runOutputDir) : null,
-            failure_scope: "shared_context",
-            failure_stage: "batch",
-            failure_reason: `Skipped after review ${index + 1} stopped the shared batch`,
-          });
-          if (skippedReview.runOutputDir) {
-            await writeResult(skippedReview.runOutputDir, results.at(-1)).catch(() => {});
+    if (mode === "parallel") {
+      const transactions = [];
+      for (let index = 0; index < validatedReviews.length; index += 1) {
+        transactions.push(runOne(validatedReviews[index], index));
+      }
+      results.push(...await Promise.all(transactions));
+    } else {
+      for (let index = 0; index < validatedReviews.length; index += 1) {
+        const review = validatedReviews[index];
+        const result = await runOne(review, index);
+        results.push(result);
+        // Missing dispatch evidence is unsafe: do not risk a duplicate submission.
+        const dispatchMayHaveStarted = result.dispatch_state !== "not_dispatched";
+        const mayContinueBeforeDispatch = result.status !== "completed"
+          && result.failure_scope === "review"
+          && !review.existingConversationUrl
+          && !hasClosedContextEvidence(result)
+          && !dispatchMayHaveStarted
+          && result.cleanup_status === "completed"
+          && result.cleanup_warning == null;
+        const mayContinueAfterEvidenceGap = result.status !== "completed"
+          && result.failure_scope === "review"
+          && result.failure_stage === "completion"
+          && result.completion === "confirmed"
+          && result.response_capture === "final"
+          && result.content_evidence_unconfirmed === true
+          && !review.existingConversationUrl
+          && result.submission === "acknowledged"
+          && result.dispatch_state === "acknowledged"
+          && result.cleanup_status === "completed"
+          && result.cleanup_warning == null;
+        if (result.status !== "completed" && !mayContinueBeforeDispatch && !mayContinueAfterEvidenceGap) {
+          for (let skippedIndex = index + 1; skippedIndex < validatedReviews.length; skippedIndex += 1) {
+            const skippedReview = validatedReviews[skippedIndex];
+            results.push({
+              ...createResult({ ...skippedReview, reviewIndex: skippedReview.reviewIndex ?? skippedIndex }),
+              status: "skipped",
+              output_dir: skippedReview.runOutputDir ? relative(process.cwd(), skippedReview.runOutputDir) : null,
+              failure_scope: "shared_context",
+              failure_stage: "batch",
+              failure_reason: `Skipped after review ${index + 1} stopped the shared batch`,
+            });
+            if (skippedReview.runOutputDir) {
+              await writeResult(skippedReview.runOutputDir, results.at(-1)).catch(() => {});
+            }
           }
+          break;
         }
-        break;
       }
     }
   } finally {
@@ -1810,17 +1827,22 @@ export async function main(argv, dependencies = {}) {
     }
     attached = await openContextForReview(contextOptions);
     removeTerminationCleanup = installCleanup(attached, closeAttachedContext, () => reviewAbortController.abort());
+    let reopenPromise = Promise.resolve();
     const reopenPage = async ({ conversationUrl } = {}) => {
       if (!options.userDataDir) return attached.reviewPage;
-      await closeAttachedContext(attached);
-      const reopened = await openContextForReview({
-        ...contextOptions,
-        initialUrl: conversationUrl,
-        skipPreflight: true,
+      const currentReopen = reopenPromise.then(async () => {
+        await closeAttachedContext(attached);
+        const reopened = await openContextForReview({
+          ...contextOptions,
+          initialUrl: conversationUrl,
+          skipPreflight: true,
+        });
+        Object.assign(attached, reopened);
+        attached.closed = false;
+        return attached.reviewPage || attached.context.pages()[0];
       });
-      Object.assign(attached, reopened);
-      attached.closed = false;
-      return attached.reviewPage || attached.context.pages()[0];
+      reopenPromise = currentReopen.catch(() => {});
+      return currentReopen;
     };
     if (options.batchFile) {
       result = summarizeBatchResults(await runBatch({
@@ -1833,6 +1855,7 @@ export async function main(argv, dependencies = {}) {
         closeContextFn: removeTerminationCleanup.closeOnce,
         reopenPage,
         reopenIntervalMs: options.reopenIntervalMs,
+        mode: options.mode,
       }));
       try {
         await persistBatchSummary(options.outputDir, result);
