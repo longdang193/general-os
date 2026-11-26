@@ -4808,8 +4808,8 @@ const results = await runReviewBatch({{
   closeContextFn: async () => {{}},
 }});
 
-assert.equal(calls, 2);
-assert.equal(results[1].status, "completed");
+assert.equal(calls, 1);
+assert.equal(results[1].status, "skipped");
 '''
     )
 
@@ -5770,6 +5770,7 @@ const result = await runReviewTransaction({{}}, {{
   runOutputDir: root,
   reviewPage: page,
   reopenIntervalMs: 0,
+  captureMode: true,
   reopenPage: async () => {{ throw new Error("profile reopen failed: browser disconnected"); }},
   dependencies: {{
     runReviewPromptInNewTab: async () => ({{
@@ -6049,11 +6050,11 @@ assert.equal(await readFile(join(root, "response.md"), "utf8"), "Visible raw res
     )
 
 
-def test_submitted_capture_persists_visible_response_without_turn_association():
+def test_submitted_capture_does_not_persist_unassociated_visible_response():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
-import {{ mkdtemp, readFile }} from "node:fs/promises";
+import {{ mkdtemp, access }} from "node:fs/promises";
 import {{ tmpdir }} from "node:os";
 import {{ join }} from "node:path";
 import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
@@ -6092,8 +6093,9 @@ const result = await runReviewTransaction({{}}, {{
   }},
 }});
 
-assert.equal(result.status, "completed");
-assert.equal(await readFile(join(root, "response.md"), "utf8"), "Older visible response\\n");
+assert.equal(result.status, "incomplete");
+assert.equal(result.response_capture, "none");
+await assert.rejects(access(join(root, "response.md")), /ENOENT/);
 ''',
     )
 

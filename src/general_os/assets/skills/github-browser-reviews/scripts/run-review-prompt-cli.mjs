@@ -126,7 +126,7 @@ export function parseArguments(argv) {
   if (!batchFile && modeValue !== undefined) usageError("--mode requires --batch-file");
   if (!batchFile && !existingConversationUrl && !model) usageError("Missing required argument: --model");
   if (!batchFile && !existingConversationUrl && !effort) usageError("Missing required argument: --effort");
-  if (!batchFile && !promptFile) usageError("Missing required argument: --prompt-file");
+  if (!batchFile && !existingConversationUrl && !promptFile) usageError("Missing required argument: --prompt-file");
   if (model && !SUPPORTED_MODELS.has(model)) usageError(`Unsupported model: ${model}`);
   if (effort && !SUPPORTED_EFFORTS.has(effort)) usageError(`Unsupported effort: ${effort}`);
   if (!batchFile && !repository) usageError("Missing required argument: --repository");
@@ -204,7 +204,7 @@ export function extractPromptGitHubBlobUrls(prompt) {
     .filter((value) => value.includes("/blob/"));
 }
 
-export function validateReviewProvenance({ repository, commitSha, reviewUrls, prompt }) {
+export function validateReviewProvenance({ repository, commitSha, reviewUrls, prompt, requirePrompt = true }) {
   const normalizedRepository = typeof repository === "string" ? repository.trim().toLowerCase() : "";
   const repositoryMatch = normalizedRepository.match(/^([^/\s]+)\/([^/\s]+)$/);
   if (!repositoryMatch) throw new Error("repository must use the owner/repository form");
@@ -221,17 +221,19 @@ export function validateReviewProvenance({ repository, commitSha, reviewUrls, pr
     }
   }
 
-  if (!prompt.includes(commitSha) && !prompt.includes(normalizedSha)) {
-    throw new Error("Prompt must contain the declared full commit SHA");
-  }
-  const promptUrls = extractPromptGitHubBlobUrls(prompt).map(normalizeGitHubBlobUrl);
-  if (promptUrls.length === 0) throw new Error("Prompt must contain at least one commit-pinned GitHub blob URL");
-  const declaredSet = new Set(normalizedUrls);
-  for (const url of promptUrls) {
-    if (!declaredSet.has(url)) throw new Error(`Prompt contains an undeclared or conflicting review URL: ${url}`);
-  }
-  for (const url of normalizedUrls) {
-    if (!promptUrls.includes(url)) throw new Error(`Declared review URL is missing from the prompt: ${url}`);
+  if (requirePrompt) {
+    if (typeof prompt !== "string" || (!prompt.includes(commitSha) && !prompt.includes(normalizedSha))) {
+      throw new Error("Prompt must contain the declared full commit SHA");
+    }
+    const promptUrls = extractPromptGitHubBlobUrls(prompt).map(normalizeGitHubBlobUrl);
+    if (promptUrls.length === 0) throw new Error("Prompt must contain at least one commit-pinned GitHub blob URL");
+    const declaredSet = new Set(normalizedUrls);
+    for (const url of promptUrls) {
+      if (!declaredSet.has(url)) throw new Error(`Prompt contains an undeclared or conflicting review URL: ${url}`);
+    }
+    for (const url of normalizedUrls) {
+      if (!promptUrls.includes(url)) throw new Error(`Declared review URL is missing from the prompt: ${url}`);
+    }
   }
 
   return {
@@ -477,24 +479,29 @@ export async function readBatchReviews(batchFile) {
     if (!existingConversationUrl && !SUPPORTED_EFFORTS.has(review.effort)) {
       throw new Error(`Batch review ${index + 1} must provide a supported effort`);
     }
-    if (typeof review.prompt_file !== "string" || !review.prompt_file.trim()) {
+    if (!existingConversationUrl && (typeof review.prompt_file !== "string" || !review.prompt_file.trim())) {
       throw new Error(`Batch review ${index + 1} must provide prompt_file`);
     }
 
-    const promptFile = resolve(dirname(manifestPath), review.prompt_file);
-    let prompt;
-    try {
-      prompt = await readFile(promptFile, "utf8");
-    } catch (error) {
-      throw new Error(`Could not read prompt file for batch review ${index + 1}: ${errorMessage(error)}`);
+    const promptFile = typeof review.prompt_file === "string" && review.prompt_file.trim()
+      ? resolve(dirname(manifestPath), review.prompt_file)
+      : null;
+    let prompt = "";
+    if (promptFile) {
+      try {
+        prompt = await readFile(promptFile, "utf8");
+      } catch (error) {
+        throw new Error(`Could not read prompt file for batch review ${index + 1}: ${errorMessage(error)}`);
+      }
+      if (!prompt.trim()) throw new Error(`Prompt file for batch review ${index + 1} must not be empty`);
     }
-    if (!prompt.trim()) throw new Error(`Prompt file for batch review ${index + 1} must not be empty`);
 
     const provenance = validateReviewProvenance({
       repository: review.repository,
       commitSha: review.commit_sha || review.commitSha,
       reviewUrls: review.review_urls,
       prompt,
+      requirePrompt: !existingConversationUrl,
     });
 
     return {
@@ -561,6 +568,7 @@ export function validateReviewBatch(reviews, { projectKey, repository } = {}) {
       commitSha: review.commitSha || review.commit_sha,
       reviewUrls: review.reviewUrls || review.review_urls,
       prompt: review.prompt,
+      requirePrompt: !existingConversationUrl,
     });
     if (expectedRepository && provenance.repository.toLowerCase() !== expectedRepository) {
       throw new Error(`Review ${index + 1} repository does not match the attached project: ${provenance.repository}`);
@@ -1182,7 +1190,7 @@ export async function runReviewTransaction(context, options) {
   let completionDeadlineAt = null;
   let recoveredCompletionSettled = false;
   const existingConversationCapture = Boolean(options.existingConversationUrl);
-  const captureMode = Number.isFinite(options.reopenIntervalMs) || existingConversationCapture;
+  const captureMode = options.captureMode === true || existingConversationCapture;
 
   const persist = async () => {
     if (!outputDir) throw new Error("Review output directory was not allocated");
@@ -1241,6 +1249,7 @@ export async function runReviewTransaction(context, options) {
         checkpointResponse = null;
         checkpointSnapshot = null;
         lastAcceptedSnapshot = null;
+        lastPersistedResponse = null;
         result.assistant_message_id = null;
         result.assistant_turn_index = null;
         try {
@@ -1300,7 +1309,6 @@ export async function runReviewTransaction(context, options) {
     }
     result = createResult({ ...options, runId });
     result.transaction_started = true;
-    result.response_path = relative(process.cwd(), join(outputDir, "response.md"));
     await persist();
 
     stage = options.existingConversationUrl ? "completion" : "selection";
@@ -1697,7 +1705,7 @@ function hasClosedContextEvidence(result) {
   return /(?:browser|context|target|page).*(?:closed|close|disconnect)|(?:closed|close|disconnect).*(?:browser|context|target|page)/i.test(evidence);
 }
 
-export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, abortSignal, reopenPage, reopenIntervalMs = 300_000, mode = "sequential", runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
+export async function runReviewBatch({ attached, outputDir, reviews, projectKey, repository, abortSignal, reopenPage, reopenIntervalMs = 300_000, captureMode = false, mode = "sequential", runTransaction = runReviewTransaction, closeContextFn = closeContext }) {
   const results = [];
   let cleanupError;
   let requestedCount = reviews?.length || 0;
@@ -1720,6 +1728,7 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         abortSignal,
         reopenPage,
         reopenIntervalMs,
+        captureMode,
         captureLock,
         dispatchGate: transactionGate,
       }).finally(() => transactionGate?.settled());
@@ -1736,7 +1745,8 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         const review = validatedReviews[index];
         const result = await runOne(review, index);
         results.push(result);
-        const mayContinueAfterIsolatedReviewFailure = result.status !== "completed"
+        const mayContinueAfterIsolatedReviewFailure = !review.existingConversationUrl
+          && result.status !== "completed"
           && result.failure_scope === "review"
           && !hasClosedContextEvidence(result)
           && result.dispatch_state !== "possibly_dispatched"
@@ -1808,7 +1818,6 @@ async function allocateReviewArtifacts(
       const allocatedReview = { ...review, reviewIndex: review.reviewIndex ?? index, runId, runOutputDir: outputDir };
       allocated.push(allocatedReview);
       const initial = createResult(allocatedReview);
-      initial.response_path = relative(process.cwd(), join(outputDir, "response.md"));
       await persistResult(outputDir, initial);
     }
     return allocated;
@@ -1857,23 +1866,24 @@ export async function main(argv, dependencies = {}) {
   if (options.batchFile) {
     reviews = await readBatchReviews(options.batchFile);
   } else {
-    const prompt = await readFile(options.promptFile, "utf8");
+    const prompt = options.promptFile ? await readFile(options.promptFile, "utf8") : "";
     const provenance = validateReviewProvenance({
       repository: options.repository,
       commitSha: options.commitSha,
       reviewUrls: options.reviewUrls,
       prompt,
+      requirePrompt: !options.existingConversationUrl,
     });
     reviews = [{
       effort: options.effort,
       model: options.model,
       prompt,
-      promptFile: options.promptFile,
+      promptFile: options.promptFile || null,
       ...provenance,
       existingConversationUrl: options.existingConversationUrl,
     }];
   }
-  if (!options.batchFile && !reviews[0].prompt.trim()) usageError("Prompt file must not be empty");
+  if (!options.batchFile && !reviews[0].existingConversationUrl && !reviews[0].prompt.trim()) usageError("Prompt file must not be empty");
 
   const projectKeys = [...new Set(reviews.map((review) => review.projectKey))];
   if (options.userDataDir) {
@@ -1950,6 +1960,7 @@ export async function main(argv, dependencies = {}) {
         reopenPage,
         reopenIntervalMs,
         mode: options.mode,
+        captureMode: true,
       }));
       try {
         await persistBatchSummary(options.outputDir, result);
@@ -1980,6 +1991,7 @@ export async function main(argv, dependencies = {}) {
         runId: reviews[0].runId,
         runOutputDir: reviews[0].runOutputDir,
         abortSignal: reviewAbortController.signal,
+        captureMode: true,
       });
     }
   } catch (error) {
