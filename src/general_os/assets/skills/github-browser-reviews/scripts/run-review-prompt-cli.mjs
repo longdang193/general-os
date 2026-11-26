@@ -884,6 +884,9 @@ export async function openContext(chromium, options, dependencies = {}) {
       });
       const { browser, context } = await connectToCdpContext(chromium, launched.endpoint, options);
       const reviewPage = await findBootstrapReviewPage(context);
+      if (options.initialUrl && reviewPage.url() !== options.initialUrl) {
+        await reviewPage.goto(options.initialUrl, { timeout: CAPTURE_PAGE_READY_TIMEOUT_MS });
+      }
       return {
         browser,
         context,

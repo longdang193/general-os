@@ -962,6 +962,40 @@ await closeContext(attached);
     )
 
 
+def test_owned_cdp_profile_navigates_bootstrap_page_to_requested_thread():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ mkdtemp }} from "node:fs/promises";
+import {{ join }} from "node:path";
+import {{ openContext, closeContext }} from {CLI_RUNNER.as_uri()!r};
+
+const root = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "github-review-cdp-profile-"));
+const profile = join(root, "github-review", "owner-repo");
+const conversationUrl = "https://chatgpt.com/c/existing-review";
+let navigatedTo = null;
+const page = {{
+  url: () => "https://chatgpt.com/",
+  goto: async (url, options) => {{ navigatedTo = {{ url, options }}; }},
+}};
+const context = {{ pages: () => [page] }};
+const browser = {{ contexts: () => [context], close: async () => {{}} }};
+const chromium = {{ connectOverCDP: async () => browser }};
+const attached = await openContext(chromium, {{
+  launchCdp: true,
+  userDataDir: profile,
+  projectKey: "owner-repo",
+  repository: "owner/repo",
+  contextIndex: 0,
+  initialUrl: conversationUrl,
+}}, {{ launchDedicatedChrome: async () => ({{ endpoint: "http://127.0.0.1:45678", process: null }}) }});
+
+assert.deepEqual(navigatedTo, {{ url: conversationUrl, options: {{ timeout: 15000 }} }});
+await closeContext(attached);
+''',
+    )
+
+
 def test_attached_cdp_context_does_not_adopt_existing_pages():
     run_node_assertion(
         f'''
