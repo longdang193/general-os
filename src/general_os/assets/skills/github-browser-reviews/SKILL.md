@@ -244,10 +244,12 @@ implicitly.
 
 The runner performs one non-submitting visible authentication preflight for the
 owned context, selects and visibly verifies the requested model and effort, and
-submits each authorized prompt at most once. After the configured capture delay, it opens the owned profile page directly at
-the existing review conversation URL, waits up to 15 seconds for that thread
-and a visible assistant turn to become readable and stable, copies whatever
-assistant response is visible, and writes `response.md` plus `result.json`.
+submits each authorized prompt at most once. Capture-only runs using an existing
+conversation URL use a read-only preflight and do not require the composer. After
+the configured capture delay, the runner opens the owned profile directly at the
+canonical conversation URL, then uses one bounded 15-second window for navigation,
+page stabilization, and visible assistant-output capture before writing
+`response.md` plus `result.json`.
 
 This capture path intentionally does not verify response completeness, terminal
 markers, revision evidence, review outcome, or semantic quality. It does not
@@ -261,9 +263,11 @@ capture. `capture_interval_ms` records the configured delay, and
 complete or semantically validated response.
 
 The delay is configurable with `--reopen-interval <seconds>`; use `0` for an
-immediate capture. The delay applies before reopening and is not an additional
-wait after the profile opens. The profile must be reopened at the supplied
-conversation URL, not at ChatGPT home or an unrelated tab. An externally
+immediate capture. Existing-conversation capture defaults to `0` when no delay
+is supplied; submitted reviews retain the normal 300-second default. The delay
+applies before reopening and is not an additional wait after the profile opens.
+The profile must be reopened at the supplied conversation URL, not at ChatGPT
+home or an unrelated tab. An externally
 attached `--cdp-endpoint` context is not closed and reopened by the runner; it
 navigates the capture page to the supplied conversation URL after the delay.
 Browser authentication,

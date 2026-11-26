@@ -61,6 +61,24 @@ function throwIfAborted(signal) {
   throw error;
 }
 
+function isNavigationTimeout(error) {
+  return error?.name === "TimeoutError" || /navigation.*timeout|timeout.*navigation/i.test(error?.message || "");
+}
+
+export async function navigateToConversation(page, conversationUrl, {
+  timeoutMs = CAPTURE_PAGE_READY_TIMEOUT_MS,
+} = {}) {
+  if (!page || !conversationUrl) return;
+  try {
+    await page.goto(conversationUrl, {
+      timeout: timeoutMs,
+      waitUntil: "domcontentloaded",
+    });
+  } catch (error) {
+    if (!isNavigationTimeout(error)) throw error;
+  }
+}
+
 export function isChallengeEvidence(evidence) {
   const frameSources = Array.isArray(evidence?.frameSources) ? evidence.frameSources.join(" ") : "";
   const content = `${evidence?.currentUrl || ""} ${evidence?.pageTitle || ""} ${evidence?.visibleText || ""} ${frameSources}`;
@@ -207,6 +225,30 @@ export async function preflightAuthenticatedContext(context, existingPage = null
   return { authenticated: true };
 }
 
+export async function preflightCaptureContext(context, existingPage = null) {
+  let page;
+  const ownsPage = !existingPage;
+  try {
+    page = existingPage || await context.newPage();
+    const evidence = await captureVisibleEvidence(page);
+    if (evidence?.challengeDetected) {
+      const error = new ReviewPromptError("ChatGPT challenge page blocked the capture profile", "shared_context");
+      error.code = "CHATGPT_CHALLENGE";
+      error.visibleEvidence = evidence;
+      throw error;
+    }
+    if (evidence?.loginVisible) {
+      const error = new ReviewPromptError("ChatGPT authentication is required for the capture profile", "shared_context");
+      error.code = "AUTHENTICATION_REQUIRED";
+      error.visibleEvidence = evidence;
+      throw error;
+    }
+    return { authenticated: true };
+  } finally {
+    if (ownsPage && page) await page.close().catch(() => {});
+  }
+}
+
 /**
  * Open a new ChatGPT tab from an existing authenticated Playwright context.
  * The context must already own the user's authenticated session.
@@ -220,7 +262,7 @@ export async function openReviewTab(context, { conversationUrl = null } = {}) {
   }
   try {
     if (conversationUrl) {
-      await page.goto(conversationUrl, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
+      await navigateToConversation(page, conversationUrl);
     } else {
       await openChatGPT(page);
     }
@@ -378,15 +420,16 @@ async function readVisibleAssistantMessage(page, { includeText = true } = {}) {
 async function waitForCapturePageReady(page, conversationUrl, {
   submittedPrompt = null,
   submittedUserTurnId = null,
+  deadlineAt = null,
   signal,
 } = {}) {
-  const deadline = Date.now() + CAPTURE_PAGE_READY_TIMEOUT_MS;
+  const deadline = deadlineAt || Date.now() + CAPTURE_PAGE_READY_TIMEOUT_MS;
   let previousSample = null;
   let stableSampleCount = 0;
   if (typeof page.waitForLoadState === "function") {
     try {
       await page.waitForLoadState("domcontentloaded", {
-        timeout: CAPTURE_PAGE_READY_TIMEOUT_MS,
+        timeout: Math.max(1, deadline - Date.now()),
       });
     } catch {
       // The bounded extraction below still provides the best available capture.
@@ -649,14 +692,20 @@ export async function captureReviewResponse(page, {
 
     let capturePage = page;
     const captureConversationId = extractConversationIdentity(captureConversationUrl);
+    const captureDeadlineAt = Date.now() + CAPTURE_PAGE_READY_TIMEOUT_MS;
     if (reopenPage && captureConversationId && !isSyntheticConversationId(captureConversationId)) {
-      const reopened = await reopenPage({ conversationUrl: captureConversationUrl, page });
-      capturePage = reopened?.page || reopened;
+      try {
+        const reopened = await reopenPage({ conversationUrl: captureConversationUrl, page, deadlineAt: captureDeadlineAt });
+        capturePage = reopened?.page || reopened;
+      } catch (error) {
+        if (!isNavigationTimeout(error)) throw error;
+      }
     }
 
     const assistant = await waitForCapturePageReady(capturePage, captureConversationUrl, {
       submittedPrompt,
       submittedUserTurnId,
+      deadlineAt: captureDeadlineAt,
       signal,
     });
     const currentUrl = readPageUrl(capturePage, captureConversationUrl);
@@ -1249,7 +1298,7 @@ export async function runReviewPromptInNewTab(context, options = {}) {
     if (!ownsPage && !options.existingConversationUrl) await openChatGPT(page);
     if (existingConversationUrl) {
       if (!matchesConversationUrl(readPageUrl(page), existingConversationUrl)) {
-        await page.goto(existingConversationUrl, { timeout: COMPOSER_READINESS_TIMEOUT_MS });
+        await navigateToConversation(page, existingConversationUrl);
       }
       const completion = await captureReviewResponse(page, {
         intervalMs: options.captureIntervalMs ?? 0,

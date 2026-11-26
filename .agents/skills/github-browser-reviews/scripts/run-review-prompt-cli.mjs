@@ -15,6 +15,8 @@ import {
   extractConversationIdentity,
   runReviewPromptInNewTab,
   preflightAuthenticatedContext,
+  preflightCaptureContext,
+  navigateToConversation,
   AMBIGUOUS_DISPATCH_TIMEOUT_MS,
   CAPTURE_PAGE_READY_TIMEOUT_MS,
   COMPLETION_TIMEOUT_MS,
@@ -137,8 +139,9 @@ export function parseArguments(argv) {
   const contextIndex = contextIndexValue === undefined ? DEFAULT_CONTEXT_INDEX : Number(contextIndexValue);
   if (!Number.isInteger(contextIndex) || contextIndex < 0) usageError(`Invalid context index: ${contextIndexValue}`);
   const cdpPort = cdpPortValue === undefined ? 0 : Number(cdpPortValue);
+  const reopenIntervalProvided = reopenIntervalValue !== undefined;
   const reopenIntervalSeconds = reopenIntervalValue === undefined
-    ? PROFILE_REOPEN_INTERVAL_MS / 1000
+    ? (existingConversationUrl ? 0 : PROFILE_REOPEN_INTERVAL_MS / 1000)
     : Number(reopenIntervalValue);
   if (cdpPortValue !== undefined && (!Number.isInteger(cdpPort) || cdpPort < 1 || cdpPort > 65535)) usageError(`Invalid CDP port: ${cdpPortValue}`);
   if (!Number.isInteger(reopenIntervalSeconds) || reopenIntervalSeconds < 0) usageError(`Invalid reopen interval: ${reopenIntervalValue}`);
@@ -147,6 +150,7 @@ export function parseArguments(argv) {
     cdpEndpoint,
     cdpPort,
     reopenIntervalMs: reopenIntervalSeconds * 1000,
+    reopenIntervalProvided,
     cdpPortProvided: cdpPortValue !== undefined,
     contextIndex,
     contextIndexProvided: contextIndexValue !== undefined,
@@ -885,7 +889,7 @@ export async function openContext(chromium, options, dependencies = {}) {
       const { browser, context } = await connectToCdpContext(chromium, launched.endpoint, options);
       const reviewPage = await findBootstrapReviewPage(context, { preferredUrl: options.initialUrl });
       if (options.initialUrl && reviewPage.url() !== options.initialUrl) {
-        await reviewPage.goto(options.initialUrl, { timeout: CAPTURE_PAGE_READY_TIMEOUT_MS });
+        await navigateToConversation(reviewPage, options.initialUrl);
       }
       return {
         browser,
@@ -930,7 +934,7 @@ export async function openContext(chromium, options, dependencies = {}) {
     });
     const reviewPage = await findBootstrapReviewPage(context, { preferredUrl: options.initialUrl });
     if (options.initialUrl && reviewPage.url() !== options.initialUrl) {
-      await reviewPage.goto(options.initialUrl, { timeout: CAPTURE_PAGE_READY_TIMEOUT_MS });
+      await navigateToConversation(reviewPage, options.initialUrl);
     }
     return {
       browser: null,
@@ -998,7 +1002,11 @@ export async function openReviewContext(options) {
   const attached = await openContext(chromium, options);
   try {
     if (!options.skipPreflight) {
-      await preflightAuthenticatedContext(attached.context, attached.reviewPage);
+      if (options.captureOnly || options.existingConversationUrl) {
+        await preflightCaptureContext(attached.context, attached.reviewPage);
+      } else {
+        await preflightAuthenticatedContext(attached.context, attached.reviewPage);
+      }
     }
     return attached;
   } catch (error) {
@@ -1871,10 +1879,16 @@ export async function main(argv, dependencies = {}) {
       usageError(`--project-key must match the repository-derived project key: ${projectKeys[0]}`);
     }
   }
+  const captureOnly = reviews.length > 0 && reviews.every((review) => Boolean(review.existingConversationUrl));
+  const reopenIntervalMs = captureOnly && !options.reopenIntervalProvided
+    ? 0
+    : options.reopenIntervalMs;
   const contextOptions = {
     ...options,
     projectKey: options.projectKey || projectKeys[0],
     repository: reviews[0].repository,
+    initialUrl: reviews.length === 1 ? reviews[0].existingConversationUrl : undefined,
+    captureOnly,
   };
 
   if (options.batchFile) {
@@ -1908,13 +1922,16 @@ export async function main(argv, dependencies = {}) {
     }
     attached = await openContextForReview(contextOptions);
     removeTerminationCleanup = installCleanup(attached, closeAttachedContext, () => reviewAbortController.abort());
-    const reopenPage = async ({ conversationUrl, page } = {}) => {
+    const reopenPage = async ({ conversationUrl, page, deadlineAt } = {}) => {
       const preferredPage = page || attached.reviewPage || attached.context?.pages?.()[0];
       const capturePage = preferredPage && !isPageClosed(preferredPage)
         ? preferredPage
         : await attached.context.newPage();
-      if (conversationUrl && capturePage.url() !== conversationUrl) {
-        await capturePage.goto(conversationUrl, { timeout: CAPTURE_PAGE_READY_TIMEOUT_MS });
+      if (conversationUrl) {
+        const timeoutMs = Number.isFinite(deadlineAt)
+          ? Math.max(1, deadlineAt - Date.now())
+          : CAPTURE_PAGE_READY_TIMEOUT_MS;
+        await navigateToConversation(capturePage, conversationUrl, { timeoutMs });
       }
       return capturePage;
     };
@@ -1928,7 +1945,7 @@ export async function main(argv, dependencies = {}) {
         abortSignal: reviewAbortController.signal,
         closeContextFn: removeTerminationCleanup.closeOnce,
         reopenPage,
-        reopenIntervalMs: options.reopenIntervalMs,
+        reopenIntervalMs,
         mode: options.mode,
       }));
       try {
@@ -1956,7 +1973,7 @@ export async function main(argv, dependencies = {}) {
         existingConversationUrl: reviews[0].existingConversationUrl,
         reviewPage: attached.reviewPage,
         reopenPage,
-        reopenIntervalMs: options.reopenIntervalMs,
+        reopenIntervalMs,
         runId: reviews[0].runId,
         runOutputDir: reviews[0].runOutputDir,
         abortSignal: reviewAbortController.signal,

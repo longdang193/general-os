@@ -887,6 +887,22 @@ assert.equal(page.closeCount, 0);
 '''
     )
 
+def test_capture_preflight_does_not_require_the_composer():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ preflightCaptureContext }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  url: () => "https://chatgpt.com/c/existing-review",
+  locator: () => ({{ innerText: async () => "Visible response" }}),
+  getByRole: () => ({{ first() {{ return this; }}, isVisible: async () => false }}),
+}};
+
+await preflightCaptureContext({{ newPage: async () => page }}, page);
+''',
+    )
+
 
 def test_missing_composer_reports_availability_without_claiming_authentication_failed():
     run_node_assertion(
@@ -956,7 +972,7 @@ const attached = await openContext(chromium, {{
 }});
 assert.equal(attached.reviewPage, page);
 assert.deepEqual(launchOptions, {{ headless: false, executablePath: "C:/test/chrome.exe" }});
-assert.deepEqual(navigatedTo, {{ url: conversationUrl, options: {{ timeout: 15000 }} }});
+assert.deepEqual(navigatedTo, {{ url: conversationUrl, options: {{ timeout: 15000, waitUntil: "domcontentloaded" }} }});
 await closeContext(attached);
 '''
     )
@@ -990,7 +1006,7 @@ const attached = await openContext(chromium, {{
   initialUrl: conversationUrl,
 }}, {{ launchDedicatedChrome: async () => ({{ endpoint: "http://127.0.0.1:45678", process: null }}) }});
 
-assert.deepEqual(navigatedTo, {{ url: conversationUrl, options: {{ timeout: 15000 }} }});
+assert.deepEqual(navigatedTo, {{ url: conversationUrl, options: {{ timeout: 15000, waitUntil: "domcontentloaded" }} }});
 await closeContext(attached);
 ''',
     )
@@ -1082,6 +1098,80 @@ const result = await runReviewPromptInNewTab({{ newPage: async () => page }}, {{
 assert.deepEqual(navigations, [threadUrl]);
 assert.equal(result.completion.status, "captured");
 assert.equal(result.completion.response, "Visible response");
+''',
+    )
+
+def test_capture_reopens_same_thread_url_before_reading_visible_output():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const threadUrl = "https://chatgpt.com/c/existing-review";
+let navigations = 0;
+const page = {{
+  url: () => threadUrl,
+  goto: async (url, options) => {{
+    assert.equal(url, threadUrl);
+    assert.equal(options.waitUntil, "domcontentloaded");
+    navigations += 1;
+  }},
+  waitForLoadState: async () => {{}},
+  waitForTimeout: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Visible response",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
+  }}),
+}};
+
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: threadUrl,
+  reopenPage: async (options) => {{
+    await page.goto(options.conversationUrl, {{ waitUntil: "domcontentloaded" }});
+    return page;
+  }},
+}});
+
+assert.equal(navigations, 1);
+assert.equal(result.response, "Visible response");
+''',
+    )
+
+def test_capture_continues_after_navigation_timeout_and_reads_visible_output():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+let attempts = 0;
+const page = {{
+  url: () => "https://chatgpt.com/c/existing-review",
+  waitForLoadState: async () => {{}},
+  waitForTimeout: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Visible after timeout",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
+  }}),
+}};
+
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: page.url(),
+  reopenPage: async () => {{
+    attempts += 1;
+    const error = new Error("Navigation timeout");
+    error.name = "TimeoutError";
+    throw error;
+  }},
+}});
+
+assert.equal(attempts, 1);
+assert.equal(result.response, "Visible after timeout");
 ''',
     )
 
@@ -2726,6 +2816,27 @@ assert.equal(options.existingConversationUrl, "https://chatgpt.com/c/existing-re
     )
 
 
+def test_cli_defaults_existing_conversation_capture_to_immediate_reopen():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ parseArguments }} from {CLI_RUNNER.as_uri()!r};
+
+const common = [
+  "--cdp-endpoint", "http://127.0.0.1:9222",
+  "--prompt-file", "review.txt",
+  "--repository", "owner/repo",
+  "--commit-sha", "0123456789abcdef0123456789abcdef01234567",
+  "--review-url", "https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md",
+];
+const capture = parseArguments([...common, "--existing-conversation-url", "https://chatgpt.com/c/existing-review"]);
+assert.equal(capture.reopenIntervalMs, 0);
+assert.equal(capture.reopenIntervalProvided, false);
+const submitted = parseArguments([...common, "--model", "GPT-6.2", "--effort", "High"]);
+assert.equal(submitted.reopenIntervalMs, 300000);
+assert.equal(submitted.reopenIntervalProvided, false);
+''',
+    )
 def test_main_forwards_existing_conversation_url_to_single_review_transaction():
     run_node_assertion(
         f'''
@@ -2766,6 +2877,7 @@ const exitCode = await main([
   closeContext: async () => {{}},
   runReviewTransaction: async (_context, options) => {{
     captured.existingConversationUrl = options.existingConversationUrl;
+    captured.reopenIntervalMs = options.reopenIntervalMs;
     return {{
       status: "completed",
       output_dir: "review-output/run-main-forward",
@@ -2775,6 +2887,7 @@ const exitCode = await main([
 
 assert.equal(exitCode, 0);
 assert.equal(captured.existingConversationUrl, "https://chatgpt.com/c/existing-review");
+assert.equal(captured.reopenIntervalMs, 0);
 '''
     )
 
@@ -2840,7 +2953,8 @@ const exitCode = await main([
 
 assert.equal(exitCode, 0);
 assert.equal(opened.length, 1);
-assert.equal(opened[0].initialUrl, undefined);
+assert.equal(opened[0].initialUrl, conversationUrl);
+assert.equal(opened[0].captureOnly, true);
 assert.equal(navigatedTo, conversationUrl);
 assert.equal(closeCount, 0);
 ''',
@@ -2899,7 +3013,7 @@ const exitCode = await main([
 }});
 
 assert.equal(exitCode, 0);
-assert.deepEqual(navigatedTo, {{ url: conversationUrl, options: {{ timeout: 15000 }} }});
+assert.deepEqual(navigatedTo, {{ url: conversationUrl, options: {{ timeout: 15000, waitUntil: "domcontentloaded" }} }});
 ''',
     )
 
