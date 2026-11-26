@@ -635,7 +635,12 @@ export async function readSubmittedUserTurnId(page, prompt, { timeoutMs = SUBMIT
 
     const remaining = deadline - Date.now();
     if (remaining <= 0 || typeof page.waitForTimeout !== "function") break;
-    await page.waitForTimeout(Math.min(SUBMISSION_ACK_POLL_MS, remaining));
+    try {
+      await page.waitForTimeout(Math.min(SUBMISSION_ACK_POLL_MS, remaining));
+    } catch {
+      // Navigation can interrupt the polling delay after dispatch.
+      return null;
+    }
   }
   return null;
 }
@@ -752,16 +757,19 @@ export async function captureReviewResponse(page, {
     const changedCanonicalRoute = canonicalCurrentRoute
       && !unresolvedCaptureIdentity
       && currentConversationId !== captureConversationId;
+    const submissionEvidenceAvailable = Boolean(
+      submittedUserTurnId || (submittedPrompt && normalizePromptForTurnComparison(submittedPrompt)),
+    );
     let verifiedCurrentUrl = visibleCurrentUrl;
     let currentRouteMatchesSubmission = false;
-    if (changedCanonicalRoute && submittedUserTurnId) {
-      const submittedTurnMatches = await hasSubmittedUserTurn(page, null, submittedUserTurnId);
+    if (canonicalCurrentRoute && (unresolvedCaptureIdentity || changedCanonicalRoute) && submissionEvidenceAvailable) {
+      const submittedTurnMatches = await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId);
       verifiedCurrentUrl = readPageUrl(page);
       const verifiedConversationId = extractConversationIdentity(verifiedCurrentUrl);
       currentRouteMatchesSubmission = submittedTurnMatches
         && verifiedConversationId === currentConversationId;
     }
-    if (canonicalCurrentRoute && (unresolvedCaptureIdentity || currentRouteMatchesSubmission)) {
+    if (canonicalCurrentRoute && (!unresolvedCaptureIdentity && !changedCanonicalRoute || currentRouteMatchesSubmission)) {
       captureConversationUrl = verifiedCurrentUrl;
       captureConversationId = currentConversationId;
     } else if (unresolvedCaptureIdentity) {
@@ -1363,7 +1371,12 @@ export async function runReviewPrompt(page, { beforeSubmit, model, effort, promp
     throw error;
   }
 
-  const submittedUserTurnId = await readSubmittedUserTurnId(page, prompt);
+  let submittedUserTurnId = null;
+  try {
+    submittedUserTurnId = await readSubmittedUserTurnId(page, prompt);
+  } catch {
+    // Submission is already acknowledged; turn lookup is best effort.
+  }
   const latestUrl = readPageUrl(page, submission.currentUrl);
   const latestConversationId = extractConversationIdentity(latestUrl);
   const submittedConversationUrl = submittedUserTurnId

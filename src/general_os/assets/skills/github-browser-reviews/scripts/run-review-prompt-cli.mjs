@@ -1178,6 +1178,7 @@ export async function runReviewTransaction(context, options) {
   let checkpointResponse = null;
   let checkpointSnapshot = null;
   let lastAcceptedSnapshot = null;
+  let lastPersistedResponse = null;
   let completionDeadlineAt = null;
   let recoveredCompletionSettled = false;
   const existingConversationCapture = Boolean(options.existingConversationUrl);
@@ -1208,7 +1209,17 @@ export async function runReviewTransaction(context, options) {
     const acceptedResponse = preserveCheckpoint ? checkpointResponse : responseText;
     const acceptedSnapshot = preserveCheckpoint ? checkpointSnapshot : snapshot;
     const responsePath = join(outputDir, authoritative ? "response.md" : "response.partial.md");
-    await writeResponse(responsePath, acceptedResponse ? `${acceptedResponse}\n` : "");
+    const responseConversationId = acceptedSnapshot?.conversationId || null;
+    const duplicateResponse = responseConversationId
+      && lastPersistedResponse?.path === responsePath
+      && lastPersistedResponse.conversationId === responseConversationId
+      && lastPersistedResponse.text === acceptedResponse;
+    if (!duplicateResponse) {
+      await writeResponse(responsePath, acceptedResponse ? `${acceptedResponse}\n` : "");
+      lastPersistedResponse = responseConversationId
+        ? { path: responsePath, conversationId: responseConversationId, text: acceptedResponse }
+        : null;
+    }
     checkpointResponse = acceptedResponse;
     checkpointSnapshot = acceptedSnapshot || checkpointSnapshot;
     result.response_capture = authoritative ? "final" : "partial";
@@ -1259,7 +1270,7 @@ export async function runReviewTransaction(context, options) {
     const responseTurnObserved = snapshot.responseTurnObserved !== false;
     const responseText = snapshot.assistantText?.trim();
     if (snapshot.checkpointAccepted !== false
-      && (responseTurnObserved || options.existingConversationUrl)
+      && (responseTurnObserved || captureMode)
       && (captureMode ? Boolean(responseText) : (snapshot.assistantMessageId || responseText))) {
       try {
         const acceptedSnapshot = await persistResponse(responseText, { authoritative: captureMode, snapshot });
@@ -1389,7 +1400,7 @@ export async function runReviewTransaction(context, options) {
     }
 
     const visibleAssistantCaptured = completionSnapshot?.checkpointAccepted !== false
-      && (existingConversationCapture
+      && (captureMode
         ? Boolean(completionSnapshot?.response?.trim())
         : completionSnapshot?.responseTurnObserved !== false
           && (Boolean(completionSnapshot?.assistantMessageId) || Boolean(completionSnapshot?.response?.trim())));
@@ -1399,7 +1410,7 @@ export async function runReviewTransaction(context, options) {
     const responseContentReady = responseStructurallyFinal
       && isResponseContentReady(completionSnapshot?.response);
     if (visibleAssistantCaptured
-      && (existingConversationCapture || completionSnapshot.responseTurnObserved !== false)) {
+      && (existingConversationCapture || captureMode || completionSnapshot.responseTurnObserved !== false)) {
       stage = "artifacts";
       await persistResponse(completionSnapshot.response, {
         authoritative: captureMode || responseStructurallyFinal,
@@ -1725,27 +1736,13 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         const review = validatedReviews[index];
         const result = await runOne(review, index);
         results.push(result);
-        // Missing dispatch evidence is unsafe: do not risk a duplicate submission.
-        const dispatchMayHaveStarted = result.dispatch_state !== "not_dispatched";
-        const mayContinueBeforeDispatch = result.status !== "completed"
+        const mayContinueAfterIsolatedReviewFailure = result.status !== "completed"
           && result.failure_scope === "review"
-          && !review.existingConversationUrl
           && !hasClosedContextEvidence(result)
-          && !dispatchMayHaveStarted
+          && result.dispatch_state !== "possibly_dispatched"
           && result.cleanup_status === "completed"
           && result.cleanup_warning == null;
-        const mayContinueAfterEvidenceGap = result.status !== "completed"
-          && result.failure_scope === "review"
-          && result.failure_stage === "completion"
-          && result.completion === "confirmed"
-          && result.response_capture === "final"
-          && result.content_evidence_unconfirmed === true
-          && !review.existingConversationUrl
-          && result.submission === "acknowledged"
-          && result.dispatch_state === "acknowledged"
-          && result.cleanup_status === "completed"
-          && result.cleanup_warning == null;
-        if (result.status !== "completed" && !mayContinueBeforeDispatch && !mayContinueAfterEvidenceGap) {
+        if (result.status !== "completed" && !mayContinueAfterIsolatedReviewFailure) {
           for (let skippedIndex = index + 1; skippedIndex < validatedReviews.length; skippedIndex += 1) {
             const skippedReview = validatedReviews[skippedIndex];
             results.push({

@@ -1721,6 +1721,24 @@ assert.equal(reads, 2);
     )
 
 
+def test_submitted_user_turn_lookup_is_best_effort_when_navigation_interrupts_polling():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ readSubmittedUserTurnId }} from {RUNNER.as_uri()!r};
+
+const page = {{
+  locator: () => ({{
+    evaluateAll: async () => {{ throw new Error("execution context destroyed"); }},
+  }}),
+  waitForTimeout: async () => {{ throw new Error("navigation in progress"); }},
+}};
+
+assert.equal(await readSubmittedUserTurnId(page, "Review the pinned change.", {{ timeoutMs: 50 }}), null);
+''',
+    )
+
+
 def test_completion_rejects_stale_same_prompt_conversation():
     run_node_assertion(
         f'''
@@ -4616,7 +4634,7 @@ assert.equal(results[1].status, "completed");
     )
 
 
-def test_batch_stops_when_first_response_is_only_partial():
+def test_batch_continues_after_isolated_partial_capture_failure():
     run_node_assertion(
         f'''import assert from "node:assert/strict";
 import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
@@ -4651,9 +4669,9 @@ const results = await runReviewBatch({{
   closeContextFn: async () => {{}} ,
 }});
 
-assert.equal(calls, 1);
+assert.equal(calls, 2);
 assert.equal(results[0].response_capture, "partial");
-assert.equal(results[1].status, "skipped");
+assert.equal(results[1].status, "incomplete");
 ''',
     )
 
@@ -4685,6 +4703,7 @@ const results = await runReviewBatch({{
           status: "incomplete",
           failure_scope: "review",
           cleanup_warning: null,
+          cleanup_status: "completed",
           submission: "acknowledged",
         }}
       : {{ status: "completed" }};
@@ -4692,8 +4711,8 @@ const results = await runReviewBatch({{
   closeContextFn: async () => {{}},
 }});
 
-assert.equal(calls, 1);
-assert.equal(results[1].status, "skipped");
+assert.equal(calls, 2);
+assert.equal(results[1].status, "completed");
 '''
     )
 
@@ -4789,8 +4808,8 @@ const results = await runReviewBatch({{
   closeContextFn: async () => {{}},
 }});
 
-assert.equal(calls, 1);
-assert.equal(results[1].status, "skipped");
+assert.equal(calls, 2);
+assert.equal(results[1].status, "completed");
 '''
     )
 
@@ -5495,7 +5514,7 @@ assert.equal(await readFile(join(root, "response.md"), "utf8"), "Captured from t
 ''',
     )
 
-def test_capture_mode_uses_visible_canonical_url_when_supplied_url_is_synthetic():
+def test_capture_mode_uses_visible_canonical_url_with_prompt_evidence():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -5503,8 +5522,17 @@ import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
 
 const provisionalUrl = "https://chatgpt.com/c/local-chatgpt%3Aabc";
 const canonicalUrl = "https://chatgpt.com/c/6b0816f9-ef38-83eb-a3ce-15fd11bd2e21";
+const prompt = "Review this repository.";
 const page = {{
   url: () => canonicalUrl,
+  locator: (selector) => ({{
+    evaluateAll: async (callback, includeText) => callback(
+      selector.includes('data-message-author-role="user"')
+        ? [{{ innerText: prompt, getAttribute: () => null }}]
+        : [],
+      includeText,
+    ),
+  }}),
 }};
 const reopenedPage = {{
   url: () => canonicalUrl,
@@ -5520,6 +5548,7 @@ let reopenedUrl = null;
 const result = await captureReviewResponse(page, {{
   intervalMs: 0,
   conversationUrl: provisionalUrl,
+  submittedPrompt: prompt,
   reopenPage: async ({{ conversationUrl }}) => {{
     reopenedUrl = conversationUrl;
     return reopenedPage;
@@ -5532,7 +5561,7 @@ assert.equal(result.response, "Captured from the canonical thread.");
 ''',
     )
 
-def test_capture_mode_promotes_homepage_to_live_canonical_conversation_url():
+def test_capture_mode_does_not_promote_homepage_without_submission_evidence():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -5540,29 +5569,19 @@ import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
 
 const canonicalUrl = "https://chatgpt.com/c/canonical-thread";
 const page = {{ url: () => canonicalUrl }};
-const reopenedPage = {{
-  url: () => canonicalUrl,
-  waitForLoadState: async () => {{}},
-  locator: () => ({{
-    evaluateAll: async (callback, includeText) => callback([{{
-      innerText: "Captured from the canonical thread.",
-      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
-    }}], includeText),
-  }}),
-}};
 let reopenedUrl = null;
 const result = await captureReviewResponse(page, {{
   intervalMs: 0,
   conversationUrl: "https://chatgpt.com/",
   reopenPage: async ({{ conversationUrl }}) => {{
     reopenedUrl = conversationUrl;
-    return reopenedPage;
+    throw new Error("must not reopen an unverified route");
   }},
 }});
 
-assert.equal(reopenedUrl, canonicalUrl);
-assert.equal(result.status, "captured");
-assert.equal(result.response, "Captured from the canonical thread.");
+assert.equal(reopenedUrl, null);
+assert.equal(result.status, "incomplete");
+assert.match(result.failureReason, /canonical conversation URL required/i);
 ''',
     )
 
@@ -5575,7 +5594,17 @@ import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
 const provisionalUrl = "https://chatgpt.com/c/local-chatgpt%3Aabc";
 const canonicalUrl = "https://chatgpt.com/c/canonical-thread";
 const prompt = "Review this repository.";
-const page = {{ url: () => canonicalUrl }};
+const page = {{
+  url: () => canonicalUrl,
+  locator: (selector) => ({{
+    evaluateAll: async (callback, includeText) => callback(
+      selector.includes('data-message-author-role="user"')
+        ? [{{ innerText: prompt, getAttribute: () => null }}]
+        : [],
+      includeText,
+    ),
+  }}),
+}};
 const reopenedPage = {{
   url: () => canonicalUrl,
   waitForLoadState: async () => {{}},
@@ -5608,7 +5637,7 @@ assert.equal(result.response, "Captured canonical response.");
     )
 
 
-def test_capture_mode_does_not_promote_changed_canonical_route_without_submitted_turn_id():
+def test_capture_mode_promotes_changed_canonical_route_with_prompt_evidence():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -5629,11 +5658,11 @@ const page = {{
   }}),
 }};
 const reopenedPage = {{
-  url: () => earlierUrl,
+  url: () => currentUrl,
   waitForLoadState: async () => {{}},
   locator: () => ({{
     evaluateAll: async (callback, includeText) => callback([{{
-        innerText: "Captured from the original thread.",
+        innerText: "Captured from the current thread.",
       getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
     }}], includeText),
   }}),
@@ -5649,9 +5678,9 @@ const result = await captureReviewResponse(page, {{
   }},
 }});
 
-assert.equal(reopenedUrl, earlierUrl);
+assert.equal(reopenedUrl, currentUrl);
 assert.equal(result.status, "captured");
-assert.equal(result.response, "Captured from the original thread.");
+assert.equal(result.response, "Captured from the current thread.");
 ''',
     )
 
@@ -6020,11 +6049,11 @@ assert.equal(await readFile(join(root, "response.md"), "utf8"), "Visible raw res
     )
 
 
-def test_submitted_capture_does_not_persist_unassociated_visible_response():
+def test_submitted_capture_persists_visible_response_without_turn_association():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
-import {{ access, mkdtemp }} from "node:fs/promises";
+import {{ mkdtemp, readFile }} from "node:fs/promises";
 import {{ tmpdir }} from "node:os";
 import {{ join }} from "node:path";
 import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
@@ -6063,8 +6092,8 @@ const result = await runReviewTransaction({{}}, {{
   }},
 }});
 
-assert.equal(result.status, "incomplete");
-await assert.rejects(access(join(root, "response.md")));
+assert.equal(result.status, "completed");
+assert.equal(await readFile(join(root, "response.md"), "utf8"), "Older visible response\\n");
 ''',
     )
 
