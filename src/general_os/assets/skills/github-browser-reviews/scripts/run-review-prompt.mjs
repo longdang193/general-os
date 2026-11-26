@@ -257,6 +257,10 @@ export function extractConversationIdentity(url) {
   }
 }
 
+function isSyntheticConversationId(value) {
+  return typeof value === "string" && value.startsWith("local-chatgpt:");
+}
+
 function readPageUrl(page, fallback = null) {
   try {
     return typeof page?.url === "function" ? page.url() : fallback;
@@ -584,12 +588,15 @@ export async function captureReviewResponse(page, {
     const observedUrl = readPageUrl(page, captureConversationUrl);
     const currentConversationId = extractConversationIdentity(observedUrl);
     const expectedConversationId = extractConversationIdentity(captureConversationUrl);
-    if (currentConversationId && (!expectedConversationId || currentConversationId === expectedConversationId)) {
+    if (currentConversationId && (!expectedConversationId
+      || currentConversationId === expectedConversationId
+      || isSyntheticConversationId(expectedConversationId) && !isSyntheticConversationId(currentConversationId))) {
       captureConversationUrl = observedUrl;
     }
 
     let capturePage = page;
-    if (reopenPage && extractConversationIdentity(captureConversationUrl)) {
+    const captureConversationId = extractConversationIdentity(captureConversationUrl);
+    if (reopenPage && captureConversationId && !isSyntheticConversationId(captureConversationId)) {
       const reopened = await reopenPage({ conversationUrl: captureConversationUrl, page });
       capturePage = reopened?.page || reopened;
     }

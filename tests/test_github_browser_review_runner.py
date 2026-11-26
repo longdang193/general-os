@@ -5204,6 +5204,42 @@ assert.equal(await readFile(join(root, "response.md"), "utf8"), "Captured from t
 ''',
     )
 
+def test_capture_mode_promotes_live_canonical_route_before_reopening():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const provisionalUrl = "https://chatgpt.com/c/local-chatgpt%3Aabc";
+const canonicalUrl = "https://chatgpt.com/c/6b0816f9-ef38-83eb-a3ce-15fd11bd2e21";
+const page = {{
+  url: () => canonicalUrl,
+}};
+const reopenedPage = {{
+  url: () => canonicalUrl,
+  waitForLoadState: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Captured from the canonical thread.",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
+  }}),
+}};
+let reopenedUrl = null;
+const result = await captureReviewResponse(page, {{
+  intervalMs: 0,
+  conversationUrl: provisionalUrl,
+  reopenPage: async ({{ conversationUrl }}) => {{
+    reopenedUrl = conversationUrl;
+    return reopenedPage;
+  }},
+}});
+
+assert.equal(reopenedUrl, canonicalUrl);
+assert.equal(result.response, "Captured from the canonical thread.");
+''',
+    )
+
 def test_capture_mode_preserves_reopen_failure_root_cause():
     run_node_assertion(
         f'''
