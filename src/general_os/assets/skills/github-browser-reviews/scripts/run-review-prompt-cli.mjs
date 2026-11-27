@@ -1409,7 +1409,7 @@ export async function runReviewTransaction(context, options) {
       && (existingConversationCapture || completionSnapshot.responseTurnObserved !== false)) {
       stage = "artifacts";
       await persistResponse(completionSnapshot.response, {
-        authoritative: existingConversationCapture || responseStructurallyFinal,
+        authoritative: captureMode || responseStructurallyFinal,
         snapshot: completionSnapshot,
       });
     }
@@ -1535,7 +1535,7 @@ export async function runReviewTransaction(context, options) {
               && (existingConversationCapture || completionSnapshot.responseTurnObserved !== false)
               && completionSnapshot?.response
               && outputDir) {
-              await persistResponse(completionSnapshot.response, { authoritative: responseStructurallyFinal, snapshot: completionSnapshot });
+              await persistResponse(completionSnapshot.response, { authoritative: captureMode || responseStructurallyFinal, snapshot: completionSnapshot });
             }
             if (completion.status === "confirmed") {
               if (!options.existingConversationUrl) {
@@ -1727,7 +1727,29 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
       for (let index = 0; index < validatedReviews.length; index += 1) {
         transactions.push(runOne(validatedReviews[index], index));
       }
-      results.push(...await Promise.all(transactions));
+      const settled = await Promise.allSettled(transactions);
+      for (let index = 0; index < settled.length; index += 1) {
+        const outcome = settled[index];
+        if (outcome.status === "fulfilled") {
+          results.push(outcome.value);
+          continue;
+        }
+        const review = validatedReviews[index];
+        const result = createResult({ ...review, reviewIndex: review.reviewIndex ?? index });
+        result.transaction_started = true;
+        result.status = "incomplete";
+        result.failure_code = outcome.reason?.code || null;
+        result.failure_scope = outcome.reason?.failureScope || "review";
+        result.failure_stage = "batch";
+        result.failure_reason = `Transaction rejected unexpectedly: ${errorMessage(outcome.reason)}`;
+        result.submission_attempted = outcome.reason?.submissionAttempted === true;
+        result.submission = result.submission_attempted ? "ambiguous" : "not_started";
+        result.dispatch_state = outcome.reason?.dispatchState
+          || (result.submission_attempted ? "possibly_dispatched" : "not_dispatched");
+        result.output_dir = review.runOutputDir ? relative(process.cwd(), resolve(review.runOutputDir)) : null;
+        if (review.runOutputDir) await writeResult(review.runOutputDir, result).catch(() => {});
+        results.push(result);
+      }
     } else {
       for (let index = 0; index < validatedReviews.length; index += 1) {
         const review = validatedReviews[index];

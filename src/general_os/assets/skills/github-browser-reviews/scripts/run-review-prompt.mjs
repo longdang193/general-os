@@ -514,12 +514,16 @@ async function waitForCapturePageReady(page, conversationUrl, {
       await page.waitForTimeout(Math.min(CAPTURE_PAGE_POLL_MS, remaining));
       continue;
     }
-    const submittedTurnObserved = await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId);
     const conversationTurnState = submittedPrompt || submittedUserTurnId
       ? await readVisibleConversationTurnState(page)
       : null;
+    const submittedTurnObserved = await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId);
     const responseTurnObserved = !(submittedPrompt || submittedUserTurnId)
-      || submittedTurnObserved && conversationTurnState?.latestAssistantFollowsLatestUser === true;
+      || submittedTurnObserved && matchesSubmittedTurnAssociation(
+        conversationTurnState,
+        submittedPrompt,
+        submittedUserTurnId,
+      );
     const sameSample = previousSample
       && previousSample.assistantMessageId === assistant.assistantMessageId
       && previousSample.assistantText === assistant.assistantText;
@@ -598,15 +602,31 @@ async function readVisibleConversationTurnState(page) {
           if (!role) return false;
           const parentRole = element.parentElement?.closest("[data-message-author-role]")?.getAttribute("data-message-author-role");
           return role !== parentRole;
-        }).map((element) => ({ role: element.getAttribute("data-message-author-role")
-          || (element.hasAttribute("data-user-message-bubble") ? "user" : "assistant") }));
+        }).map((element) => ({
+          role: element.getAttribute("data-message-author-role")
+            || (element.hasAttribute("data-user-message-bubble") ? "user" : "assistant"),
+          id: ["data-message-id", "data-user-message-id", "data-turn-id", "data-chatgpt-selection-message-id", "data-testid", "id"]
+            .map((attribute) => element.getAttribute(attribute))
+            .find(Boolean) || null,
+          text: element.innerText || "",
+        }));
         const latestUserIndex = turns.findLastIndex((turn) => turn.role === "user");
         const latestAssistantIndex = turns.findLastIndex((turn) => turn.role === "assistant");
+        const latestAssistantPrecedingUser = latestAssistantIndex >= 0
+          ? turns.slice(0, latestAssistantIndex).findLast((turn) => turn.role === "user") || null
+          : null;
+        const latestUser = latestUserIndex >= 0 ? turns[latestUserIndex] : null;
+        const latestAssistant = latestAssistantIndex >= 0 ? turns[latestAssistantIndex] : null;
         return {
           userTurnCount: turns.filter((turn) => turn.role === "user").length,
           assistantTurnCount: turns.filter((turn) => turn.role === "assistant").length,
           latestAssistantFollowsLatestUser: latestUserIndex >= 0
             && latestAssistantIndex > latestUserIndex,
+          latestUserId: latestUser?.id || null,
+          latestUserText: latestUser?.text || "",
+          latestAssistantId: latestAssistant?.id || null,
+          latestAssistantPrecedingUserId: latestAssistantPrecedingUser?.id || null,
+          latestAssistantPrecedingUserText: latestAssistantPrecedingUser?.text || "",
         };
       });
     }
@@ -615,6 +635,39 @@ async function readVisibleConversationTurnState(page) {
   } catch {
     return null;
   }
+}
+
+function matchesSubmittedTurn(turnId, turnText, submittedPrompt, submittedUserTurnId) {
+  if (submittedUserTurnId) return turnId === submittedUserTurnId;
+  if (!submittedPrompt) return false;
+  return normalizePromptForTurnComparison(turnText || "").includes(normalizePromptForTurnComparison(submittedPrompt));
+}
+
+function matchesSubmittedTurnAssociation(turnState, submittedPrompt, submittedUserTurnId, {
+  requireAssistantAssociation = true,
+  allowUnavailableState = false,
+} = {}) {
+  if (!submittedPrompt && !submittedUserTurnId) return true;
+  // Legacy test doubles and older SPA selectors may not expose turn metadata.
+  if (!turnState) return !requireAssistantAssociation || allowUnavailableState;
+  const idKey = requireAssistantAssociation ? "latestAssistantPrecedingUserId" : "latestUserId";
+  const textKey = requireAssistantAssociation ? "latestAssistantPrecedingUserText" : "latestUserText";
+  const richStateAvailable = Object.prototype.hasOwnProperty.call(turnState, idKey)
+    || Object.prototype.hasOwnProperty.call(turnState, textKey);
+  if (richStateAvailable) return matchesSubmittedTurn(turnState[idKey], turnState[textKey], submittedPrompt, submittedUserTurnId);
+  if (!requireAssistantAssociation || turnState.latestAssistantFollowsLatestUser === true) return true;
+  return allowUnavailableState && (!Object.prototype.hasOwnProperty.call(turnState, "userTurnCount") || turnState.userTurnCount === null);
+}
+
+async function hasSubmittedTurnAssociation(page, submittedPrompt, submittedUserTurnId, options) {
+  const submittedTurnObserved = await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId);
+  if (!submittedTurnObserved) return false;
+  return matchesSubmittedTurnAssociation(
+    await readVisibleConversationTurnState(page),
+    submittedPrompt,
+    submittedUserTurnId,
+    options,
+  );
 }
 
 export async function readSubmittedUserTurnId(page, prompt, { timeoutMs = SUBMITTED_TURN_ID_TIMEOUT_MS } = {}) {
@@ -711,6 +764,7 @@ async function readCompletionSnapshot(page, { includeText } = {}) {
   const finalUrl = page.url();
   const routeStable = initialUrl === assistantUrl && assistantUrl === currentUrl && currentUrl === finalUrl;
   return {
+    ...(routeStable ? conversationTurnState || {} : {}),
     ...(routeStable ? assistantMessage : { assistantMessageId: null, assistantText: "", assistantTurnCount: 0 }),
     userTurnCount: routeStable ? conversationTurnState?.userTurnCount ?? null : null,
     latestAssistantFollowsLatestUser: routeStable
@@ -750,9 +804,13 @@ export async function captureReviewResponse(page, {
       || extractConversationIdentity(conversationUrl || readPageUrl(page));
     const visibleAssistant = Boolean(interruptedSnapshot.assistantText?.trim());
     const conversationMatches = interruptedSnapshot.routeStable !== false
+      && Boolean(expectedConversationId)
+      && Boolean(interruptedSnapshot.conversationId)
       && interruptedSnapshot.conversationId === expectedConversationId;
+    const submittedTurnMatches = !submissionEvidenceAvailable
+      || await hasSubmittedTurnAssociation(page, submittedPrompt, submittedUserTurnId);
     const responseTurnObserved = conversationMatches
-      && interruptedSnapshot.latestAssistantFollowsLatestUser === true
+      && submittedTurnMatches
       && visibleAssistant;
     const response = responseTurnObserved ? interruptedSnapshot.assistantText : "";
     const snapshot = {
@@ -775,7 +833,12 @@ export async function captureReviewResponse(page, {
       const persistedIdentityIsCanonical = persistedConversationId
         && !isSyntheticConversationId(persistedConversationId);
       if (!candidateId || isSyntheticConversationId(candidateId) || persistedIdentityIsCanonical) return;
-      if (!submissionEvidenceAvailable || !await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId)) return;
+       if (!submissionEvidenceAvailable || !await hasSubmittedTurnAssociation(
+         page,
+         submittedPrompt,
+         submittedUserTurnId,
+         { requireAssistantAssociation: false },
+       )) return;
       const verifiedUrl = readPageUrl(page);
       const verifiedId = extractConversationIdentity(verifiedUrl);
       if (verifiedId !== candidateId || !matchesConversationUrl(verifiedUrl, candidateUrl)) return;
@@ -820,7 +883,12 @@ export async function captureReviewResponse(page, {
     if (canonicalCurrentRoute
       && (unresolvedCaptureIdentity || changedCanonicalRoute && !routeChangedAfterCaptureStarted)
       && submissionEvidenceAvailable) {
-      const submittedTurnMatches = await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId);
+       const submittedTurnMatches = await hasSubmittedTurnAssociation(
+         page,
+         submittedPrompt,
+         submittedUserTurnId,
+         { requireAssistantAssociation: false },
+       );
       verifiedCurrentUrl = readPageUrl(page);
       const verifiedConversationId = extractConversationIdentity(verifiedCurrentUrl);
       currentRouteMatchesSubmission = submittedTurnMatches
@@ -994,9 +1062,14 @@ export async function submitPrompt(page, composer, prompt, { beforeSubmit, signa
 
   let currentUrl = readPageUrl(page);
   const routeDeadline = Date.now() + SUBMITTED_TURN_ID_TIMEOUT_MS;
-  while (!extractConversationIdentity(currentUrl) && Date.now() <= routeDeadline) {
-    if (typeof page.waitForTimeout !== "function") break;
-    await page.waitForTimeout(Math.min(SUBMISSION_ACK_POLL_MS, routeDeadline - Date.now()));
+  try {
+    while (!extractConversationIdentity(currentUrl) && Date.now() <= routeDeadline) {
+      if (typeof page.waitForTimeout !== "function") break;
+      await page.waitForTimeout(Math.min(SUBMISSION_ACK_POLL_MS, routeDeadline - Date.now()));
+      currentUrl = readPageUrl(page, currentUrl);
+    }
+  } catch {
+    // The dispatch was already acknowledged; SPA navigation failures must not downgrade it.
     currentUrl = readPageUrl(page, currentUrl);
   }
   return {
@@ -1068,13 +1141,21 @@ export async function waitForReviewCompletion(page, {
   while (Date.now() <= deadline) {
     if (signal?.aborted) {
       const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
-      const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
-      const responseTurnObserved = interruptedSnapshot.generating
+      const submittedTurnObserved = await hasSubmittedTurnAssociation(
+        page,
+        baseline.submittedPrompt,
+        submittedUserTurnId,
+        { allowUnavailableState: true },
+      );
+      const responseTurnObserved = (interruptedSnapshot.generating
         || interruptedSnapshot.assistantTurnCount > baselineAssistantTurnCount
-        || Boolean(interruptedSnapshot.assistantMessageId && interruptedSnapshot.assistantMessageId !== baseline.assistantMessageId);
+        || Boolean(interruptedSnapshot.assistantMessageId && interruptedSnapshot.assistantMessageId !== baseline.assistantMessageId))
+        && submittedTurnObserved;
       const checkpointAccepted = interruptedSnapshot.routeStable !== false
         && submittedTurnObserved
-        && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId);
+        && Boolean(expectedConversationId)
+        && Boolean(interruptedSnapshot.conversationId)
+        && interruptedSnapshot.conversationId === expectedConversationId;
       const snapshot = { ...interruptedSnapshot, checkpointAccepted, responseTurnObserved };
       if (onSnapshot) await onSnapshot(snapshot);
       const error = new Error("Review completion observation interrupted by termination signal");
@@ -1085,11 +1166,20 @@ export async function waitForReviewCompletion(page, {
     }
     if (await readVisibleInterruption(page)) {
       const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
-      const submittedTurnObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
-      const responseTurnObserved = interruptedSnapshot.generating
+      const submittedTurnObserved = await hasSubmittedTurnAssociation(
+        page,
+        baseline.submittedPrompt,
+        submittedUserTurnId,
+        { allowUnavailableState: true },
+      );
+      const responseTurnObserved = (interruptedSnapshot.generating
         || interruptedSnapshot.assistantTurnCount > baselineAssistantTurnCount
-        || Boolean(interruptedSnapshot.assistantMessageId && interruptedSnapshot.assistantMessageId !== baseline.assistantMessageId);
-      if (submittedTurnObserved && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId)) {
+        || Boolean(interruptedSnapshot.assistantMessageId && interruptedSnapshot.assistantMessageId !== baseline.assistantMessageId))
+        && submittedTurnObserved;
+      const conversationMatches = Boolean(expectedConversationId)
+        && Boolean(interruptedSnapshot.conversationId)
+        && interruptedSnapshot.conversationId === expectedConversationId;
+      if (submittedTurnObserved && conversationMatches) {
         if (onSnapshot) await onSnapshot({ ...interruptedSnapshot, responseTurnObserved });
       }
       return {
@@ -1097,8 +1187,7 @@ export async function waitForReviewCompletion(page, {
         response: interruptedSnapshot.assistantText,
         responseTurnObserved,
         status: "interrupted",
-        checkpointAccepted: submittedTurnObserved
-          && (!expectedConversationId || interruptedSnapshot.conversationId === expectedConversationId),
+        checkpointAccepted: submittedTurnObserved && conversationMatches,
         failureReason: "visible response interruption",
       };
     }
@@ -1129,9 +1218,17 @@ export async function waitForReviewCompletion(page, {
     if (!submittedUserTurnId && baseline.submittedPrompt) {
       submittedUserTurnId = await readSubmittedUserTurnId(page, baseline.submittedPrompt, { timeoutMs: 0 });
     }
-    let submittedTurnObserved = (submittedTurnAnchorObserved
+    const submittedTurnEvidenceObserved = await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
+    const submittedTurnAssociationObserved = matchesSubmittedTurnAssociation(
+      snapshot,
+      baseline.submittedPrompt,
+      submittedUserTurnId,
+      { allowUnavailableState: true },
+    );
+    let submittedTurnObserved = ((submittedTurnAnchorObserved
       && (!snapshot.conversationId || snapshot.conversationId === submittedTurnAnchorConversationId))
-      || await hasSubmittedUserTurn(page, baseline.submittedPrompt, submittedUserTurnId);
+      || submittedTurnEvidenceObserved)
+      && submittedTurnAssociationObserved;
     if (submittedTurnObserved) {
       submittedTurnAnchorObserved = true;
       submittedTurnAnchorConversationId = snapshot.conversationId || submittedTurnAnchorConversationId;
@@ -1141,7 +1238,8 @@ export async function waitForReviewCompletion(page, {
       && submissionConversationId
       && snapshot.conversationId === submissionConversationId
       && snapshot.assistantTurnCount > baselineAssistantTurnCount
-      && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId);
+      && Boolean(snapshot.assistantMessageId && snapshot.assistantMessageId !== baseline.assistantMessageId)
+      && submittedTurnAssociationObserved;
     if (acknowledgedSubmissionAssistantTurn) {
       submittedTurnObserved = true;
       submittedTurnAnchorObserved = true;
