@@ -416,17 +416,22 @@ async function readVisibleAssistantMessage(page, { includeText = true } = {}) {
   };
 }
 
-function waitForCaptureDelay(delayMs, signal) {
-  return new Promise((resolveDelay) => {
-    let timer;
-    const finish = () => {
-      if (timer) clearTimeout(timer);
-      signal?.removeEventListener?.("abort", finish);
-      resolveDelay();
-    };
-    timer = setTimeout(finish, delayMs);
-    signal?.addEventListener?.("abort", finish, { once: true });
-  });
+async function waitForCaptureDelay(delayMs, signal, onTick) {
+  const deadline = Date.now() + delayMs;
+  while (Date.now() < deadline) {
+    await new Promise((resolveDelay) => {
+      let timer;
+      const finish = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener?.("abort", finish);
+        resolveDelay();
+      };
+      timer = setTimeout(finish, Math.min(CAPTURE_PAGE_POLL_MS, deadline - Date.now()));
+      signal?.addEventListener?.("abort", finish, { once: true });
+    });
+    throwIfAborted(signal);
+    await onTick?.();
+  }
 }
 
 async function waitForCapturePageReady(page, conversationUrl, {
@@ -729,7 +734,28 @@ export async function captureReviewResponse(page, {
   if (!page) throw new Error("page is required for response capture");
   if (!Number.isFinite(intervalMs) || intervalMs < 0) throw new Error("intervalMs must be a non-negative number");
 
-  await waitForCaptureDelay(intervalMs, signal);
+  let persistedConversationUrl = conversationUrl;
+  let persistedConversationId = extractConversationIdentity(conversationUrl);
+  await waitForCaptureDelay(intervalMs, signal, async () => {
+    const currentUrl = readPageUrl(page);
+    const currentId = extractConversationIdentity(currentUrl);
+    if (!currentId || isSyntheticConversationId(currentId) || currentId === persistedConversationId) return;
+    persistedConversationUrl = currentUrl;
+    persistedConversationId = currentId;
+    if (onSnapshot) {
+      await onSnapshot({
+        assistantMessageId: null,
+        assistantText: "",
+        assistantTurnCount: 0,
+        conversationId: currentId,
+        currentUrl,
+        response: "",
+        responseTurnObserved: false,
+        stableSampleCount: 0,
+        checkpointAccepted: true,
+      });
+    }
+  });
   if (signal?.aborted) {
     const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
     const expectedConversationId = extractConversationIdentity(conversationUrl || readPageUrl(page));
@@ -748,8 +774,8 @@ export async function captureReviewResponse(page, {
   }
 
   const capture = async () => {
-    let captureConversationUrl = conversationUrl;
-    let captureConversationId = extractConversationIdentity(captureConversationUrl);
+    let captureConversationUrl = persistedConversationUrl;
+    let captureConversationId = persistedConversationId;
     const visibleCurrentUrl = readPageUrl(page);
     const currentConversationId = extractConversationIdentity(visibleCurrentUrl);
     const unresolvedCaptureIdentity = !captureConversationId || isSyntheticConversationId(captureConversationId);

@@ -383,8 +383,8 @@ export function createResult(options) {
     last_visible_conversation_id: null,
     assistant_message_id: null,
     assistant_turn_index: null,
-    response_path: "response.md",
-    partial_response_path: "response.partial.md",
+    response_path: null,
+    partial_response_path: null,
     response_capture: "none",
     cleanup_status: "not_started",
     cleanup_warning: null,
@@ -1228,6 +1228,12 @@ export async function runReviewTransaction(context, options) {
         ? { path: responsePath, conversationId: responseConversationId, text: acceptedResponse }
         : null;
     }
+    if (authoritative) {
+      result.response_path = "response.md";
+      result.partial_response_path = null;
+    } else {
+      result.partial_response_path = "response.partial.md";
+    }
     checkpointResponse = acceptedResponse;
     checkpointSnapshot = acceptedSnapshot || checkpointSnapshot;
     result.response_capture = authoritative ? "final" : "partial";
@@ -1245,24 +1251,6 @@ export async function runReviewTransaction(context, options) {
     if (!snapshot) return;
     recordVisibleConversation(result, snapshot);
     if (snapshot.checkpointAccepted === false) {
-      if (options.existingConversationUrl && snapshot.responseTurnObserved === false && outputDir) {
-        checkpointResponse = null;
-        checkpointSnapshot = null;
-        lastAcceptedSnapshot = null;
-        lastPersistedResponse = null;
-        result.assistant_message_id = null;
-        result.assistant_turn_index = null;
-        try {
-          await rm(join(outputDir, "response.md"), { force: true });
-          await rm(join(outputDir, "response.partial.md"), { force: true });
-          result.response_capture = "none";
-        } catch (error) {
-          if (!result.stale_response_cleanup_error) {
-            result.stale_response_cleanup_error = errorMessage(error);
-            result.failure_reason = appendFailureReason(result.failure_reason, `stale response cleanup failed: ${result.stale_response_cleanup_error}`);
-          }
-        }
-      }
       await persist().catch((error) => {
         result.failure_reason = appendFailureReason(result.failure_reason, `result checkpoint failed: ${errorMessage(error)}`);
       });
@@ -1279,7 +1267,7 @@ export async function runReviewTransaction(context, options) {
     const responseTurnObserved = snapshot.responseTurnObserved !== false;
     const responseText = snapshot.assistantText?.trim();
     if (snapshot.checkpointAccepted !== false
-      && (responseTurnObserved || captureMode)
+      && (responseTurnObserved || existingConversationCapture)
       && (captureMode ? Boolean(responseText) : (snapshot.assistantMessageId || responseText))) {
       try {
         const acceptedSnapshot = await persistResponse(responseText, { authoritative: captureMode, snapshot });
@@ -1408,7 +1396,7 @@ export async function runReviewTransaction(context, options) {
     }
 
     const visibleAssistantCaptured = completionSnapshot?.checkpointAccepted !== false
-      && (captureMode
+      && (existingConversationCapture
         ? Boolean(completionSnapshot?.response?.trim())
         : completionSnapshot?.responseTurnObserved !== false
           && (Boolean(completionSnapshot?.assistantMessageId) || Boolean(completionSnapshot?.response?.trim())));
@@ -1418,10 +1406,10 @@ export async function runReviewTransaction(context, options) {
     const responseContentReady = responseStructurallyFinal
       && isResponseContentReady(completionSnapshot?.response);
     if (visibleAssistantCaptured
-      && (existingConversationCapture || captureMode || completionSnapshot.responseTurnObserved !== false)) {
+      && (existingConversationCapture || completionSnapshot.responseTurnObserved !== false)) {
       stage = "artifacts";
       await persistResponse(completionSnapshot.response, {
-        authoritative: captureMode || responseStructurallyFinal,
+        authoritative: existingConversationCapture || responseStructurallyFinal,
         snapshot: completionSnapshot,
       });
     }
@@ -1745,8 +1733,7 @@ export async function runReviewBatch({ attached, outputDir, reviews, projectKey,
         const review = validatedReviews[index];
         const result = await runOne(review, index);
         results.push(result);
-        const mayContinueAfterIsolatedReviewFailure = !review.existingConversationUrl
-          && result.status !== "completed"
+          const mayContinueAfterIsolatedReviewFailure = result.status !== "completed"
           && result.failure_scope === "review"
           && !hasClosedContextEvidence(result)
           && result.dispatch_state !== "possibly_dispatched"
@@ -1900,7 +1887,7 @@ export async function main(argv, dependencies = {}) {
     ...options,
     projectKey: options.projectKey || projectKeys[0],
     repository: reviews[0].repository,
-    initialUrl: reviews.length === 1 ? reviews[0].existingConversationUrl : undefined,
+    initialUrl: captureOnly ? undefined : reviews.length === 1 ? reviews[0].existingConversationUrl : undefined,
     captureOnly,
   };
 

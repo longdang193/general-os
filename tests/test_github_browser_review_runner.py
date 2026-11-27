@@ -2971,7 +2971,7 @@ const exitCode = await main([
 
 assert.equal(exitCode, 0);
 assert.equal(opened.length, 1);
-assert.equal(opened[0].initialUrl, conversationUrl);
+assert.equal(opened[0].initialUrl, undefined);
 assert.equal(opened[0].captureOnly, true);
 assert.equal(navigatedTo, conversationUrl);
 assert.equal(closeCount, 0);
@@ -3223,12 +3223,12 @@ assert.equal(result.completion, "not_started");
     )
 
 
-def test_read_only_accepted_response_is_removed_when_later_snapshot_is_stale():
+def test_read_only_accepted_response_survives_later_transient_stale_snapshot():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
 import {{ existsSync }} from "node:fs";
-import {{ mkdtemp, rm }} from "node:fs/promises";
+import {{ mkdtemp, readFile, rm }} from "node:fs/promises";
 import {{ join }} from "node:path";
 import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
 
@@ -3287,74 +3287,25 @@ const result = await runReviewTransaction({{}}, {{
 }});
 
 assert.equal(result.status, "incomplete");
-assert.equal(existsSync(join(outputDir, "response.md")), false);
-assert.equal(result.assistant_message_id, null);
+assert.equal(existsSync(join(outputDir, "response.md")), true);
+assert.equal(await readFile(join(outputDir, "response.md"), "utf8"), "Old response from before the pending request\\n");
+assert.equal(result.response_path, "response.md");
+assert.equal(result.partial_response_path, null);
+assert.equal(result.assistant_message_id, "assistant-old");
 await rm(outputDir, {{ recursive: true, force: true }});
 ''',
     )
 
 
-def test_read_only_stale_response_cleanup_failure_is_recorded():
+def test_result_paths_are_not_advertised_before_response_persistence():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
-import {{ mkdir, writeFile }} from "node:fs/promises";
-import {{ mkdtemp, rm }} from "node:fs/promises";
-import {{ join }} from "node:path";
-import {{ runReviewTransaction }} from {CLI_RUNNER.as_uri()!r};
+import {{ createResult }} from {CLI_RUNNER.as_uri()!r};
 
-const outputDir = await mkdtemp(join(process.env.TEMP || process.env.TMP || ".", "review-read-only-cleanup-failure-"));
-const responseDir = join(outputDir, "response.md");
-await mkdir(responseDir);
-await writeFile(join(responseDir, "existing.txt"), "old response");
-const page = {{ close: async () => {{}} }};
-const result = await runReviewTransaction({{}}, {{
-  runOutputDir: outputDir,
-  model: "GPT-6",
-  effort: "High",
-  prompt: "review prompt",
-  promptFile: "review.txt",
-  repository: "owner/repo",
-  commitSha: "0123456789abcdef0123456789abcdef01234567",
-  reviewUrls: ["https://github.com/owner/repo/blob/0123456789abcdef0123456789abcdef01234567/file.md"],
-  existingConversationUrl: "https://chatgpt.com/c/existing-review",
-  dependencies: {{
-    runReviewPromptInNewTab: async (_context, options) => {{
-      for (let attempt = 0; attempt < 3; attempt += 1) {{
-        await options.onSnapshot({{
-          checkpointAccepted: false,
-          responseTurnObserved: false,
-          currentUrl: "https://chatgpt.com/c/existing-review",
-          conversationId: "existing-review",
-          assistantText: "Old response from before the pending request",
-        }});
-      }}
-      return {{
-        page,
-        readOnlyVerification: true,
-        submission: "not_attempted",
-        dispatchState: "not_dispatched",
-        currentUrl: "https://chatgpt.com/c/existing-review",
-        conversationId: "existing-review",
-        completion: {{
-          status: "incomplete",
-          checkpointAccepted: false,
-          responseTurnObserved: false,
-          currentUrl: "https://chatgpt.com/c/existing-review",
-          conversationId: "existing-review",
-          response: "Old response from before the pending request",
-          failureReason: "bounded existing conversation verification timeout",
-        }},
-      }};
-    }},
-  }},
-}});
-
-assert.equal(result.status, "incomplete");
-assert.match(result.stale_response_cleanup_error, /EISDIR|ENOTEMPTY|EPERM|EBUSY/i);
-assert.equal((result.failure_reason.match(/stale response cleanup failed/gi) || []).length, 1);
-assert.match(result.failure_reason, /bounded existing conversation verification timeout/i);
-await rm(outputDir, {{ recursive: true, force: true }});
+const result = createResult({{ model: "GPT-6.2", effort: "High" }});
+assert.equal(result.response_path, null);
+assert.equal(result.partial_response_path, null);
 ''',
     )
 
@@ -4758,7 +4709,7 @@ assert.equal(results[1].status, "completed");
 '''
     )
 
-def test_batch_stops_after_incomplete_existing_conversation_verification():
+def test_batch_continues_after_incomplete_existing_conversation_verification():
     run_node_assertion(
         f'''import assert from "node:assert/strict";
 import {{ runReviewBatch }} from {CLI_RUNNER.as_uri()!r};
@@ -4808,8 +4759,8 @@ const results = await runReviewBatch({{
   closeContextFn: async () => {{}},
 }});
 
-assert.equal(calls, 1);
-assert.equal(results[1].status, "skipped");
+assert.equal(calls, 2);
+assert.equal(results[1].status, "completed");
 '''
     )
 
@@ -5558,6 +5509,49 @@ const result = await captureReviewResponse(page, {{
 assert.equal(reopenedUrl, canonicalUrl);
 assert.equal(result.status, "captured");
 assert.equal(result.response, "Captured from the canonical thread.");
+''',
+    )
+
+def test_capture_mode_persists_canonical_route_seen_during_delay():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const provisionalUrl = "https://chatgpt.com/c/local-chatgpt%3Aabc";
+const canonicalUrl = "https://chatgpt.com/c/canonical-thread";
+const canonicalVisibleAt = Date.now() + 20;
+const page = {{
+  url: () => Date.now() >= canonicalVisibleAt ? canonicalUrl : provisionalUrl,
+}};
+const reopenedPage = {{
+  url: () => canonicalUrl,
+  waitForLoadState: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Captured after the canonical route checkpoint.",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+    }}], includeText),
+  }}),
+}};
+const snapshots = [];
+let reopenedUrl = null;
+const result = await captureReviewResponse(page, {{
+  intervalMs: 150,
+  conversationUrl: provisionalUrl,
+  onSnapshot: async (snapshot) => snapshots.push(snapshot),
+  reopenPage: async ({{ conversationUrl }}) => {{
+    reopenedUrl = conversationUrl;
+    return reopenedPage;
+  }},
+}});
+
+assert.equal(reopenedUrl, canonicalUrl);
+assert.ok(snapshots.some((snapshot) => snapshot.currentUrl === canonicalUrl
+  && snapshot.conversationId === "canonical-thread"
+  && snapshot.checkpointAccepted === true));
+assert.equal(result.status, "captured");
+assert.equal(result.response, "Captured after the canonical route checkpoint.");
 ''',
     )
 
