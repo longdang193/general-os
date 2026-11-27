@@ -5474,8 +5474,9 @@ import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
 const provisionalUrl = "https://chatgpt.com/c/local-chatgpt%3Aabc";
 const canonicalUrl = "https://chatgpt.com/c/6b0816f9-ef38-83eb-a3ce-15fd11bd2e21";
 const prompt = "Review this repository.";
+const canonicalVisibleAt = Date.now() + 5;
 const page = {{
-  url: () => canonicalUrl,
+  url: () => Date.now() >= canonicalVisibleAt ? canonicalUrl : provisionalUrl,
   locator: (selector) => ({{
     evaluateAll: async (callback, includeText) => callback(
       selector.includes('data-message-author-role="user"')
@@ -5497,7 +5498,7 @@ const reopenedPage = {{
 }};
 let reopenedUrl = null;
 const result = await captureReviewResponse(page, {{
-  intervalMs: 0,
+  intervalMs: 20,
   conversationUrl: provisionalUrl,
   submittedPrompt: prompt,
   reopenPage: async ({{ conversationUrl }}) => {{
@@ -5512,7 +5513,7 @@ assert.equal(result.response, "Captured from the canonical thread.");
 ''',
     )
 
-def test_capture_mode_persists_canonical_route_seen_during_delay():
+def test_capture_mode_does_not_persist_canonical_route_without_submission_evidence():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -5524,34 +5525,19 @@ const canonicalVisibleAt = Date.now() + 20;
 const page = {{
   url: () => Date.now() >= canonicalVisibleAt ? canonicalUrl : provisionalUrl,
 }};
-const reopenedPage = {{
-  url: () => canonicalUrl,
-  waitForLoadState: async () => {{}},
-  locator: () => ({{
-    evaluateAll: async (callback, includeText) => callback([{{
-      innerText: "Captured after the canonical route checkpoint.",
-      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
-    }}], includeText),
-  }}),
-}};
-const snapshots = [];
 let reopenedUrl = null;
 const result = await captureReviewResponse(page, {{
   intervalMs: 150,
   conversationUrl: provisionalUrl,
-  onSnapshot: async (snapshot) => snapshots.push(snapshot),
   reopenPage: async ({{ conversationUrl }}) => {{
     reopenedUrl = conversationUrl;
-    return reopenedPage;
+    throw new Error("must not reopen an unverified route");
   }},
 }});
 
-assert.equal(reopenedUrl, canonicalUrl);
-assert.ok(snapshots.some((snapshot) => snapshot.currentUrl === canonicalUrl
-  && snapshot.conversationId === "canonical-thread"
-  && snapshot.checkpointAccepted === true));
-assert.equal(result.status, "captured");
-assert.equal(result.response, "Captured after the canonical route checkpoint.");
+assert.equal(reopenedUrl, null);
+assert.equal(result.status, "incomplete");
+assert.match(result.failureReason, /canonical conversation URL required/i);
 ''',
     )
 
@@ -5588,8 +5574,9 @@ import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
 const provisionalUrl = "https://chatgpt.com/c/local-chatgpt%3Aabc";
 const canonicalUrl = "https://chatgpt.com/c/canonical-thread";
 const prompt = "Review this repository.";
+const canonicalVisibleAt = Date.now() + 5;
 const page = {{
-  url: () => canonicalUrl,
+  url: () => Date.now() >= canonicalVisibleAt ? canonicalUrl : provisionalUrl,
   locator: (selector) => ({{
     evaluateAll: async (callback, includeText) => callback(
       selector.includes('data-message-author-role="user"')
@@ -5615,7 +5602,7 @@ const reopenedPage = {{
 }};
 let reopenedUrl = null;
 const result = await captureReviewResponse(page, {{
-  intervalMs: 0,
+  intervalMs: 20,
   conversationUrl: provisionalUrl,
   submittedPrompt: prompt,
   reopenPage: async ({{ conversationUrl }}) => {{
@@ -6043,6 +6030,125 @@ assert.equal(await readFile(join(root, "response.md"), "utf8"), "Visible raw res
 ''',
     )
 
+
+def test_existing_capture_keeps_supplied_conversation_when_route_changes_during_delay():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const expectedUrl = "https://chatgpt.com/c/expected";
+const unrelatedUrl = "https://chatgpt.com/c/unrelated";
+let currentUrl = expectedUrl;
+setTimeout(() => {{ currentUrl = unrelatedUrl; }}, 0);
+const reopenedPage = {{
+  url: () => expectedUrl,
+  waitForLoadState: async () => {{}},
+  locator: () => ({{
+    evaluateAll: async (callback, includeText) => callback([{{
+      innerText: "Expected response",
+      getAttribute: (name) => name === "data-message-id" ? "assistant-expected" : null,
+    }}], includeText),
+  }}),
+}};
+const page = {{ url: () => currentUrl }};
+const result = await captureReviewResponse(page, {{
+  intervalMs: 10,
+  conversationUrl: expectedUrl,
+  reopenPage: async (options) => {{
+    assert.equal(options.conversationUrl, expectedUrl);
+    return reopenedPage;
+  }},
+}});
+
+assert.equal(result.response, "Expected response");
+''',
+    )
+
+def test_submitted_capture_does_not_adopt_route_without_submitted_turn_evidence():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const provisionalUrl = "https://chatgpt.com/c/local-chatgpt%3Aprovisional";
+const canonicalUrl = "https://chatgpt.com/c/canonical";
+let currentUrl = provisionalUrl;
+setTimeout(() => {{ currentUrl = canonicalUrl; }}, 0);
+const page = {{
+  url: () => currentUrl,
+  locator: (selector) => ({{
+    evaluateAll: async (callback, includeText) => callback(
+      selector.includes('data-message-author-role="user"') ? [] : [{{
+        innerText: "Unrelated visible response",
+        getAttribute: (name) => name === "data-message-id" ? "assistant-unrelated" : null,
+      }}],
+      includeText,
+    ),
+  }}),
+}};
+const result = await captureReviewResponse(page, {{
+  intervalMs: 10,
+  conversationUrl: provisionalUrl,
+  submittedPrompt: "Submitted review prompt",
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.response, "");
+assert.equal(result.checkpointAccepted, false);
+''',
+    )
+
+def test_capture_abort_during_delay_persists_best_effort_snapshot():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const controller = new AbortController();
+const snapshots = [];
+const url = "https://chatgpt.com/c/review";
+const page = {{
+  url: () => url,
+  getByRole: () => ({{
+    first: () => ({{ isVisible: async () => false }}),
+    last: () => ({{ isVisible: async () => false }}),
+  }}),
+  getByText: () => ({{ first: () => ({{ isVisible: async () => false }}) }}),
+  locator: () => {{
+    const locator = {{
+      evaluateAll: async (callback, includeText) => callback([{{
+        innerText: "Partial response",
+        getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+      }}], includeText),
+      first: () => locator,
+      count: async () => 0,
+      isVisible: async () => false,
+      innerText: async () => "",
+    }};
+    return locator;
+  }},
+  evaluate: async () => ({{
+    latestAssistantFollowsLatestUser: true,
+    userTurnCount: 1,
+    assistantTurnCount: 1,
+  }}),
+}};
+setTimeout(() => controller.abort(), 5);
+await assert.rejects(
+  captureReviewResponse(page, {{
+    intervalMs: 50,
+    conversationUrl: url,
+    onSnapshot: async (snapshot) => snapshots.push(snapshot),
+    signal: controller.signal,
+  }}),
+  (error) => error.code === "REVIEW_INTERRUPTED"
+    && error.interruptionSnapshot?.checkpointAccepted === true,
+);
+assert.equal(snapshots.length, 1);
+assert.equal(snapshots[0].response, "Partial response");
+''',
+    )
 
 def test_submitted_capture_does_not_persist_unassociated_visible_response():
     run_node_assertion(

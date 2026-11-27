@@ -548,8 +548,9 @@ to 15 seconds for the page to load and stabilize, then copies whatever assistant
 output is visible. A valid thread URL is required; if none is available, record
 an incomplete capture without reopening ChatGPT home.
 Treat `local-chatgpt:` route IDs as provisional; promote a later canonical
-`/c/<id>` route before reopening, and never reopen a provisional route as the
-capture destination.
+`/c/<id>` route before reopening only after the submitted prompt or user-turn
+evidence is visible on that route. If that evidence is unavailable, record an
+`incomplete` capture rather than reopening a guessed or provisional destination.
 It does not verify completeness, terminal markers, revision evidence, review
 outcome, or semantic quality. Treat the captured text as raw model output. If no
 assistant output is visible, record an incomplete capture. If the reopened page

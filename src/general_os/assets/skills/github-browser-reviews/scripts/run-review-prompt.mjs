@@ -736,27 +736,10 @@ export async function captureReviewResponse(page, {
 
   let persistedConversationUrl = conversationUrl;
   let persistedConversationId = extractConversationIdentity(conversationUrl);
-  await waitForCaptureDelay(intervalMs, signal, async () => {
-    const currentUrl = readPageUrl(page);
-    const currentId = extractConversationIdentity(currentUrl);
-    if (!currentId || isSyntheticConversationId(currentId) || currentId === persistedConversationId) return;
-    persistedConversationUrl = currentUrl;
-    persistedConversationId = currentId;
-    if (onSnapshot) {
-      await onSnapshot({
-        assistantMessageId: null,
-        assistantText: "",
-        assistantTurnCount: 0,
-        conversationId: currentId,
-        currentUrl,
-        response: "",
-        responseTurnObserved: false,
-        stableSampleCount: 0,
-        checkpointAccepted: true,
-      });
-    }
-  });
-  if (signal?.aborted) {
+  const submissionEvidenceAvailable = Boolean(
+    submittedUserTurnId || (submittedPrompt && normalizePromptForTurnComparison(submittedPrompt)),
+  );
+  const interruptCapture = async () => {
     const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
     const expectedConversationId = extractConversationIdentity(conversationUrl || readPageUrl(page));
     const responseTurnObserved = interruptedSnapshot.latestAssistantFollowsLatestUser === true;
@@ -764,6 +747,7 @@ export async function captureReviewResponse(page, {
       ...interruptedSnapshot,
       checkpointAccepted: interruptedSnapshot.routeStable !== false
         && interruptedSnapshot.conversationId === expectedConversationId,
+      response: interruptedSnapshot.assistantText || "",
       responseTurnObserved,
     };
     if (onSnapshot) await onSnapshot(snapshot);
@@ -771,7 +755,34 @@ export async function captureReviewResponse(page, {
     error.code = "REVIEW_INTERRUPTED";
     error.interruptionSnapshot = snapshot;
     throw error;
+  };
+  try {
+    await waitForCaptureDelay(intervalMs, signal, async () => {
+      const currentUrl = readPageUrl(page);
+      const currentId = extractConversationIdentity(currentUrl);
+      if (!currentId || isSyntheticConversationId(currentId) || currentId === persistedConversationId) return;
+      if (!submissionEvidenceAvailable || !await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId)) return;
+      persistedConversationUrl = currentUrl;
+      persistedConversationId = currentId;
+      if (onSnapshot) {
+        await onSnapshot({
+          assistantMessageId: null,
+          assistantText: "",
+          assistantTurnCount: 0,
+          conversationId: currentId,
+          currentUrl,
+          response: "",
+          responseTurnObserved: false,
+          stableSampleCount: 0,
+          checkpointAccepted: true,
+        });
+      }
+    });
+  } catch (error) {
+    if (signal?.aborted) return interruptCapture();
+    throw error;
   }
+  if (signal?.aborted) return interruptCapture();
 
   const capture = async () => {
     let captureConversationUrl = persistedConversationUrl;
@@ -783,9 +794,6 @@ export async function captureReviewResponse(page, {
     const changedCanonicalRoute = canonicalCurrentRoute
       && !unresolvedCaptureIdentity
       && currentConversationId !== captureConversationId;
-    const submissionEvidenceAvailable = Boolean(
-      submittedUserTurnId || (submittedPrompt && normalizePromptForTurnComparison(submittedPrompt)),
-    );
     let verifiedCurrentUrl = visibleCurrentUrl;
     let currentRouteMatchesSubmission = false;
     if (canonicalCurrentRoute && (unresolvedCaptureIdentity || changedCanonicalRoute) && submissionEvidenceAvailable) {
