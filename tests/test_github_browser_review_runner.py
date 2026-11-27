@@ -1176,7 +1176,7 @@ assert.equal(result.response, "Visible after timeout");
     )
 
 
-def test_capture_keeps_visible_text_when_submitted_turn_association_is_missing():
+def test_capture_rejects_visible_text_when_submitted_turn_association_is_missing():
     run_node_assertion(
         f'''
 import assert from "node:assert/strict";
@@ -1207,8 +1207,10 @@ try {{
     submittedPrompt: "submitted prompt",
     submittedUserTurnId: "missing-user-turn",
   }});
-  assert.equal(result.response, "Visible despite missing user-turn metadata");
+  assert.equal(result.response, "");
+  assert.equal(result.status, "incomplete");
   assert.equal(result.responseTurnObserved, false);
+  assert.equal(result.checkpointAccepted, false);
 }} finally {{
   Date.now = originalNow;
 }}
@@ -5489,11 +5491,17 @@ const page = {{
 const reopenedPage = {{
   url: () => canonicalUrl,
   waitForLoadState: async () => {{}},
-  locator: () => ({{
-    evaluateAll: async (callback, includeText) => callback([{{
-      innerText: "Captured from the canonical thread.",
-      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
-    }}], includeText),
+  evaluate: async () => ({{ latestAssistantFollowsLatestUser: true }}),
+  locator: (selector) => ({{
+    evaluateAll: async (callback, includeText) => callback(
+      selector.includes('data-message-author-role="user"')
+        ? [{{ innerText: prompt, getAttribute: () => null }}]
+        : [{{
+          innerText: "Captured from the canonical thread.",
+          getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+        }}],
+      includeText,
+    ),
   }}),
 }};
 let reopenedUrl = null;
@@ -5641,11 +5649,17 @@ const page = {{
 const reopenedPage = {{
   url: () => currentUrl,
   waitForLoadState: async () => {{}},
-  locator: () => ({{
-    evaluateAll: async (callback, includeText) => callback([{{
-        innerText: "Captured from the current thread.",
-      getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
-    }}], includeText),
+  evaluate: async () => ({{ latestAssistantFollowsLatestUser: true }}),
+  locator: (selector) => ({{
+    evaluateAll: async (callback, includeText) => callback(
+      selector.includes('data-message-author-role="user"')
+        ? [{{ innerText: prompt, getAttribute: () => null }}]
+        : [{{
+          innerText: "Captured from the current thread.",
+          getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null,
+        }}],
+      includeText,
+    ),
   }}),
 }};
 let reopenedUrl = null;
@@ -6099,6 +6113,44 @@ assert.equal(result.checkpointAccepted, false);
 ''',
     )
 
+def test_submitted_capture_does_not_replace_verified_canonical_route():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const verifiedUrl = "https://chatgpt.com/c/verified";
+const unrelatedUrl = "https://chatgpt.com/c/unrelated";
+let currentUrl = verifiedUrl;
+setTimeout(() => {{ currentUrl = unrelatedUrl; }}, 0);
+const page = {{
+  url: () => currentUrl,
+  locator: (selector) => ({{
+    evaluateAll: async (callback, includeText) => callback(
+      selector.includes('data-message-author-role="user"') ? [{{
+        innerText: "Submitted review prompt",
+        getAttribute: (name) => name === "data-message-id" ? "user-1" : null,
+      }}] : [{{
+        innerText: "Unrelated visible response",
+        getAttribute: (name) => name === "data-message-id" ? "assistant-unrelated" : null,
+      }}],
+      includeText,
+    ),
+  }}),
+}};
+const result = await captureReviewResponse(page, {{
+  intervalMs: 10,
+  conversationUrl: verifiedUrl,
+  submittedPrompt: "Submitted review prompt",
+  submittedUserTurnId: "user-1",
+}});
+
+assert.equal(result.status, "incomplete");
+assert.equal(result.response, "");
+assert.equal(result.checkpointAccepted, false);
+''',
+    )
+
 def test_capture_abort_during_delay_persists_best_effort_snapshot():
     run_node_assertion(
         f'''
@@ -6147,6 +6199,81 @@ await assert.rejects(
 );
 assert.equal(snapshots.length, 1);
 assert.equal(snapshots[0].response, "Partial response");
+''',
+    )
+
+def test_capture_abort_after_synthetic_route_promotion_uses_canonical_identity():
+    run_node_assertion(
+        f'''
+import assert from "node:assert/strict";
+import {{ captureReviewResponse }} from {RUNNER.as_uri()!r};
+
+const controller = new AbortController();
+const snapshots = [];
+const provisionalUrl = "https://chatgpt.com/c/local-chatgpt%3Aprovisional";
+const canonicalUrl = "https://chatgpt.com/c/canonical";
+const page = {{
+  url: () => canonicalUrl,
+  getByRole: () => ({{
+    first: () => ({{ isVisible: async () => false }}),
+    last: () => ({{ isVisible: async () => false }}),
+    isVisible: async () => false,
+  }}),
+  getByText: () => ({{ first: () => ({{ isVisible: async () => false }}) }}),
+  locator: (selector) => {{
+    const isUserTurn = selector.includes('data-message-author-role="user"')
+      || selector.includes("data-user-message-bubble");
+    const isAssistantTurn = selector.includes('data-message-author-role="assistant"')
+      || selector.includes("data-response-body");
+    const locator = {{
+      evaluateAll: async (callback, includeText) => callback(
+        isUserTurn
+          ? [{{ innerText: "Submitted review prompt", getAttribute: (name) => name === "data-message-id" ? "user-1" : null }}]
+          : isAssistantTurn
+            ? [{{ innerText: "Canonical partial response", getAttribute: (name) => name === "data-message-id" ? "assistant-1" : null }}]
+            : [],
+        includeText,
+      ),
+      first: () => locator,
+      last: () => locator,
+      nth: () => locator,
+      count: async () => isUserTurn || isAssistantTurn ? 1 : 0,
+      isVisible: async () => false,
+      innerText: async () => "",
+      getByRole: () => locator,
+      getByText: () => locator,
+    }};
+    return locator;
+  }},
+  evaluate: async () => ({{
+    latestAssistantFollowsLatestUser: true,
+    userTurnCount: 1,
+    assistantTurnCount: 1,
+  }}),
+}};
+
+await assert.rejects(
+  captureReviewResponse(page, {{
+    intervalMs: 10,
+    conversationUrl: provisionalUrl,
+    submittedPrompt: "Submitted review prompt",
+    onSnapshot: async (snapshot) => {{
+      snapshots.push(snapshot);
+      if (!snapshot.response && snapshot.conversationId === "canonical") controller.abort();
+    }},
+    signal: controller.signal,
+  }}),
+  (error) => {{
+    assert.equal(error.code, "REVIEW_INTERRUPTED");
+    assert.equal(error.interruptionSnapshot.conversationId, "canonical");
+    assert.equal(error.interruptionSnapshot.response, "Canonical partial response");
+    assert.equal(error.interruptionSnapshot.checkpointAccepted, true);
+    return true;
+  }},
+);
+assert.equal(snapshots.length, 2);
+assert.equal(snapshots[0].conversationId, "canonical");
+assert.equal(snapshots[0].checkpointAccepted, true);
 ''',
     )
 

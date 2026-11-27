@@ -446,11 +446,15 @@ async function waitForCapturePageReady(page, conversationUrl, {
   let stableSampleCount = 0;
   const preserveLastSample = (error) => {
     if (!lastRouteVerifiedSample) return;
+    const responseTurnObserved = lastRouteVerifiedSample.responseTurnObserved === true;
+    const response = responseTurnObserved ? lastRouteVerifiedSample.assistantText : "";
     error.interruptionSnapshot = {
       ...lastRouteVerifiedSample,
       conversationId: extractConversationIdentity(lastRouteVerifiedSample.currentUrl),
-      response: lastRouteVerifiedSample.assistantText,
-      checkpointAccepted: true,
+      assistantText: response,
+      response,
+      responseTurnObserved,
+      checkpointAccepted: responseTurnObserved,
     };
   };
   const waitForNextSample = async (remaining) => {
@@ -736,18 +740,26 @@ export async function captureReviewResponse(page, {
 
   let persistedConversationUrl = conversationUrl;
   let persistedConversationId = extractConversationIdentity(conversationUrl);
+  const captureStartConversationId = extractConversationIdentity(readPageUrl(page));
   const submissionEvidenceAvailable = Boolean(
     submittedUserTurnId || (submittedPrompt && normalizePromptForTurnComparison(submittedPrompt)),
   );
   const interruptCapture = async () => {
     const interruptedSnapshot = await readCompletionSnapshot(page, { includeText: true });
-    const expectedConversationId = extractConversationIdentity(conversationUrl || readPageUrl(page));
-    const responseTurnObserved = interruptedSnapshot.latestAssistantFollowsLatestUser === true;
+    const expectedConversationId = persistedConversationId
+      || extractConversationIdentity(conversationUrl || readPageUrl(page));
+    const visibleAssistant = Boolean(interruptedSnapshot.assistantText?.trim());
+    const conversationMatches = interruptedSnapshot.routeStable !== false
+      && interruptedSnapshot.conversationId === expectedConversationId;
+    const responseTurnObserved = conversationMatches
+      && interruptedSnapshot.latestAssistantFollowsLatestUser === true
+      && visibleAssistant;
+    const response = responseTurnObserved ? interruptedSnapshot.assistantText : "";
     const snapshot = {
       ...interruptedSnapshot,
-      checkpointAccepted: interruptedSnapshot.routeStable !== false
-        && interruptedSnapshot.conversationId === expectedConversationId,
-      response: interruptedSnapshot.assistantText || "",
+      assistantText: response,
+      checkpointAccepted: responseTurnObserved,
+      response,
       responseTurnObserved,
     };
     if (onSnapshot) await onSnapshot(snapshot);
@@ -758,19 +770,24 @@ export async function captureReviewResponse(page, {
   };
   try {
     await waitForCaptureDelay(intervalMs, signal, async () => {
-      const currentUrl = readPageUrl(page);
-      const currentId = extractConversationIdentity(currentUrl);
-      if (!currentId || isSyntheticConversationId(currentId) || currentId === persistedConversationId) return;
+      const candidateUrl = readPageUrl(page);
+      const candidateId = extractConversationIdentity(candidateUrl);
+      const persistedIdentityIsCanonical = persistedConversationId
+        && !isSyntheticConversationId(persistedConversationId);
+      if (!candidateId || isSyntheticConversationId(candidateId) || persistedIdentityIsCanonical) return;
       if (!submissionEvidenceAvailable || !await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId)) return;
-      persistedConversationUrl = currentUrl;
-      persistedConversationId = currentId;
+      const verifiedUrl = readPageUrl(page);
+      const verifiedId = extractConversationIdentity(verifiedUrl);
+      if (verifiedId !== candidateId || !matchesConversationUrl(verifiedUrl, candidateUrl)) return;
+      persistedConversationUrl = verifiedUrl;
+      persistedConversationId = verifiedId;
       if (onSnapshot) {
         await onSnapshot({
           assistantMessageId: null,
           assistantText: "",
           assistantTurnCount: 0,
-          conversationId: currentId,
-          currentUrl,
+          conversationId: verifiedId,
+          currentUrl: verifiedUrl,
           response: "",
           responseTurnObserved: false,
           stableSampleCount: 0,
@@ -794,16 +811,25 @@ export async function captureReviewResponse(page, {
     const changedCanonicalRoute = canonicalCurrentRoute
       && !unresolvedCaptureIdentity
       && currentConversationId !== captureConversationId;
+    const routeChangedAfterCaptureStarted = captureStartConversationId
+      && captureConversationId
+      && captureStartConversationId === captureConversationId
+      && currentConversationId !== captureStartConversationId;
     let verifiedCurrentUrl = visibleCurrentUrl;
     let currentRouteMatchesSubmission = false;
-    if (canonicalCurrentRoute && (unresolvedCaptureIdentity || changedCanonicalRoute) && submissionEvidenceAvailable) {
+    if (canonicalCurrentRoute
+      && (unresolvedCaptureIdentity || changedCanonicalRoute && !routeChangedAfterCaptureStarted)
+      && submissionEvidenceAvailable) {
       const submittedTurnMatches = await hasSubmittedUserTurn(page, submittedPrompt, submittedUserTurnId);
       verifiedCurrentUrl = readPageUrl(page);
       const verifiedConversationId = extractConversationIdentity(verifiedCurrentUrl);
       currentRouteMatchesSubmission = submittedTurnMatches
         && verifiedConversationId === currentConversationId;
     }
-    if (canonicalCurrentRoute && (!unresolvedCaptureIdentity && !changedCanonicalRoute || currentRouteMatchesSubmission)) {
+    if (canonicalCurrentRoute && (
+      !unresolvedCaptureIdentity && (!changedCanonicalRoute || currentRouteMatchesSubmission)
+      || unresolvedCaptureIdentity && currentRouteMatchesSubmission
+    )) {
       captureConversationUrl = verifiedCurrentUrl;
       captureConversationId = currentConversationId;
     } else if (unresolvedCaptureIdentity) {
@@ -847,7 +873,8 @@ export async function captureReviewResponse(page, {
     const responseTurnObserved = conversationMatches
       && assistant.responseTurnObserved !== false
       && visibleAssistant;
-    const response = conversationMatches && visibleAssistant ? assistant.assistantText : "";
+    const response = responseTurnObserved ? assistant.assistantText : "";
+    const checkpointAccepted = responseTurnObserved;
     const snapshot = {
       assistantMessageId: conversationMatches ? assistant.assistantMessageId : null,
       assistantText: response,
@@ -857,10 +884,21 @@ export async function captureReviewResponse(page, {
       response,
       responseTurnObserved,
       stableSampleCount: assistant.stableSampleCount || 0,
-      checkpointAccepted: conversationMatches,
+      checkpointAccepted,
     };
     if (onSnapshot) await onSnapshot(snapshot);
-    return { ...snapshot, status: "captured", page: capturePage };
+    return {
+      ...snapshot,
+      status: checkpointAccepted ? "captured" : "incomplete",
+      ...(checkpointAccepted ? {} : {
+        failureReason: !conversationMatches
+          ? "Captured conversation identity did not match expected conversation"
+          : !visibleAssistant
+            ? "No visible assistant response was available"
+            : "Submitted response turn could not be associated",
+      }),
+      page: capturePage,
+    };
   };
 
   return captureLock ? captureLock(capture) : capture();
